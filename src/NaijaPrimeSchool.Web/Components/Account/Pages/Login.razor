@@ -1,0 +1,144 @@
+@page "/Account/Login"
+
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.AspNetCore.Authentication
+@using Microsoft.AspNetCore.Identity
+@using NaijaPrimeSchool.Domain.Identity
+
+@inject SignInManager<ApplicationUser> SignInManager
+@inject UserManager<ApplicationUser> UserManager
+@inject ILogger<Login> Logger
+@inject NavigationManager NavigationManager
+@inject IdentityRedirectManager RedirectManager
+
+<PageTitle>Sign in · Naija Prime School</PageTitle>
+
+<div class="nps-auth-page">
+    <div class="nps-auth-card rz-shadow-4">
+        <div class="nps-auth-brand">
+            <div class="nps-auth-logo">NPS</div>
+            <div>
+                <h1 class="nps-auth-title">Naija Prime School</h1>
+                <p class="nps-auth-subtitle">Shaping the leaders of tomorrow</p>
+            </div>
+        </div>
+
+        <h2 class="nps-auth-heading">Welcome back</h2>
+        <p class="nps-auth-lede">Sign in to continue to the school portal.</p>
+
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat" Shade="Shade.Lighter"
+                         AllowClose="false" Icon="error_outline">
+                @errorMessage
+            </RadzenAlert>
+        }
+
+        <EditForm EditContext="editContext" method="post" OnValidSubmit="LoginUser" FormName="login" class="nps-auth-form">
+            <DataAnnotationsValidator />
+
+            <div class="nps-field">
+                <label for="Input.Email">Email or username</label>
+                <InputText @bind-Value="Input.Email" id="Input.Email" class="rz-textbox"
+                           autocomplete="username" placeholder="you@example.com" />
+                <ValidationMessage For="() => Input.Email" class="nps-field-error" />
+            </div>
+
+            <div class="nps-field">
+                <label for="Input.Password">Password</label>
+                <InputText type="password" @bind-Value="Input.Password" id="Input.Password" class="rz-textbox"
+                           autocomplete="current-password" placeholder="Your password" />
+                <ValidationMessage For="() => Input.Password" class="nps-field-error" />
+            </div>
+
+            <div class="nps-auth-row">
+                <label class="nps-checkbox">
+                    <InputCheckbox @bind-Value="Input.RememberMe" />
+                    <span>Remember me</span>
+                </label>
+            </div>
+
+            <button type="submit" class="rz-button rz-button-md rz-primary nps-auth-submit">
+                <span class="rzi rzi-login"></span>
+                <span>Sign in</span>
+            </button>
+        </EditForm>
+
+        <div class="nps-auth-footer">
+            <small>Need an account? Please contact your school administrator.</small>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string? errorMessage;
+    private EditContext editContext = default!;
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [SupplyParameterFromForm]
+    private InputModel Input { get; set; } = default!;
+
+    [SupplyParameterFromQuery]
+    private string? ReturnUrl { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        Input ??= new();
+        editContext = new EditContext(Input);
+
+        if (HttpMethods.IsGet(HttpContext.Request.Method))
+        {
+            await HttpContext.SignOutAsync(IdentityConstants.ExternalScheme);
+        }
+    }
+
+    public async Task LoginUser()
+    {
+        var user = await UserManager.FindByNameAsync(Input.Email)
+                   ?? await UserManager.FindByEmailAsync(Input.Email);
+
+        if (user is null || user.IsDeleted)
+        {
+            errorMessage = "Invalid sign in attempt.";
+            return;
+        }
+
+        if (!user.IsActive)
+        {
+            errorMessage = "Your account has been deactivated. Please contact your administrator.";
+            return;
+        }
+
+        var result = await SignInManager.PasswordSignInAsync(
+            user.UserName!, Input.Password, Input.RememberMe, lockoutOnFailure: true);
+
+        if (result.Succeeded)
+        {
+            Logger.LogInformation("User {User} signed in.", user.UserName);
+            RedirectManager.RedirectTo(ReturnUrl);
+            return;
+        }
+
+        if (result.IsLockedOut)
+        {
+            errorMessage = "Account locked. Please try again later or contact your administrator.";
+            return;
+        }
+
+        errorMessage = "Invalid sign in attempt.";
+    }
+
+    private sealed class InputModel
+    {
+        [Required(ErrorMessage = "Enter your email or username")]
+        public string Email { get; set; } = "";
+
+        [Required(ErrorMessage = "Enter your password")]
+        [DataType(DataType.Password)]
+        public string Password { get; set; } = "";
+
+        public bool RememberMe { get; set; }
+    }
+}

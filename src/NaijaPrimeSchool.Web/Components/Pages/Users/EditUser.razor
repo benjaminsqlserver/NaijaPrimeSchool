@@ -1,0 +1,238 @@
+@page "/users/{Id:guid}"
+@attribute [Authorize(Roles = Roles.SuperAdmin)]
+@rendermode InteractiveServer
+
+@inject IUserService UserService
+@inject ILookupService LookupService
+@inject NavigationManager Nav
+@inject DialogService DialogService
+@inject NotificationService Notification
+
+<PageTitle>Edit user · Naija Prime School</PageTitle>
+
+<div class="nps-page-header">
+    <div>
+        <h1>Edit user</h1>
+        <p>@user?.FullName <span style="color: var(--nps-ink-500);">· @user?.Email</span></p>
+    </div>
+    <div class="nps-page-actions">
+        <RadzenButton Text="Assign roles" Icon="admin_panel_settings"
+                      ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat"
+                      Click="@(() => Nav.NavigateTo($"/users/{Id}/roles"))" />
+        @if (user is not null)
+        {
+            if (user.IsActive)
+            {
+                <RadzenButton Text="Deactivate" Icon="block" ButtonStyle="ButtonStyle.Warning"
+                              Click="@DeactivateAsync" />
+            }
+            else
+            {
+                <RadzenButton Text="Activate" Icon="check_circle" ButtonStyle="ButtonStyle.Success"
+                              Click="@ActivateAsync" />
+            }
+        }
+        <RadzenButton Text="Back" Icon="arrow_back"
+                      ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat"
+                      Click="@(() => Nav.NavigateTo("/users"))" />
+    </div>
+</div>
+
+@if (!loaded)
+{
+    <RadzenCard class="nps-card">
+        <RadzenProgressBarCircular ShowValue="false" Mode="ProgressBarMode.Indeterminate" />
+        <span style="margin-left:.75rem;">Loading user...</span>
+    </RadzenCard>
+}
+else if (user is null)
+{
+    <RadzenAlert AlertStyle="AlertStyle.Warning" Variant="Variant.Flat">User not found.</RadzenAlert>
+}
+else
+{
+    <RadzenCard class="nps-card">
+        <div style="display:flex; gap:.75rem; align-items:center; margin-bottom:1rem;">
+            <RadzenBadge Text="@(user.IsActive ? "Active" : "Inactive")"
+                         BadgeStyle="@(user.IsActive ? BadgeStyle.Success : BadgeStyle.Secondary)"
+                         Variant="Variant.Flat" />
+            @foreach (var role in user.Roles)
+            {
+                <RadzenBadge Text="@role" BadgeStyle="BadgeStyle.Info" Variant="Variant.Flat" />
+            }
+        </div>
+
+        <RadzenTemplateForm TItem="UpdateUserRequest" Data="@model" Submit="@OnSubmit">
+            <DataAnnotationsValidator />
+
+            <h3 style="margin:0 0 1rem; font-size:1.1rem;">Personal details</h3>
+            <div class="nps-form-grid">
+                <div class="nps-field">
+                    <label>Title</label>
+                    <RadzenDropDown TValue="Guid?" Data="@titles" TextProperty="Name" ValueProperty="Id"
+                                    @bind-Value="model.TitleId" AllowClear="true" />
+                </div>
+                <div class="nps-field">
+                    <label>Gender</label>
+                    <RadzenDropDown TValue="Guid?" Data="@genders" TextProperty="Name" ValueProperty="Id"
+                                    @bind-Value="model.GenderId" AllowClear="true" />
+                </div>
+                <div class="nps-field">
+                    <label>First name *</label>
+                    <RadzenTextBox @bind-Value="model.FirstName" />
+                    <ValidationMessage For="() => model.FirstName" />
+                </div>
+                <div class="nps-field">
+                    <label>Middle name</label>
+                    <RadzenTextBox @bind-Value="model.MiddleName" />
+                </div>
+                <div class="nps-field">
+                    <label>Last name *</label>
+                    <RadzenTextBox @bind-Value="model.LastName" />
+                    <ValidationMessage For="() => model.LastName" />
+                </div>
+                <div class="nps-field">
+                    <label>Date of birth</label>
+                    <RadzenDatePicker TValue="DateTime?" @bind-Value="model.DateOfBirth"
+                                      DateFormat="d MMM yyyy" ShowTime="false" />
+                </div>
+                <div class="nps-field nps-span-2">
+                    <label>Address</label>
+                    <RadzenTextArea @bind-Value="model.Address" Rows="2" />
+                </div>
+            </div>
+
+            <h3 style="margin:1.5rem 0 1rem; font-size:1.1rem;">Contact</h3>
+            <div class="nps-form-grid">
+                <div class="nps-field">
+                    <label>Email *</label>
+                    <RadzenTextBox @bind-Value="model.Email" />
+                    <ValidationMessage For="() => model.Email" />
+                </div>
+                <div class="nps-field">
+                    <label>Phone</label>
+                    <RadzenTextBox @bind-Value="model.PhoneNumber" />
+                    <ValidationMessage For="() => model.PhoneNumber" />
+                </div>
+            </div>
+
+            <div class="nps-form-actions">
+                <RadzenButton Text="Reset password" Icon="key" Variant="Variant.Flat"
+                              ButtonStyle="ButtonStyle.Light"
+                              ButtonType="ButtonType.Button"
+                              Click="@ResetPasswordAsync" />
+                <RadzenButton Text="Cancel" ButtonType="ButtonType.Button"
+                              ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat"
+                              Click="@(() => Nav.NavigateTo("/users"))" />
+                <RadzenButton Text="@(saving ? "Saving..." : "Save changes")"
+                              Icon="save" ButtonType="ButtonType.Submit"
+                              ButtonStyle="ButtonStyle.Primary" Disabled="@saving" />
+            </div>
+        </RadzenTemplateForm>
+    </RadzenCard>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private UserDto? user;
+    private UpdateUserRequest model = new();
+    private IReadOnlyList<LookupDto> titles = [];
+    private IReadOnlyList<LookupDto> genders = [];
+    private bool loaded;
+    private bool saving;
+
+    protected override async Task OnInitializedAsync()
+    {
+        titles = await LookupService.GetTitlesAsync();
+        genders = await LookupService.GetGendersAsync();
+        await LoadUserAsync();
+    }
+
+    private async Task LoadUserAsync()
+    {
+        user = await UserService.GetByIdAsync(Id);
+        if (user is not null)
+        {
+            model = new UpdateUserRequest
+            {
+                Id = user.Id,
+                FirstName = user.FirstName,
+                LastName = user.LastName,
+                MiddleName = user.MiddleName,
+                TitleId = user.TitleId,
+                GenderId = user.GenderId,
+                Email = user.Email,
+                PhoneNumber = user.PhoneNumber,
+                DateOfBirth = user.DateOfBirth,
+                Address = user.Address,
+            };
+        }
+        loaded = true;
+    }
+
+    private async Task OnSubmit()
+    {
+        saving = true;
+        try
+        {
+            var result = await UserService.UpdateAsync(model);
+            if (result.Succeeded)
+            {
+                Notification.Notify(NotificationSeverity.Success, "User updated", $"{model.FirstName} {model.LastName}.");
+                await LoadUserAsync();
+            }
+            else
+            {
+                Notification.Notify(NotificationSeverity.Error, "Update failed", string.Join("; ", result.Errors));
+            }
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private async Task DeactivateAsync()
+    {
+        if (user is null) return;
+        var reason = await DialogService.Confirm(
+            $"Deactivate '{user.FullName}'? They won't be able to sign in until reactivated.",
+            "Deactivate user",
+            new ConfirmOptions { OkButtonText = "Deactivate", CancelButtonText = "Cancel" });
+        if (reason != true) return;
+
+        var result = await UserService.SetActiveAsync(Id, false, "Deactivated by administrator", CancellationToken.None);
+        Notify(result, "User deactivated.");
+        await LoadUserAsync();
+    }
+
+    private async Task ActivateAsync()
+    {
+        var result = await UserService.SetActiveAsync(Id, true, null, CancellationToken.None);
+        Notify(result, "User activated.");
+        await LoadUserAsync();
+    }
+
+    private async Task ResetPasswordAsync()
+    {
+        if (user is null) return;
+        var pwd = await DialogService.OpenAsync<ResetPasswordDialog>(
+            $"Reset password for {user.FullName}",
+            new Dictionary<string, object?>(),
+            new DialogOptions { Width = "420px", CloseDialogOnEsc = true });
+
+        if (pwd is not string newPassword || string.IsNullOrWhiteSpace(newPassword)) return;
+
+        var result = await UserService.SetPasswordAsync(Id, newPassword, CancellationToken.None);
+        Notify(result, "Password updated.");
+    }
+
+    private void Notify(OperationResult result, string success)
+    {
+        if (result.Succeeded)
+            Notification.Notify(NotificationSeverity.Success, "Done", success);
+        else
+            Notification.Notify(NotificationSeverity.Error, "Failed", string.Join("; ", result.Errors));
+    }
+}

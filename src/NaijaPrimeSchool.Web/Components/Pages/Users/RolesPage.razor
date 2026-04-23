@@ -1,0 +1,42 @@
+@page "/roles"
+@attribute [Authorize(Roles = Roles.SuperAdmin)]
+@rendermode InteractiveServer
+
+@inject ILookupService LookupService
+
+<PageTitle>Roles · Naija Prime School</PageTitle>
+
+<div class="nps-page-header">
+    <div>
+        <h1>Roles</h1>
+        <p>System-defined roles used to control access.</p>
+    </div>
+</div>
+
+<RadzenCard class="nps-card">
+    <RadzenDataGrid TItem="RoleDto" Data="@roles" AllowPaging="false" IsLoading="@loading">
+        <Columns>
+            <RadzenDataGridColumn TItem="RoleDto" Title="Role" Property="Name" Width="220px" />
+            <RadzenDataGridColumn TItem="RoleDto" Title="Description" Property="Description" />
+            <RadzenDataGridColumn TItem="RoleDto" Title="Type" Width="140px">
+                <Template Context="r">
+                    <RadzenBadge Text="@(r.IsSystemRole ? "System" : "Custom")"
+                                 BadgeStyle="@(r.IsSystemRole ? BadgeStyle.Primary : BadgeStyle.Secondary)"
+                                 Variant="Variant.Flat" />
+                </Template>
+            </RadzenDataGridColumn>
+        </Columns>
+    </RadzenDataGrid>
+</RadzenCard>
+
+@code {
+    private IReadOnlyList<RoleDto> roles = [];
+    private bool loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        loading = true;
+        roles = await LookupService.GetRolesAsync();
+        loading = false;
+    }
+}

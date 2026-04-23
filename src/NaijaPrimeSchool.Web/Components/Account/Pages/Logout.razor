@@ -1,0 +1,20 @@
+@page "/Account/Logout"
+
+<PageTitle>Signing out · Naija Prime School</PageTitle>
+
+<div class="nps-status-page">
+    <div class="nps-status-card rz-shadow-4">
+        <span class="nps-status-icon rzi rzi-logout"></span>
+        <h1>Signing you out</h1>
+        <p>Please wait while we complete the sign out.</p>
+
+        <form action="/Account/Logout" method="post">
+            <AntiforgeryToken />
+            <input type="hidden" name="returnUrl" value="Account/Login" />
+            <button type="submit" class="rz-button rz-button-md rz-primary">
+                <span class="rzi rzi-logout"></span>
+                <span>Confirm sign out</span>
+            </button>
+        </form>
+    </div>
+</div>

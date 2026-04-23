@@ -1,0 +1,207 @@
+@page "/users"
+@attribute [Authorize(Roles = Roles.SuperAdmin)]
+@rendermode InteractiveServer
+
+@inject IUserService UserService
+@inject ILookupService LookupService
+@inject NavigationManager Nav
+@inject DialogService DialogService
+@inject NotificationService Notification
+
+<PageTitle>Users · Naija Prime School</PageTitle>
+
+<div class="nps-page-header">
+    <div>
+        <h1>Users</h1>
+        <p>Manage staff, pupils, and parent accounts across the school.</p>
+    </div>
+    <div class="nps-page-actions">
+        <RadzenButton Text="Add new user" Icon="person_add"
+                      ButtonStyle="ButtonStyle.Primary" Click="@(() => Nav.NavigateTo("/users/new"))" />
+    </div>
+</div>
+
+<RadzenCard class="nps-card" Style="margin-bottom: 1rem;">
+    <div class="nps-filter-bar">
+        <div class="nps-field">
+            <label>Search</label>
+            <RadzenTextBox @bind-Value="searchTerm" Placeholder="Name, email or username"
+                           Change="@(_ => LoadAsync())" Style="min-width: 260px;" />
+        </div>
+        <div class="nps-field">
+            <label>Role</label>
+            <RadzenDropDown TValue="string" Data="@roleNames" @bind-Value="selectedRole"
+                            Placeholder="All roles" AllowClear="true"
+                            Change="@(_ => LoadAsync())" Style="min-width: 200px;" />
+        </div>
+        <div class="nps-field">
+            <label>Status</label>
+            <RadzenDropDown TValue="bool?" @bind-Value="selectedActive"
+                            Data="@statusOptions" TextProperty="Text" ValueProperty="Value"
+                            AllowClear="true" Placeholder="All"
+                            Change="@(_ => LoadAsync())" Style="min-width: 160px;" />
+        </div>
+        <RadzenButton Text="Refresh" Icon="refresh" Variant="Variant.Flat"
+                      ButtonStyle="ButtonStyle.Light" Click="@LoadAsync" />
+    </div>
+</RadzenCard>
+
+<RadzenCard class="nps-card">
+    <RadzenDataGrid @ref="grid" TItem="UserDto" Data="@users" Count="@totalCount"
+                    IsLoading="@loading" AllowPaging="true" AllowSorting="true"
+                    PageSize="20" PageSizeOptions="@(new[] {10, 20, 50})"
+                    LoadData="@OnLoadData" EmptyText="No users match your filters.">
+        <Columns>
+            <RadzenDataGridColumn TItem="UserDto" Title="Name" Property="FullName">
+                <Template Context="user">
+                    <div style="display:flex; flex-direction:column;">
+                        <strong>@user.FullName</strong>
+                        <small style="color: var(--nps-ink-500);">@user.Email</small>
+                    </div>
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="UserDto" Title="Username" Property="UserName" Width="160px" />
+            <RadzenDataGridColumn TItem="UserDto" Title="Roles" Sortable="false">
+                <Template Context="user">
+                    @foreach (var role in user.Roles)
+                    {
+                        <RadzenBadge Text="@role" BadgeStyle="BadgeStyle.Info"
+                                     Variant="Variant.Flat" Style="margin-right: 0.25rem;" />
+                    }
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="UserDto" Title="Status" Width="120px" Property="IsActive">
+                <Template Context="user">
+                    @if (user.IsActive)
+                    {
+                        <RadzenBadge Text="Active" BadgeStyle="BadgeStyle.Success" Variant="Variant.Flat" />
+                    }
+                    else
+                    {
+                        <RadzenBadge Text="Inactive" BadgeStyle="BadgeStyle.Secondary" Variant="Variant.Flat" />
+                    }
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="UserDto" Title="Actions" Sortable="false" Filterable="false"
+                                  TextAlign="TextAlign.Right" Width="220px">
+                <Template Context="user">
+                    <div class="nps-inline-actions">
+                        <RadzenButton Icon="edit" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Light"
+                                      Variant="Variant.Flat" title="Edit"
+                                      Click="@(() => Nav.NavigateTo($"/users/{user.Id}"))" />
+                        <RadzenButton Icon="admin_panel_settings" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Light"
+                                      Variant="Variant.Flat" title="Assign roles"
+                                      Click="@(() => Nav.NavigateTo($"/users/{user.Id}/roles"))" />
+                        @if (user.IsActive)
+                        {
+                            <RadzenButton Icon="block" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Warning"
+                                          Variant="Variant.Flat" title="Deactivate"
+                                          Click="@(() => DeactivateAsync(user))" />
+                        }
+                        else
+                        {
+                            <RadzenButton Icon="check_circle" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Success"
+                                          Variant="Variant.Flat" title="Activate"
+                                          Click="@(() => ActivateAsync(user))" />
+                        }
+                    </div>
+                </Template>
+            </RadzenDataGridColumn>
+        </Columns>
+    </RadzenDataGrid>
+</RadzenCard>
+
+@code {
+    private RadzenDataGrid<UserDto>? grid;
+    private List<UserDto> users = [];
+    private int totalCount;
+    private bool loading;
+
+    private string? searchTerm;
+    private string? selectedRole;
+    private bool? selectedActive;
+
+    private List<string> roleNames = [];
+
+    private record StatusOption(string Text, bool? Value);
+    private readonly List<StatusOption> statusOptions =
+    [
+        new StatusOption("Active", true),
+        new StatusOption("Inactive", false),
+    ];
+
+    private int skip;
+    private int take = 20;
+    private string? orderBy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var roles = await LookupService.GetRolesAsync();
+        roleNames = roles.Select(r => r.Name).ToList();
+    }
+
+    private async Task OnLoadData(LoadDataArgs args)
+    {
+        skip = args.Skip ?? 0;
+        take = args.Top ?? 20;
+        orderBy = args.OrderBy;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        try
+        {
+            var result = await UserService.ListAsync(new UserListFilter
+            {
+                SearchTerm = searchTerm,
+                Role = selectedRole,
+                IsActive = selectedActive,
+                Skip = skip,
+                Take = take,
+                OrderBy = orderBy,
+            });
+            users = result.Items;
+            totalCount = result.TotalCount;
+        }
+        finally
+        {
+            loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task DeactivateAsync(UserDto user)
+    {
+        var confirm = await DialogService.Confirm(
+            $"Deactivate '{user.FullName}'? They will no longer be able to sign in.",
+            "Deactivate user",
+            new ConfirmOptions { OkButtonText = "Deactivate", CancelButtonText = "Cancel" });
+
+        if (confirm != true) return;
+
+        var result = await UserService.SetActiveAsync(user.Id, false, reason: "Deactivated by administrator", CancellationToken.None);
+        ShowResult(result, $"'{user.FullName}' has been deactivated.");
+        await LoadAsync();
+    }
+
+    private async Task ActivateAsync(UserDto user)
+    {
+        var result = await UserService.SetActiveAsync(user.Id, true, reason: null, CancellationToken.None);
+        ShowResult(result, $"'{user.FullName}' has been activated.");
+        await LoadAsync();
+    }
+
+    private void ShowResult(OperationResult result, string successMessage)
+    {
+        if (result.Succeeded)
+        {
+            Notification.Notify(NotificationSeverity.Success, "Done", successMessage);
+        }
+        else
+        {
+            Notification.Notify(NotificationSeverity.Error, "Failed", string.Join("; ", result.Errors));
+        }
+    }
+}

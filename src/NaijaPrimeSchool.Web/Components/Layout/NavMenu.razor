@@ -1,0 +1,39 @@
+@* Primary navigation rendered inside the Radzen sidebar *@
+
+<RadzenPanelMenu class="nps-panel-menu">
+    <RadzenPanelMenuItem Text="Dashboard" Icon="dashboard" Path="/" />
+
+    <AuthorizeView Roles="@(Roles.SuperAdmin)">
+        <Authorized>
+            <RadzenPanelMenuItem Text="User Management" Icon="manage_accounts" Expanded="true">
+                <RadzenPanelMenuItem Text="All Users" Icon="people" Path="/users" />
+                <RadzenPanelMenuItem Text="Add New User" Icon="person_add" Path="/users/new" />
+                <RadzenPanelMenuItem Text="Roles" Icon="admin_panel_settings" Path="/roles" />
+            </RadzenPanelMenuItem>
+        </Authorized>
+    </AuthorizeView>
+
+    <AuthorizeView Roles="@($"{Roles.SuperAdmin},{Roles.HeadTeacher},{Roles.Teacher}")">
+        <Authorized>
+            <RadzenPanelMenuItem Text="Academics" Icon="school" Disabled="true" />
+        </Authorized>
+    </AuthorizeView>
+
+    <AuthorizeView Roles="@($"{Roles.SuperAdmin},{Roles.SchoolBursar}")">
+        <Authorized>
+            <RadzenPanelMenuItem Text="Finance" Icon="payments" Disabled="true" />
+        </Authorized>
+    </AuthorizeView>
+
+    <AuthorizeView Roles="@($"{Roles.SuperAdmin},{Roles.SchoolStoreKeeper}")">
+        <Authorized>
+            <RadzenPanelMenuItem Text="Store & Inventory" Icon="inventory_2" Disabled="true" />
+        </Authorized>
+    </AuthorizeView>
+
+    <AuthorizeView Roles="@($"{Roles.Parent},{Roles.Student}")">
+        <Authorized>
+            <RadzenPanelMenuItem Text="My Children" Icon="family_restroom" Disabled="true" />
+        </Authorized>
+    </AuthorizeView>
+</RadzenPanelMenu>

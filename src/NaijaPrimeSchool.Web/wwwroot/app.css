@@ -1,0 +1,439 @@
+:root {
+    --nps-green-900: #064e2b;
+    --nps-green-700: #0a7a43;
+    --nps-green-500: #1ba05c;
+    --nps-green-200: #d9f1e3;
+    --nps-amber-500: #f5a524;
+    --nps-ink-900: #1a1f36;
+    --nps-ink-700: #323a4f;
+    --nps-ink-500: #5a6478;
+    --nps-ink-200: #e5e7eb;
+    --nps-surface: #f8faf9;
+    --nps-surface-alt: #ffffff;
+    --nps-danger-500: #d64545;
+}
+
+html, body {
+    margin: 0;
+    height: 100%;
+    font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    color: var(--nps-ink-900);
+    background: var(--nps-surface);
+}
+
+h1:focus {
+    outline: none;
+}
+
+.valid.modified:not([type=checkbox]) {
+    outline: none;
+}
+
+.invalid {
+    outline: 1px solid var(--nps-danger-500);
+}
+
+.validation-message,
+.nps-field-error {
+    color: var(--nps-danger-500);
+    font-size: 0.8rem;
+    margin-top: 0.25rem;
+    display: block;
+}
+
+.blazor-error-boundary {
+    background: #b32121;
+    padding: 1rem 1rem 1rem 3.7rem;
+    color: white;
+}
+
+.blazor-error-boundary::after {
+    content: "An error has occurred."
+}
+
+/* ===================== Radzen overrides ===================== */
+.rz-header {
+    background: linear-gradient(90deg, var(--nps-green-900) 0%, var(--nps-green-700) 100%) !important;
+    color: #fff !important;
+    height: 64px;
+}
+
+.rz-header .rz-button {
+    color: #fff !important;
+}
+
+.rz-sidebar {
+    background: var(--nps-surface-alt);
+    border-right: 1px solid var(--nps-ink-200);
+}
+
+/* ===================== Shell ===================== */
+.nps-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    color: #fff;
+    padding-left: 0.5rem;
+}
+
+.nps-brand-badge {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: var(--nps-amber-500);
+    color: var(--nps-green-900);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+}
+
+.nps-brand-text {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.1;
+}
+
+.nps-brand-text strong {
+    font-size: 1.05rem;
+    font-weight: 700;
+    letter-spacing: 0.2px;
+}
+
+.nps-brand-text small {
+    font-size: 0.72rem;
+    opacity: 0.85;
+}
+
+.nps-user-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    color: #fff;
+    background: rgba(255, 255, 255, 0.14);
+    padding: 0.3rem 0.75rem;
+    border-radius: 999px;
+    font-size: 0.85rem;
+}
+
+.nps-logout-button {
+    background: rgba(255,255,255,0.15) !important;
+    color: #fff !important;
+    border: 1px solid rgba(255,255,255,0.35) !important;
+    gap: 0.35rem;
+}
+
+.nps-logout-button:hover {
+    background: rgba(255,255,255,0.25) !important;
+}
+
+.nps-page-container {
+    padding: 1.25rem 1.75rem 2rem;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+/* ===================== Page headers ===================== */
+.nps-page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.25rem;
+}
+
+.nps-page-header h1 {
+    font-size: 1.6rem;
+    font-weight: 700;
+    margin: 0;
+    color: var(--nps-ink-900);
+}
+
+.nps-page-header p {
+    margin: 0.25rem 0 0;
+    color: var(--nps-ink-500);
+}
+
+.nps-page-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+/* ===================== Cards & forms ===================== */
+.nps-card {
+    background: var(--nps-surface-alt);
+    border-radius: 14px;
+    padding: 1.5rem;
+    box-shadow: 0 6px 24px rgba(15, 23, 42, 0.06);
+}
+
+.nps-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem 1.25rem;
+}
+
+.nps-form-grid .nps-span-2 {
+    grid-column: span 2;
+}
+
+@media (max-width: 720px) {
+    .nps-form-grid { grid-template-columns: 1fr; }
+    .nps-form-grid .nps-span-2 { grid-column: span 1; }
+}
+
+.nps-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.nps-field label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--nps-ink-700);
+}
+
+.nps-field .rz-textbox,
+.nps-field .rz-dropdown,
+.nps-field .rz-datepicker {
+    width: 100% !important;
+}
+
+.nps-form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin-top: 1.25rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--nps-ink-200);
+}
+
+/* ===================== Auth page ===================== */
+.nps-auth-page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    background:
+        radial-gradient(circle at 10% 10%, rgba(10, 122, 67, 0.18), transparent 40%),
+        radial-gradient(circle at 90% 90%, rgba(245, 165, 36, 0.2), transparent 40%),
+        linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%);
+}
+
+.nps-auth-card {
+    background: var(--nps-surface-alt);
+    width: 100%;
+    max-width: 440px;
+    border-radius: 18px;
+    padding: 2rem 2rem 1.5rem;
+    border: 1px solid var(--nps-ink-200);
+}
+
+.nps-auth-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    margin-bottom: 1.25rem;
+}
+
+.nps-auth-logo {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    background: var(--nps-green-700);
+    color: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+}
+
+.nps-auth-title {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--nps-ink-900);
+}
+
+.nps-auth-subtitle {
+    margin: 0.1rem 0 0;
+    font-size: 0.8rem;
+    color: var(--nps-ink-500);
+}
+
+.nps-auth-heading {
+    margin: 0.5rem 0 0.25rem;
+    font-size: 1.4rem;
+    font-weight: 700;
+}
+
+.nps-auth-lede {
+    margin: 0 0 1.25rem;
+    color: var(--nps-ink-500);
+}
+
+.nps-auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.nps-auth-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.nps-checkbox {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    color: var(--nps-ink-700);
+    font-size: 0.9rem;
+}
+
+.nps-auth-submit {
+    width: 100%;
+    justify-content: center;
+    gap: 0.4rem;
+}
+
+.nps-auth-footer {
+    text-align: center;
+    margin-top: 1.25rem;
+    color: var(--nps-ink-500);
+}
+
+/* ===================== Status pages ===================== */
+.nps-status-page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    background:
+        linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%);
+}
+
+.nps-status-card {
+    background: #fff;
+    border-radius: 18px;
+    padding: 2rem;
+    max-width: 440px;
+    width: 100%;
+    text-align: center;
+    border: 1px solid var(--nps-ink-200);
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    align-items: center;
+}
+
+.nps-status-icon {
+    font-size: 48px;
+    color: var(--nps-green-700);
+}
+
+.nps-status-card h1 {
+    margin: 0;
+    font-size: 1.3rem;
+}
+
+.nps-status-card p {
+    color: var(--nps-ink-500);
+    margin: 0;
+}
+
+/* ===================== Home page ===================== */
+.nps-hero {
+    background: linear-gradient(120deg, var(--nps-green-700), var(--nps-green-900) 70%);
+    color: #fff;
+    padding: 2rem 2.5rem;
+    border-radius: 18px;
+    box-shadow: 0 12px 30px rgba(10, 122, 67, 0.25);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.nps-hero h2 {
+    margin: 0 0 0.25rem;
+    font-size: 1.6rem;
+}
+
+.nps-hero p {
+    margin: 0;
+    opacity: 0.9;
+}
+
+.nps-hero-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.nps-stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 1rem;
+    margin-top: 1.25rem;
+}
+
+.nps-stat-card {
+    background: var(--nps-surface-alt);
+    border-radius: 14px;
+    padding: 1.1rem 1.25rem;
+    border: 1px solid var(--nps-ink-200);
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+}
+
+.nps-stat-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--nps-green-200);
+    color: var(--nps-green-900);
+    font-size: 22px;
+}
+
+.nps-stat-label {
+    color: var(--nps-ink-500);
+    font-size: 0.8rem;
+}
+
+.nps-stat-value {
+    font-size: 1.35rem;
+    font-weight: 700;
+}
+
+/* ===================== Table helpers ===================== */
+.nps-inline-actions {
+    display: inline-flex;
+    gap: 0.35rem;
+}
+
+.nps-filter-bar {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    align-items: end;
+    margin-bottom: 1rem;
+}
+
+.nps-filter-bar .rz-textbox,
+.nps-filter-bar .rz-dropdown {
+    min-width: 220px;
+}

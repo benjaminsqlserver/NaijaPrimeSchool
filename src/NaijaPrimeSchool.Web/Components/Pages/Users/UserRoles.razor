@@ -1,0 +1,95 @@
+@page "/users/{Id:guid}/roles"
+@attribute [Authorize(Roles = Roles.SuperAdmin)]
+@rendermode InteractiveServer
+
+@inject IUserService UserService
+@inject ILookupService LookupService
+@inject NavigationManager Nav
+@inject NotificationService Notification
+
+<PageTitle>Assign roles · Naija Prime School</PageTitle>
+
+<div class="nps-page-header">
+    <div>
+        <h1>Assign roles</h1>
+        <p>@user?.FullName <span style="color: var(--nps-ink-500);">· @user?.Email</span></p>
+    </div>
+    <div class="nps-page-actions">
+        <RadzenButton Text="Back to user" Icon="arrow_back"
+                      ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat"
+                      Click="@(() => Nav.NavigateTo($"/users/{Id}"))" />
+    </div>
+</div>
+
+@if (!loaded)
+{
+    <RadzenCard class="nps-card">
+        <RadzenProgressBarCircular ShowValue="false" Mode="ProgressBarMode.Indeterminate" />
+    </RadzenCard>
+}
+else if (user is null)
+{
+    <RadzenAlert AlertStyle="AlertStyle.Warning" Variant="Variant.Flat">User not found.</RadzenAlert>
+}
+else
+{
+    <RadzenCard class="nps-card">
+        <p style="margin:0 0 1rem; color:var(--nps-ink-500);">
+            Select the roles this user should have. Access to features is determined by role membership.
+        </p>
+
+        <RadzenCheckBoxList TValue="string" @bind-Value="selected"
+                            Data="@roleOptions"
+                            TextProperty="Name" ValueProperty="Name"
+                            Orientation="Orientation.Vertical" />
+
+        <div class="nps-form-actions">
+            <RadzenButton Text="Cancel" ButtonType="ButtonType.Button"
+                          ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat"
+                          Click="@(() => Nav.NavigateTo($"/users/{Id}"))" />
+            <RadzenButton Text="@(saving ? "Saving..." : "Save roles")"
+                          Icon="save" ButtonStyle="ButtonStyle.Primary"
+                          Click="@SaveAsync" Disabled="@saving" />
+        </div>
+    </RadzenCard>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private UserDto? user;
+    private IReadOnlyList<RoleDto> roleOptions = [];
+    private IEnumerable<string> selected = [];
+    private bool loaded;
+    private bool saving;
+
+    protected override async Task OnInitializedAsync()
+    {
+        roleOptions = await LookupService.GetRolesAsync();
+        user = await UserService.GetByIdAsync(Id);
+        selected = user?.Roles ?? [];
+        loaded = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        saving = true;
+        try
+        {
+            var result = await UserService.AssignRolesAsync(Id, selected ?? [], CancellationToken.None);
+            if (result.Succeeded)
+            {
+                Notification.Notify(NotificationSeverity.Success, "Roles updated", "Role assignments saved.");
+                Nav.NavigateTo($"/users/{Id}");
+            }
+            else
+            {
+                Notification.Notify(NotificationSeverity.Error, "Failed", string.Join("; ", result.Errors));
+            }
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+}

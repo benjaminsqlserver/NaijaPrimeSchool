@@ -1,0 +1,59 @@
+@inherits LayoutComponentBase
+
+<RadzenComponents @rendermode="InteractiveServer" />
+
+<RadzenLayout Style="height: 100vh;">
+    <AuthorizeView>
+        <Authorized>
+            <RadzenHeader>
+                <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center"
+                             Gap="0.5rem" class="nps-header-stack" Style="height: 100%; padding-inline: 0.5rem;">
+                    <RadzenSidebarToggle Click="@(() => sidebarExpanded = !sidebarExpanded)" />
+                    <div class="nps-brand">
+                        <span class="nps-brand-badge">NPS</span>
+                        <div class="nps-brand-text">
+                            <strong>Naija Prime School</strong>
+                            <small>School Management Portal</small>
+                        </div>
+                    </div>
+                    <div style="flex: 1"></div>
+                    <div class="nps-user-chip">
+                        <span class="rzi rzi-person"></span>
+                        <span>@context.User.Identity?.Name</span>
+                    </div>
+                    <form action="/Account/Logout" method="post" style="margin: 0;">
+                        <AntiforgeryToken />
+                        <input type="hidden" name="returnUrl" value="Account/Login" />
+                        <button type="submit" class="rz-button rz-button-sm rz-light nps-logout-button" title="Sign out">
+                            <span class="rzi rzi-logout"></span>
+                            <span>Sign out</span>
+                        </button>
+                    </form>
+                </RadzenStack>
+            </RadzenHeader>
+            <RadzenSidebar @bind-Expanded="sidebarExpanded" Responsive="true" Style="width: 260px;">
+                <NavMenu />
+            </RadzenSidebar>
+            <RadzenBody>
+                <div class="nps-page-container">
+                    @Body
+                </div>
+            </RadzenBody>
+        </Authorized>
+        <NotAuthorized>
+            <RadzenBody Style="padding: 0;">
+                @Body
+            </RadzenBody>
+        </NotAuthorized>
+    </AuthorizeView>
+</RadzenLayout>
+
+<div id="blazor-error-ui" data-nosnippet>
+    An unhandled error has occurred.
+    <a href="." class="reload">Reload</a>
+    <span class="dismiss">🗙</span>
+</div>
+
+@code {
+    private bool sidebarExpanded = true;
+}

@@ -1,0 +1,84 @@
+@page "/"
+@attribute [Authorize]
+@rendermode InteractiveServer
+
+<PageTitle>Dashboard · Naija Prime School</PageTitle>
+
+<div class="nps-hero">
+    <div>
+        <AuthorizeView>
+            <Authorized>
+                <h2>Welcome, @context.User.Identity?.Name!</h2>
+            </Authorized>
+            <NotAuthorized>
+                <h2>Welcome to Naija Prime School</h2>
+            </NotAuthorized>
+        </AuthorizeView>
+        <p>Empowering every child with the foundation to lead Nigeria's tomorrow.</p>
+    </div>
+    <div class="nps-hero-actions">
+        <AuthorizeView Roles="@Roles.SuperAdmin">
+            <Authorized>
+                <RadzenButton Text="Manage users" Icon="manage_accounts"
+                              ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat"
+                              Click="@(() => Nav.NavigateTo("/users"))" />
+                <RadzenButton Text="Add user" Icon="person_add"
+                              ButtonStyle="ButtonStyle.Warning" Variant="Variant.Filled"
+                              Click="@(() => Nav.NavigateTo("/users/new"))" />
+            </Authorized>
+        </AuthorizeView>
+    </div>
+</div>
+
+<div class="nps-stat-grid">
+    <div class="nps-stat-card">
+        <span class="nps-stat-icon rzi rzi-people"></span>
+        <div>
+            <div class="nps-stat-label">Staff &amp; students</div>
+            <div class="nps-stat-value">@totalUsers</div>
+        </div>
+    </div>
+    <div class="nps-stat-card">
+        <span class="nps-stat-icon rzi rzi-admin_panel_settings"></span>
+        <div>
+            <div class="nps-stat-label">Roles configured</div>
+            <div class="nps-stat-value">@totalRoles</div>
+        </div>
+    </div>
+    <div class="nps-stat-card">
+        <span class="nps-stat-icon rzi rzi-verified_user"></span>
+        <div>
+            <div class="nps-stat-label">Active users</div>
+            <div class="nps-stat-value">@activeUsers</div>
+        </div>
+    </div>
+    <div class="nps-stat-card">
+        <span class="nps-stat-icon rzi rzi-person_off"></span>
+        <div>
+            <div class="nps-stat-label">Deactivated</div>
+            <div class="nps-stat-value">@deactivatedUsers</div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Inject] private IUserService UserService { get; set; } = default!;
+    [Inject] private ILookupService LookupService { get; set; } = default!;
+    [Inject] private NavigationManager Nav { get; set; } = default!;
+
+    private int totalUsers;
+    private int activeUsers;
+    private int deactivatedUsers;
+    private int totalRoles;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var all = await UserService.ListAsync(new UserListFilter { Take = 10_000 });
+        totalUsers = all.TotalCount;
+        activeUsers = all.Items.Count(u => u.IsActive);
+        deactivatedUsers = all.Items.Count(u => !u.IsActive);
+
+        var roles = await LookupService.GetRolesAsync();
+        totalRoles = roles.Count;
+    }
+}

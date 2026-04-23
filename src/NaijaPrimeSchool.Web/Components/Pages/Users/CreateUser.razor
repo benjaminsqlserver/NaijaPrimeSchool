@@ -1,0 +1,171 @@
+@page "/users/new"
+@attribute [Authorize(Roles = Roles.SuperAdmin)]
+@rendermode InteractiveServer
+
+@inject IUserService UserService
+@inject ILookupService LookupService
+@inject NavigationManager Nav
+@inject NotificationService Notification
+
+<PageTitle>Add user · Naija Prime School</PageTitle>
+
+<div class="nps-page-header">
+    <div>
+        <h1>Add new user</h1>
+        <p>Create a new staff, parent, or student account and assign their roles.</p>
+    </div>
+    <div class="nps-page-actions">
+        <RadzenButton Text="Back to users" Icon="arrow_back"
+                      ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat"
+                      Click="@(() => Nav.NavigateTo("/users"))" />
+    </div>
+</div>
+
+<RadzenCard class="nps-card">
+    <RadzenTemplateForm TItem="CreateUserRequest" Data="@model" Submit="@OnSubmit">
+        <DataAnnotationsValidator />
+
+        <h3 style="margin:0 0 1rem; font-size:1.1rem;">Personal details</h3>
+        <div class="nps-form-grid">
+            <div class="nps-field">
+                <label>Title</label>
+                <RadzenDropDown TValue="Guid?" Data="@titles" TextProperty="Name" ValueProperty="Id"
+                                @bind-Value="model.TitleId" Placeholder="Select a title" AllowClear="true" />
+            </div>
+            <div class="nps-field">
+                <label>Gender</label>
+                <RadzenDropDown TValue="Guid?" Data="@genders" TextProperty="Name" ValueProperty="Id"
+                                @bind-Value="model.GenderId" Placeholder="Select a gender" AllowClear="true" />
+            </div>
+            <div class="nps-field">
+                <label>First name *</label>
+                <RadzenTextBox @bind-Value="model.FirstName" Placeholder="Chiamaka" />
+                <ValidationMessage For="() => model.FirstName" />
+            </div>
+            <div class="nps-field">
+                <label>Middle name</label>
+                <RadzenTextBox @bind-Value="model.MiddleName" />
+            </div>
+            <div class="nps-field">
+                <label>Last name *</label>
+                <RadzenTextBox @bind-Value="model.LastName" Placeholder="Okafor" />
+                <ValidationMessage For="() => model.LastName" />
+            </div>
+            <div class="nps-field">
+                <label>Date of birth</label>
+                <RadzenDatePicker TValue="DateTime?" @bind-Value="model.DateOfBirth"
+                                  DateFormat="d MMM yyyy" ShowTime="false" />
+            </div>
+            <div class="nps-field nps-span-2">
+                <label>Address</label>
+                <RadzenTextArea @bind-Value="model.Address" Rows="2"
+                                Placeholder="Street, area, city" />
+            </div>
+        </div>
+
+        <h3 style="margin:1.5rem 0 1rem; font-size:1.1rem;">Account</h3>
+        <div class="nps-form-grid">
+            <div class="nps-field">
+                <label>Username *</label>
+                <RadzenTextBox @bind-Value="model.UserName" Placeholder="chiamaka.o" />
+                <ValidationMessage For="() => model.UserName" />
+            </div>
+            <div class="nps-field">
+                <label>Email *</label>
+                <RadzenTextBox @bind-Value="model.Email" Placeholder="name@school.ng" />
+                <ValidationMessage For="() => model.Email" />
+            </div>
+            <div class="nps-field">
+                <label>Phone</label>
+                <RadzenTextBox @bind-Value="model.PhoneNumber" Placeholder="+234 800 000 0000" />
+                <ValidationMessage For="() => model.PhoneNumber" />
+            </div>
+            <div class="nps-field">
+                <label>Active</label>
+                <RadzenSwitch @bind-Value="model.IsActive" />
+            </div>
+            <div class="nps-field">
+                <label>Password *</label>
+                <RadzenPassword @bind-Value="model.Password" AutoComplete="false" />
+                <ValidationMessage For="() => model.Password" />
+            </div>
+            <div class="nps-field">
+                <label>Confirm password *</label>
+                <RadzenPassword @bind-Value="model.ConfirmPassword" AutoComplete="false" />
+                <ValidationMessage For="() => model.ConfirmPassword" />
+            </div>
+        </div>
+
+        <h3 style="margin:1.5rem 0 1rem; font-size:1.1rem;">Roles *</h3>
+        <div class="nps-field">
+            <RadzenCheckBoxList TValue="string" Value="@model.Roles"
+                                ValueChanged="@OnRolesChanged"
+                                ValueExpression="@(() => model.Roles)"
+                                Data="@roleOptions"
+                                TextProperty="Name" ValueProperty="Name"
+                                Orientation="Orientation.Horizontal" />
+            <ValidationMessage For="() => model.Roles" />
+        </div>
+
+        <div class="nps-form-actions">
+            <RadzenButton Text="Cancel" ButtonType="ButtonType.Button"
+                          ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat"
+                          Click="@(() => Nav.NavigateTo("/users"))" />
+            <RadzenButton Text="@(saving ? "Creating..." : "Create user")"
+                          Icon="save"
+                          ButtonType="ButtonType.Submit"
+                          ButtonStyle="ButtonStyle.Primary"
+                          Disabled="@saving" />
+        </div>
+    </RadzenTemplateForm>
+</RadzenCard>
+
+@code {
+    private CreateUserRequest model = new();
+    private IReadOnlyList<LookupDto> titles = [];
+    private IReadOnlyList<LookupDto> genders = [];
+    private IReadOnlyList<RoleDto> roleOptions = [];
+    private bool saving;
+
+    private void OnRolesChanged(IEnumerable<string> values)
+    {
+        model.Roles = values?.ToList() ?? [];
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        titles = await LookupService.GetTitlesAsync();
+        genders = await LookupService.GetGendersAsync();
+        roleOptions = await LookupService.GetRolesAsync();
+    }
+
+    private async Task OnSubmit()
+    {
+        if (model.Roles.Count == 0)
+        {
+            Notification.Notify(NotificationSeverity.Warning, "Roles required", "Please assign at least one role.");
+            return;
+        }
+
+        saving = true;
+        try
+        {
+            var result = await UserService.CreateAsync(model);
+            if (result.Succeeded)
+            {
+                Notification.Notify(NotificationSeverity.Success, "User created",
+                    $"{model.FirstName} {model.LastName} is ready to go.");
+                Nav.NavigateTo("/users");
+            }
+            else
+            {
+                Notification.Notify(NotificationSeverity.Error, "Could not create user",
+                    string.Join("; ", result.Errors));
+            }
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+}

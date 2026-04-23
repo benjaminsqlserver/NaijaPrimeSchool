@@ -1,0 +1,101 @@
+# Build output
+bin/
+obj/
+out/
+[Bb]in/
+[Oo]bj/
+[Oo]ut/
+[Ll]og/
+[Ll]ogs/
+
+# Visual Studio / Rider / VS Code user state
+.vs/
+.vscode/
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.userprefs
+*.DotSettings.user
+
+# Build artifacts
+*.pdb
+*.dll.config
+*.exe.config
+*.log
+*.tlog
+*.binlog
+
+# NuGet
+*.nupkg
+*.snupkg
+.nuget/
+packages/
+!packages/build/
+**/packages/*
+!**/packages/build/
+*.nuget.props
+*.nuget.targets
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# Entity Framework
+*.edmx.diagram
+*.mdf
+*.ldf
+*.ndf
+
+# Secrets (never commit)
+**/appsettings.*.Local.json
+**/appsettings.Production.json
+*.pfx
+*.pem
+*.key
+*.p12
+.env
+.env.*
+secrets.json
+
+# ASP.NET Scaffolding / publish
+PublishProfiles/
+*.pubxml
+*.pubxml.user
+*.publishsettings
+publish/
+Publish/
+
+# Node / frontend tools (in case of scripts later)
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json.bak
+
+# Test output
+TestResults/
+[Tt]est[Rr]esult*/
+coverage*.json
+coverage*.xml
+coverage/
+*.coverage
+*.coveragexml
+
+# Misc OS
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Generated
+Generated_Code/
+*.Generated.cs
+
+# Rider
+_ReSharper.Caches/
+_ReSharper.*/
+*.[Rr]e[Ss]harper
+
+# JetBrains
+.idea/
+*.iml
