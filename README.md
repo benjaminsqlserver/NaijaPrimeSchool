@@ -4,7 +4,7 @@ A modern school management system for Nigerian primary schools, built with **.NE
 
 Two sprints have shipped. **Sprint 1** delivered the authentication & authorization foundation: user accounts, role-based access control, login/logout, activation/deactivation, and the SuperAdmin user-management screens. **Sprint 2** built the academic domain on top of that foundation: sessions, terms, class arms, subjects, timetable periods, and a click-to-edit weekly timetable grid.
 
-Implementation walk-throughs for both sprints live at the repo root as Word documents:
+Implementation walk-throughs for both sprints live at the repo root as pdf documents:
 
 - `Sprint 1 - Implementation Guide.pdf`
 - `Sprint 2 - Implementation Guide.pdf`
