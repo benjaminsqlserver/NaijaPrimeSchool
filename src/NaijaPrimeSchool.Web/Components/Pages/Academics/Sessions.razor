@@ -1,0 +1,230 @@
+@page "/sessions"
+@using NaijaPrimeSchool.Application.Academics
+@using NaijaPrimeSchool.Application.Academics.Dtos
+@attribute [Authorize(Roles = $"{Roles.SuperAdmin},{Roles.HeadTeacher}")]
+@rendermode InteractiveServer
+
+@inject ISessionService SessionService
+@inject NotificationService Notification
+@inject DialogService Dialog
+
+<PageTitle>Academic sessions · Naija Prime School</PageTitle>
+
+<div class="nps-page-header">
+    <div>
+        <h1>Academic sessions</h1>
+        <p>Manage academic years and the term schedule built on top of them.</p>
+    </div>
+    <div class="nps-page-actions">
+        <RadzenButton Text="New session" Icon="add" ButtonStyle="ButtonStyle.Primary"
+                      Click="@(() => OpenForm(null))" />
+    </div>
+</div>
+
+<RadzenCard class="nps-card">
+    <RadzenDataGrid TItem="SessionDto" Data="@sessions" IsLoading="@loading"
+                    AllowPaging="true" PageSize="20" EmptyText="No sessions yet.">
+        <Columns>
+            <RadzenDataGridColumn TItem="SessionDto" Title="Name" Property="Name">
+                <Template Context="s">
+                    <strong>@s.Name</strong>
+                    @if (s.IsCurrent)
+                    {
+                        <RadzenBadge Text="Current" BadgeStyle="BadgeStyle.Success"
+                                     Variant="Variant.Flat" Style="margin-left:.5rem;" />
+                    }
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="SessionDto" Title="Start" Property="StartDate" FormatString="{0:d MMM yyyy}" Width="140px" />
+            <RadzenDataGridColumn TItem="SessionDto" Title="End"   Property="EndDate"   FormatString="{0:d MMM yyyy}" Width="140px" />
+            <RadzenDataGridColumn TItem="SessionDto" Title="Terms"   Property="TermCount"  Width="100px" />
+            <RadzenDataGridColumn TItem="SessionDto" Title="Classes" Property="ClassCount" Width="100px" />
+            <RadzenDataGridColumn TItem="SessionDto" Title="Actions" Sortable="false" Width="220px" TextAlign="TextAlign.Right">
+                <Template Context="s">
+                    <div class="nps-inline-actions">
+                        @if (!s.IsCurrent)
+                        {
+                            <RadzenButton Icon="check_circle" Size="ButtonSize.Small"
+                                          ButtonStyle="ButtonStyle.Success" Variant="Variant.Flat"
+                                          title="Mark current"
+                                          Click="@(() => SetCurrentAsync(s))" />
+                        }
+                        <RadzenButton Icon="edit" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                      ButtonStyle="ButtonStyle.Light" title="Edit"
+                                      Click="@(() => OpenForm(s))" />
+                        <RadzenButton Icon="delete" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                      ButtonStyle="ButtonStyle.Danger" title="Delete"
+                                      Click="@(() => DeleteAsync(s))" />
+                    </div>
+                </Template>
+            </RadzenDataGridColumn>
+        </Columns>
+    </RadzenDataGrid>
+</RadzenCard>
+
+@if (showForm)
+{
+    <RadzenCard class="nps-card" Style="margin-top:1rem;">
+        <h3 style="margin:0 0 1rem;">@(editingId.HasValue ? "Edit session" : "New session")</h3>
+        <RadzenTemplateForm TItem="SessionFormModel" Data="@form" Submit="@SaveAsync">
+            <DataAnnotationsValidator />
+            <div class="nps-form-grid">
+                <div class="nps-field">
+                    <label>Name *</label>
+                    <RadzenTextBox @bind-Value="form.Name" Placeholder="2025/2026" />
+                    <ValidationMessage For="() => form.Name" />
+                </div>
+                <div class="nps-field">
+                    <label>Start date *</label>
+                    <RadzenDatePicker TValue="DateTime?" @bind-Value="form.StartDate"
+                                      DateFormat="d MMM yyyy" ShowTime="false" />
+                </div>
+                <div class="nps-field">
+                    <label>End date *</label>
+                    <RadzenDatePicker TValue="DateTime?" @bind-Value="form.EndDate"
+                                      DateFormat="d MMM yyyy" ShowTime="false" />
+                </div>
+                <div class="nps-field">
+                    <label>Mark current</label>
+                    <RadzenSwitch @bind-Value="form.IsCurrent" />
+                </div>
+            </div>
+            <div class="nps-form-actions">
+                <RadzenButton Text="Cancel" ButtonType="ButtonType.Button"
+                              ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat"
+                              Click="@(() => showForm = false)" />
+                <RadzenButton Text="@(saving ? "Saving..." : "Save")"
+                              Icon="save" ButtonType="ButtonType.Submit"
+                              ButtonStyle="ButtonStyle.Primary" Disabled="@saving" />
+            </div>
+        </RadzenTemplateForm>
+    </RadzenCard>
+}
+
+@code {
+    private IReadOnlyList<SessionDto> sessions = [];
+    private bool loading;
+    private bool saving;
+    private bool showForm;
+    private Guid? editingId;
+
+    private SessionFormModel form = new();
+
+    private class SessionFormModel
+    {
+        [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(40)]
+        public string Name { get; set; } = string.Empty;
+        public DateTime? StartDate { get; set; }
+        public DateTime? EndDate { get; set; }
+        public bool IsCurrent { get; set; }
+    }
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        try { sessions = await SessionService.ListAsync(); }
+        finally { loading = false; }
+    }
+
+    private void OpenForm(SessionDto? s)
+    {
+        editingId = s?.Id;
+        form = new SessionFormModel
+        {
+            Name = s?.Name ?? string.Empty,
+            StartDate = s is null ? null : s.StartDate.ToDateTime(TimeOnly.MinValue),
+            EndDate = s is null ? null : s.EndDate.ToDateTime(TimeOnly.MinValue),
+            IsCurrent = s?.IsCurrent ?? false,
+        };
+        showForm = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (form.StartDate is null || form.EndDate is null)
+        {
+            Notification.Notify(NotificationSeverity.Warning, "Dates required",
+                "Please pick a start and end date.");
+            return;
+        }
+
+        saving = true;
+        try
+        {
+            var start = DateOnly.FromDateTime(form.StartDate.Value);
+            var end = DateOnly.FromDateTime(form.EndDate.Value);
+
+            OperationResult result;
+            if (editingId.HasValue)
+            {
+                result = await SessionService.UpdateAsync(new UpdateSessionRequest
+                {
+                    Id = editingId.Value,
+                    Name = form.Name,
+                    StartDate = start,
+                    EndDate = end,
+                    IsCurrent = form.IsCurrent,
+                });
+            }
+            else
+            {
+                result = await SessionService.CreateAsync(new CreateSessionRequest
+                {
+                    Name = form.Name,
+                    StartDate = start,
+                    EndDate = end,
+                    IsCurrent = form.IsCurrent,
+                });
+            }
+
+            if (result.Succeeded)
+            {
+                Notification.Notify(NotificationSeverity.Success, "Saved", $"Session '{form.Name}' saved.");
+                showForm = false;
+                await LoadAsync();
+            }
+            else
+            {
+                Notification.Notify(NotificationSeverity.Error, "Failed", string.Join("; ", result.Errors));
+            }
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private async Task SetCurrentAsync(SessionDto s)
+    {
+        var result = await SessionService.SetCurrentAsync(s.Id);
+        if (result.Succeeded)
+        {
+            Notification.Notify(NotificationSeverity.Success, "Current session", $"'{s.Name}' is now the current session.");
+            await LoadAsync();
+        }
+        else
+        {
+            Notification.Notify(NotificationSeverity.Error, "Failed", string.Join("; ", result.Errors));
+        }
+    }
+
+    private async Task DeleteAsync(SessionDto s)
+    {
+        var confirm = await Dialog.Confirm($"Delete session '{s.Name}'?", "Confirm delete",
+            new ConfirmOptions { OkButtonText = "Delete", CancelButtonText = "Cancel" });
+        if (confirm != true) return;
+
+        var result = await SessionService.SoftDeleteAsync(s.Id);
+        if (result.Succeeded)
+        {
+            Notification.Notify(NotificationSeverity.Success, "Deleted", $"Session '{s.Name}' deleted.");
+            await LoadAsync();
+        }
+        else
+        {
+            Notification.Notify(NotificationSeverity.Error, "Failed", string.Join("; ", result.Errors));
+        }
+    }
+}

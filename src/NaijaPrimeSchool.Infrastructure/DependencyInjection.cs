@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using NaijaPrimeSchool.Application.Academics;
 using NaijaPrimeSchool.Application.Users;
 using NaijaPrimeSchool.Domain.Identity;
 using NaijaPrimeSchool.Infrastructure.Persistence;
@@ -46,6 +47,12 @@ public static class DependencyInjection
 
         services.AddScoped<IUserService, UserService>();
         services.AddScoped<ILookupService, LookupService>();
+
+        services.AddScoped<ISessionService, SessionService>();
+        services.AddScoped<ITermService, TermService>();
+        services.AddScoped<ISchoolClassService, SchoolClassService>();
+        services.AddScoped<ISubjectService, SubjectService>();
+        services.AddScoped<ITimetableService, TimetableService>();
 
         return services;
     }

@@ -1,0 +1,294 @@
+@page "/timetable"
+@using NaijaPrimeSchool.Application.Academics
+@using NaijaPrimeSchool.Application.Academics.Dtos
+@attribute [Authorize(Roles = $"{Roles.SuperAdmin},{Roles.HeadTeacher},{Roles.Teacher}")]
+@rendermode InteractiveServer
+
+@inject ITimetableService TimetableService
+@inject ITermService TermService
+@inject ISchoolClassService ClassService
+@inject ISubjectService SubjectService
+@inject ILookupService LookupService
+@inject NotificationService Notification
+@inject DialogService Dialog
+
+<PageTitle>Timetable · Naija Prime School</PageTitle>
+
+<div class="nps-page-header">
+    <div>
+        <h1>Class timetable</h1>
+        <p>Pick a term and a class to view or edit its weekly schedule.</p>
+    </div>
+</div>
+
+<RadzenCard class="nps-card" Style="margin-bottom:1rem;">
+    <div class="nps-filter-bar">
+        <div class="nps-field">
+            <label>Term</label>
+            <RadzenDropDown TValue="Guid?" Data="@terms" @bind-Value="selectedTermId"
+                            TextProperty="Display" ValueProperty="Id"
+                            Placeholder="Choose a term" Change="@(_ => LoadEntriesAsync())"
+                            Style="min-width:280px;" />
+        </div>
+        <div class="nps-field">
+            <label>Class</label>
+            <RadzenDropDown TValue="Guid?" Data="@classes" @bind-Value="selectedClassId"
+                            TextProperty="Name" ValueProperty="Id"
+                            Placeholder="Choose a class" Change="@(_ => LoadEntriesAsync())"
+                            Style="min-width:240px;" />
+        </div>
+    </div>
+</RadzenCard>
+
+@if (selectedTermId is null || selectedClassId is null)
+{
+    <RadzenAlert AlertStyle="AlertStyle.Info" Variant="Variant.Flat">
+        Pick a term and a class to load the timetable.
+    </RadzenAlert>
+}
+else
+{
+    <RadzenCard class="nps-card">
+        @if (loading)
+        {
+            <RadzenProgressBarCircular ShowValue="false" Mode="ProgressBarMode.Indeterminate" />
+        }
+        else
+        {
+            <div class="nps-timetable">
+                <table class="nps-timetable-grid">
+                    <thead>
+                        <tr>
+                            <th class="nps-tt-time-col">Period</th>
+                            @foreach (var day in weekDays)
+                            {
+                                <th>@day.Name</th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var period in periods)
+                        {
+                            <tr class="@(period.IsBreak ? "nps-tt-break-row" : null)">
+                                <th class="nps-tt-time-col">
+                                    <div><strong>@period.Name</strong></div>
+                                    <small>@period.StartTime.ToString("HH:mm") – @period.EndTime.ToString("HH:mm")</small>
+                                </th>
+                                @foreach (var day in weekDays)
+                                {
+                                    var cellEntry = entries.FirstOrDefault(e =>
+                                        e.WeekDayId == day.Id && e.TimetablePeriodId == period.Id);
+                                    var p = period;
+                                    var d = day;
+                                    <td class="nps-tt-cell" @onclick="@(() => OpenCellAsync(p, d, cellEntry))">
+                                        @if (period.IsBreak)
+                                        {
+                                            <span class="nps-tt-break">@period.Name</span>
+                                        }
+                                        else if (cellEntry is not null)
+                                        {
+                                            <div class="nps-tt-filled">
+                                                <strong>@cellEntry.SubjectCode</strong>
+                                                <div>@cellEntry.SubjectName</div>
+                                                @if (!string.IsNullOrWhiteSpace(cellEntry.TeacherName))
+                                                {
+                                                    <small>@cellEntry.TeacherName</small>
+                                                }
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <span class="nps-tt-empty">+ assign</span>
+                                        }
+                                    </td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </RadzenCard>
+}
+
+@if (showCellForm)
+{
+    <RadzenCard class="nps-card" Style="margin-top:1rem;">
+        <h3 style="margin:0 0 1rem;">
+            @cellPeriod?.Name · @cellDay?.Name
+        </h3>
+        <div class="nps-form-grid">
+            <div class="nps-field">
+                <label>Subject *</label>
+                <RadzenDropDown TValue="Guid?" Data="@subjects" TextProperty="Name" ValueProperty="Id"
+                                @bind-Value="cellSubjectId" Placeholder="Pick a subject" />
+            </div>
+            <div class="nps-field">
+                <label>Teacher</label>
+                <RadzenDropDown TValue="Guid?" Data="@teachers" TextProperty="Name" ValueProperty="Id"
+                                @bind-Value="cellTeacherId" AllowClear="true" Placeholder="Optional" />
+            </div>
+            <div class="nps-field">
+                <label>Room</label>
+                <RadzenTextBox @bind-Value="cellRoom" Placeholder="Optional" />
+            </div>
+            <div class="nps-field nps-span-2">
+                <label>Notes</label>
+                <RadzenTextArea @bind-Value="cellNotes" Rows="2" />
+            </div>
+        </div>
+        <div class="nps-form-actions">
+            <RadzenButton Text="Cancel" ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat"
+                          Click="@(() => showCellForm = false)" />
+            @if (editingEntryId.HasValue)
+            {
+                <RadzenButton Text="Remove" Icon="delete" ButtonStyle="ButtonStyle.Danger"
+                              Click="@RemoveEntryAsync" />
+            }
+            <RadzenButton Text="@(saving ? "Saving..." : "Save")" Icon="save"
+                          ButtonStyle="ButtonStyle.Primary" Disabled="@saving"
+                          Click="@SaveEntryAsync" />
+        </div>
+    </RadzenCard>
+}
+
+@code {
+    private record TermOption(Guid Id, string Display);
+
+    private List<TermOption> terms = [];
+    private List<SchoolClassDto> classes = [];
+    private List<TimetablePeriodDto> periods = [];
+    private List<LookupDto> weekDays = [];
+    private List<SubjectDto> subjects = [];
+    private List<LookupDto> teachers = [];
+    private List<TimetableEntryDto> entries = [];
+
+    private Guid? selectedTermId;
+    private Guid? selectedClassId;
+
+    private bool loading;
+    private bool saving;
+    private bool showCellForm;
+
+    private Guid? editingEntryId;
+    private TimetablePeriodDto? cellPeriod;
+    private LookupDto? cellDay;
+    private Guid? cellSubjectId;
+    private Guid? cellTeacherId;
+    private string? cellRoom;
+    private string? cellNotes;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var termList = await TermService.ListAsync();
+        terms = termList
+            .Select(t => new TermOption(t.Id, $"{t.SessionName} — {t.TermTypeName}"))
+            .ToList();
+
+        classes = (await ClassService.ListAsync()).ToList();
+        periods = (await TimetableService.ListPeriodsAsync()).ToList();
+        weekDays = (await LookupService.GetWeekDaysAsync()).ToList();
+        subjects = (await SubjectService.ListAsync()).ToList();
+        teachers = (await LookupService.GetTeachersAsync()).ToList();
+
+        var currentTerm = termList.FirstOrDefault(t => t.IsCurrent);
+        selectedTermId = currentTerm?.Id;
+    }
+
+    private async Task LoadEntriesAsync()
+    {
+        if (selectedTermId is null || selectedClassId is null) return;
+
+        loading = true;
+        try
+        {
+            var list = await TimetableService.ListEntriesAsync(new TimetableQuery
+            {
+                TermId = selectedTermId.Value,
+                SchoolClassId = selectedClassId.Value,
+            });
+            entries = list.ToList();
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private Task OpenCellAsync(TimetablePeriodDto period, LookupDto day, TimetableEntryDto? entry)
+    {
+        if (period.IsBreak) return Task.CompletedTask;
+
+        cellPeriod = period;
+        cellDay = day;
+        editingEntryId = entry?.Id;
+        cellSubjectId = entry?.SubjectId;
+        cellTeacherId = entry?.TeacherId;
+        cellRoom = entry?.Room;
+        cellNotes = entry?.Notes;
+        showCellForm = true;
+        return Task.CompletedTask;
+    }
+
+    private async Task SaveEntryAsync()
+    {
+        if (cellSubjectId is null || cellPeriod is null || cellDay is null
+            || selectedTermId is null || selectedClassId is null)
+        {
+            Notification.Notify(NotificationSeverity.Warning, "Required", "Subject is required.");
+            return;
+        }
+
+        saving = true;
+        try
+        {
+            var result = await TimetableService.UpsertEntryAsync(new UpsertTimetableEntryRequest
+            {
+                Id = editingEntryId,
+                TermId = selectedTermId.Value,
+                SchoolClassId = selectedClassId.Value,
+                SubjectId = cellSubjectId.Value,
+                WeekDayId = cellDay.Id,
+                TimetablePeriodId = cellPeriod.Id,
+                TeacherId = cellTeacherId,
+                Room = cellRoom,
+                Notes = cellNotes,
+            });
+
+            if (result.Succeeded)
+            {
+                Notification.Notify(NotificationSeverity.Success, "Saved", "Timetable updated.");
+                showCellForm = false;
+                await LoadEntriesAsync();
+            }
+            else
+            {
+                Notification.Notify(NotificationSeverity.Error, "Failed", string.Join("; ", result.Errors));
+            }
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private async Task RemoveEntryAsync()
+    {
+        if (!editingEntryId.HasValue) return;
+        var confirm = await Dialog.Confirm("Remove this lesson from the timetable?", "Confirm",
+            new ConfirmOptions { OkButtonText = "Remove", CancelButtonText = "Cancel" });
+        if (confirm != true) return;
+
+        var result = await TimetableService.SoftDeleteEntryAsync(editingEntryId.Value);
+        if (result.Succeeded)
+        {
+            Notification.Notify(NotificationSeverity.Success, "Removed", "Lesson removed.");
+            showCellForm = false;
+            await LoadEntriesAsync();
+        }
+        else
+        {
+            Notification.Notify(NotificationSeverity.Error, "Failed", string.Join("; ", result.Errors));
+        }
+    }
+}

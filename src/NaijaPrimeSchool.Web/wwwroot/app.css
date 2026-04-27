@@ -437,3 +437,69 @@ h1:focus {
 .nps-filter-bar .rz-dropdown {
     min-width: 220px;
 }
+
+/* ===================== Timetable grid ===================== */
+.nps-timetable {
+    overflow-x: auto;
+}
+
+.nps-timetable-grid {
+    width: 100%;
+    border-collapse: collapse;
+    background: #fff;
+}
+
+.nps-timetable-grid th,
+.nps-timetable-grid td {
+    border: 1px solid #e5e7eb;
+    padding: 0.5rem;
+    vertical-align: top;
+    text-align: left;
+}
+
+.nps-timetable-grid thead th {
+    background: #f0fdf4;
+    color: #05613c;
+    font-weight: 600;
+}
+
+.nps-tt-time-col {
+    width: 130px;
+    background: #fafafa;
+}
+
+.nps-tt-cell {
+    cursor: pointer;
+    height: 64px;
+    transition: background 0.15s;
+}
+
+.nps-tt-cell:hover {
+    background: #f0fdf4;
+}
+
+.nps-tt-empty {
+    color: #9ca3af;
+    font-size: 0.85rem;
+}
+
+.nps-tt-filled strong {
+    color: #b8860b;
+    font-size: 0.95rem;
+}
+
+.nps-tt-filled small {
+    display: block;
+    color: #6b7280;
+    margin-top: 0.15rem;
+}
+
+.nps-tt-break-row td,
+.nps-tt-break-row th {
+    background: #fff8e1;
+}
+
+.nps-tt-break {
+    color: #b8860b;
+    font-style: italic;
+}

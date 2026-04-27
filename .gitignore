@@ -87,6 +87,11 @@ Thumbs.db
 ehthumbs.db
 Desktop.ini
 
+# Office app lock files (Word / LibreOffice)
+~$*.docx
+~$*.xlsx
+.~lock.*#
+
 # Generated
 Generated_Code/
 *.Generated.cs

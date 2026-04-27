@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using NaijaPrimeSchool.Application.Common;
+using NaijaPrimeSchool.Domain.Academics;
 using NaijaPrimeSchool.Domain.Common;
 using NaijaPrimeSchool.Domain.Identity;
 
@@ -24,6 +25,16 @@ public class ApplicationDbContext(
 {
     public DbSet<Gender> Genders => Set<Gender>();
     public DbSet<Title> Titles => Set<Title>();
+
+    public DbSet<Session> Sessions => Set<Session>();
+    public DbSet<TermType> TermTypes => Set<TermType>();
+    public DbSet<Term> Terms => Set<Term>();
+    public DbSet<ClassLevel> ClassLevels => Set<ClassLevel>();
+    public DbSet<SchoolClass> SchoolClasses => Set<SchoolClass>();
+    public DbSet<Subject> Subjects => Set<Subject>();
+    public DbSet<WeekDay> WeekDays => Set<WeekDay>();
+    public DbSet<TimetablePeriod> TimetablePeriods => Set<TimetablePeriod>();
+    public DbSet<TimetableEntry> TimetableEntries => Set<TimetableEntry>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -101,6 +112,163 @@ public class ApplicationDbContext(
         {
             b.Property(t => t.Name).HasMaxLength(50).IsRequired();
             b.HasIndex(t => t.Name).IsUnique();
+        });
+
+        ConfigureAcademics(builder);
+    }
+
+    private static void ConfigureAcademics(ModelBuilder builder)
+    {
+        ConfigureLookup<TermType>(builder, "TermTypes", extra: b =>
+        {
+            b.Property(t => t.Name).HasMaxLength(50).IsRequired();
+            b.HasIndex(t => t.Name).IsUnique();
+        });
+
+        ConfigureLookup<ClassLevel>(builder, "ClassLevels", extra: b =>
+        {
+            b.Property(t => t.Name).HasMaxLength(50).IsRequired();
+            b.HasIndex(t => t.Name).IsUnique();
+        });
+
+        ConfigureLookup<WeekDay>(builder, "WeekDays", extra: b =>
+        {
+            b.Property(d => d.Name).HasMaxLength(20).IsRequired();
+            b.Property(d => d.ShortName).HasMaxLength(5).IsRequired();
+            b.HasIndex(d => d.Name).IsUnique();
+        });
+
+        builder.Entity<Session>(b =>
+        {
+            b.ToTable("Sessions");
+            b.HasKey(s => s.Id);
+            b.Property(s => s.Name).HasMaxLength(40).IsRequired();
+            b.Property(s => s.CreatedBy).HasMaxLength(100);
+            b.Property(s => s.ModifiedBy).HasMaxLength(100);
+            b.Property(s => s.DeletedBy).HasMaxLength(100);
+            b.HasIndex(s => s.Name).IsUnique();
+            b.HasIndex(s => s.IsCurrent);
+            b.HasIndex(s => s.IsDeleted);
+            b.HasQueryFilter(s => !s.IsDeleted);
+        });
+
+        builder.Entity<Term>(b =>
+        {
+            b.ToTable("Terms");
+            b.HasKey(t => t.Id);
+            b.Property(t => t.CreatedBy).HasMaxLength(100);
+            b.Property(t => t.ModifiedBy).HasMaxLength(100);
+            b.Property(t => t.DeletedBy).HasMaxLength(100);
+
+            b.HasOne(t => t.Session).WithMany(s => s.Terms)
+                .HasForeignKey(t => t.SessionId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasOne(t => t.TermType).WithMany(tt => tt.Terms)
+                .HasForeignKey(t => t.TermTypeId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasIndex(t => new { t.SessionId, t.TermTypeId }).IsUnique();
+            b.HasIndex(t => t.IsCurrent);
+            b.HasIndex(t => t.IsDeleted);
+            b.HasQueryFilter(t => !t.IsDeleted);
+        });
+
+        builder.Entity<SchoolClass>(b =>
+        {
+            b.ToTable("SchoolClasses");
+            b.HasKey(c => c.Id);
+            b.Property(c => c.Name).HasMaxLength(80).IsRequired();
+            b.Property(c => c.Description).HasMaxLength(300);
+            b.Property(c => c.CreatedBy).HasMaxLength(100);
+            b.Property(c => c.ModifiedBy).HasMaxLength(100);
+            b.Property(c => c.DeletedBy).HasMaxLength(100);
+
+            b.HasOne(c => c.ClassLevel).WithMany(cl => cl.Classes)
+                .HasForeignKey(c => c.ClassLevelId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasOne(c => c.Session).WithMany(s => s.Classes)
+                .HasForeignKey(c => c.SessionId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasOne(c => c.ClassTeacher).WithMany()
+                .HasForeignKey(c => c.ClassTeacherId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            b.HasIndex(c => new { c.SessionId, c.Name }).IsUnique();
+            b.HasIndex(c => c.IsDeleted);
+            b.HasQueryFilter(c => !c.IsDeleted);
+        });
+
+        builder.Entity<Subject>(b =>
+        {
+            b.ToTable("Subjects");
+            b.HasKey(s => s.Id);
+            b.Property(s => s.Name).HasMaxLength(80).IsRequired();
+            b.Property(s => s.Code).HasMaxLength(10).IsRequired();
+            b.Property(s => s.Description).HasMaxLength(300);
+            b.Property(s => s.CreatedBy).HasMaxLength(100);
+            b.Property(s => s.ModifiedBy).HasMaxLength(100);
+            b.Property(s => s.DeletedBy).HasMaxLength(100);
+            b.HasIndex(s => s.Code).IsUnique();
+            b.HasIndex(s => s.Name).IsUnique();
+            b.HasIndex(s => s.IsDeleted);
+            b.HasQueryFilter(s => !s.IsDeleted);
+        });
+
+        builder.Entity<TimetablePeriod>(b =>
+        {
+            b.ToTable("TimetablePeriods");
+            b.HasKey(p => p.Id);
+            b.Property(p => p.Name).HasMaxLength(40).IsRequired();
+            b.Property(p => p.CreatedBy).HasMaxLength(100);
+            b.Property(p => p.ModifiedBy).HasMaxLength(100);
+            b.Property(p => p.DeletedBy).HasMaxLength(100);
+            b.HasIndex(p => p.DisplayOrder);
+            b.HasIndex(p => p.IsDeleted);
+            b.HasQueryFilter(p => !p.IsDeleted);
+        });
+
+        builder.Entity<TimetableEntry>(b =>
+        {
+            b.ToTable("TimetableEntries");
+            b.HasKey(e => e.Id);
+            b.Property(e => e.Room).HasMaxLength(60);
+            b.Property(e => e.Notes).HasMaxLength(300);
+            b.Property(e => e.CreatedBy).HasMaxLength(100);
+            b.Property(e => e.ModifiedBy).HasMaxLength(100);
+            b.Property(e => e.DeletedBy).HasMaxLength(100);
+
+            b.HasOne(e => e.Term).WithMany(t => t.TimetableEntries)
+                .HasForeignKey(e => e.TermId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasOne(e => e.SchoolClass).WithMany(c => c.TimetableEntries)
+                .HasForeignKey(e => e.SchoolClassId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasOne(e => e.Subject).WithMany(s => s.TimetableEntries)
+                .HasForeignKey(e => e.SubjectId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasOne(e => e.WeekDay).WithMany(d => d.TimetableEntries)
+                .HasForeignKey(e => e.WeekDayId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasOne(e => e.TimetablePeriod).WithMany(p => p.TimetableEntries)
+                .HasForeignKey(e => e.TimetablePeriodId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasOne(e => e.Teacher).WithMany()
+                .HasForeignKey(e => e.TeacherId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            // One subject per (term, class, day, period) slot.
+            b.HasIndex(e => new { e.TermId, e.SchoolClassId, e.WeekDayId, e.TimetablePeriodId })
+                .IsUnique();
+            b.HasIndex(e => e.IsDeleted);
+            b.HasQueryFilter(e => !e.IsDeleted);
         });
     }
 

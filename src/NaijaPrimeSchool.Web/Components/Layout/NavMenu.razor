@@ -15,7 +15,14 @@
 
     <AuthorizeView Roles="@($"{Roles.SuperAdmin},{Roles.HeadTeacher},{Roles.Teacher}")">
         <Authorized>
-            <RadzenPanelMenuItem Text="Academics" Icon="school" Disabled="true" />
+            <RadzenPanelMenuItem Text="Academics" Icon="school" Expanded="true">
+                <RadzenPanelMenuItem Text="Sessions" Icon="event" Path="/sessions" />
+                <RadzenPanelMenuItem Text="Terms" Icon="event_note" Path="/terms" />
+                <RadzenPanelMenuItem Text="Classes" Icon="class" Path="/classes" />
+                <RadzenPanelMenuItem Text="Subjects" Icon="menu_book" Path="/subjects" />
+                <RadzenPanelMenuItem Text="Periods" Icon="schedule" Path="/timetable-periods" />
+                <RadzenPanelMenuItem Text="Timetable" Icon="grid_on" Path="/timetable" />
+            </RadzenPanelMenuItem>
         </Authorized>
     </AuthorizeView>
 

@@ -1,0 +1,175 @@
+@page "/subjects"
+@using NaijaPrimeSchool.Application.Academics
+@using NaijaPrimeSchool.Application.Academics.Dtos
+@attribute [Authorize(Roles = $"{Roles.SuperAdmin},{Roles.HeadTeacher}")]
+@rendermode InteractiveServer
+
+@inject ISubjectService SubjectService
+@inject NotificationService Notification
+@inject DialogService Dialog
+
+<PageTitle>Subjects · Naija Prime School</PageTitle>
+
+<div class="nps-page-header">
+    <div>
+        <h1>Subjects</h1>
+        <p>Subjects taught across the school. Codes appear on timetables and result sheets.</p>
+    </div>
+    <div class="nps-page-actions">
+        <RadzenButton Text="New subject" Icon="add" ButtonStyle="ButtonStyle.Primary"
+                      Click="@(() => OpenForm(null))" />
+    </div>
+</div>
+
+<RadzenCard class="nps-card">
+    <RadzenDataGrid TItem="SubjectDto" Data="@subjects" IsLoading="@loading"
+                    AllowPaging="true" PageSize="20" EmptyText="No subjects yet.">
+        <Columns>
+            <RadzenDataGridColumn TItem="SubjectDto" Title="Name" Property="Name" />
+            <RadzenDataGridColumn TItem="SubjectDto" Title="Code" Property="Code" Width="120px" />
+            <RadzenDataGridColumn TItem="SubjectDto" Title="Description" Property="Description" />
+            <RadzenDataGridColumn TItem="SubjectDto" Title="Actions" Sortable="false" Width="160px" TextAlign="TextAlign.Right">
+                <Template Context="s">
+                    <div class="nps-inline-actions">
+                        <RadzenButton Icon="edit" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                      ButtonStyle="ButtonStyle.Light" Click="@(() => OpenForm(s))" title="Edit" />
+                        <RadzenButton Icon="delete" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                      ButtonStyle="ButtonStyle.Danger" Click="@(() => DeleteAsync(s))" title="Delete" />
+                    </div>
+                </Template>
+            </RadzenDataGridColumn>
+        </Columns>
+    </RadzenDataGrid>
+</RadzenCard>
+
+@if (showForm)
+{
+    <RadzenCard class="nps-card" Style="margin-top:1rem;">
+        <h3 style="margin:0 0 1rem;">@(editingId.HasValue ? "Edit subject" : "New subject")</h3>
+        <RadzenTemplateForm TItem="SubjectFormModel" Data="@form" Submit="@SaveAsync">
+            <DataAnnotationsValidator />
+            <div class="nps-form-grid">
+                <div class="nps-field">
+                    <label>Name *</label>
+                    <RadzenTextBox @bind-Value="form.Name" Placeholder="Mathematics" />
+                    <ValidationMessage For="() => form.Name" />
+                </div>
+                <div class="nps-field">
+                    <label>Code *</label>
+                    <RadzenTextBox @bind-Value="form.Code" Placeholder="MTH" />
+                    <ValidationMessage For="() => form.Code" />
+                </div>
+                <div class="nps-field nps-span-2">
+                    <label>Description</label>
+                    <RadzenTextArea @bind-Value="form.Description" Rows="2" />
+                </div>
+            </div>
+            <div class="nps-form-actions">
+                <RadzenButton Text="Cancel" ButtonType="ButtonType.Button"
+                              ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat"
+                              Click="@(() => showForm = false)" />
+                <RadzenButton Text="@(saving ? "Saving..." : "Save")"
+                              Icon="save" ButtonType="ButtonType.Submit"
+                              ButtonStyle="ButtonStyle.Primary" Disabled="@saving" />
+            </div>
+        </RadzenTemplateForm>
+    </RadzenCard>
+}
+
+@code {
+    private IReadOnlyList<SubjectDto> subjects = [];
+    private bool loading;
+    private bool saving;
+    private bool showForm;
+    private Guid? editingId;
+
+    private SubjectFormModel form = new();
+
+    private class SubjectFormModel
+    {
+        [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(80)]
+        public string Name { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(10)]
+        public string Code { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.StringLength(300)]
+        public string? Description { get; set; }
+    }
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        try { subjects = await SubjectService.ListAsync(); }
+        finally { loading = false; }
+    }
+
+    private void OpenForm(SubjectDto? s)
+    {
+        editingId = s?.Id;
+        form = new SubjectFormModel
+        {
+            Name = s?.Name ?? string.Empty,
+            Code = s?.Code ?? string.Empty,
+            Description = s?.Description,
+        };
+        showForm = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        saving = true;
+        try
+        {
+            OperationResult result = editingId.HasValue
+                ? await SubjectService.UpdateAsync(new UpdateSubjectRequest
+                {
+                    Id = editingId.Value,
+                    Name = form.Name,
+                    Code = form.Code,
+                    Description = form.Description,
+                })
+                : await SubjectService.CreateAsync(new CreateSubjectRequest
+                {
+                    Name = form.Name,
+                    Code = form.Code,
+                    Description = form.Description,
+                });
+
+            if (result.Succeeded)
+            {
+                Notification.Notify(NotificationSeverity.Success, "Saved", $"Subject '{form.Name}' saved.");
+                showForm = false;
+                await LoadAsync();
+            }
+            else
+            {
+                Notification.Notify(NotificationSeverity.Error, "Failed", string.Join("; ", result.Errors));
+            }
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private async Task DeleteAsync(SubjectDto s)
+    {
+        var confirm = await Dialog.Confirm($"Delete subject '{s.Name}'?", "Confirm delete",
+            new ConfirmOptions { OkButtonText = "Delete", CancelButtonText = "Cancel" });
+        if (confirm != true) return;
+
+        var result = await SubjectService.SoftDeleteAsync(s.Id);
+        if (result.Succeeded)
+        {
+            Notification.Notify(NotificationSeverity.Success, "Deleted", $"Subject '{s.Name}' deleted.");
+            await LoadAsync();
+        }
+        else
+        {
+            Notification.Notify(NotificationSeverity.Error, "Failed", string.Join("; ", result.Errors));
+        }
+    }
+}

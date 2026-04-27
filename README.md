@@ -2,11 +2,16 @@
 
 A modern school management system for Nigerian primary schools, built with **.NET 10**, **Blazor Auto**, **Clean Architecture**, **SQL Server**, and **Radzen Blazor Components**.
 
-This first sprint delivers the authentication & authorization foundation: user accounts, role-based access control, login/logout, activation/deactivation, and the user management screens that the rest of the system will build on.
+Two sprints have shipped. **Sprint 1** delivered the authentication & authorization foundation: user accounts, role-based access control, login/logout, activation/deactivation, and the SuperAdmin user-management screens. **Sprint 2** built the academic domain on top of that foundation: sessions, terms, class arms, subjects, timetable periods, and a click-to-edit weekly timetable grid.
+
+Implementation walk-throughs for both sprints live at the repo root as Word documents:
+
+- `Sprint 1 - Implementation Guide.docx`
+- `Sprint 2 - Implementation Guide.docx`
 
 ---
 
-## Features (this sprint)
+## Sprint 1 — Identity & user management ✅
 
 - **Identity & access**
   - Cookie-based authentication with ASP.NET Core Identity
@@ -21,12 +26,30 @@ This first sprint delivers the authentication & authorization foundation: user a
   - Activate / deactivate accounts
   - Reassign roles
   - Reset password (admin-initiated)
+
+## Sprint 2 — Academic domain ✅
+
+- **Calendar**
+  - Academic **Sessions** (e.g. 2025/2026) with current-session flag
+  - **Terms** within each session, typed by a `TermType` lookup (First / Second / Third)
+- **Structure**
+  - **Classes** (Primary 1A, JSS 2B, …) tied to a session and a `ClassLevel` lookup
+  - Optional class teacher pulled from active users in the **Teacher** role
+  - **Subjects** with unique short codes (e.g. MTH for Mathematics)
+- **Timetables**
+  - Configurable **TimetablePeriods** (Period 1, Short Break, Lunch, …)
+  - **Weekly timetable grid**: pick a term and class, click any period × weekday cell to assign a subject, teacher, room, and notes
+  - One subject per (term, class, weekday, period) slot, enforced by a unique index
+- **Pages added** (`/sessions`, `/terms`, `/classes`, `/subjects`, `/timetable-periods`, `/timetable`), all gated to **SuperAdmin** + **HeadTeacher**, with the timetable read view also visible to **Teacher**
+
+## Cross-cutting (every sprint)
+
 - **Beautiful, inviting UI**
   - Green + gold Nigerian-themed palette
   - Radzen Blazor components (DataGrid, Dialog, Notification, Layout, Sidebar, Forms)
   - Responsive layout
 - **Data integrity**
-  - No enums; every lookup (roles, titles, genders) is a first-class table
+  - No enums; every lookup (roles, titles, genders, term types, class levels, week days, …) is a first-class table
   - Soft delete for all entities, enforced globally via EF Core query filters
   - Auditing (CreatedOn/By, ModifiedOn/By, DeletedOn/By) applied automatically in `SaveChanges`
 
@@ -49,12 +72,22 @@ This first sprint delivers the authentication & authorization foundation: user a
 ```
 NaijaPrimeSchool/
 ├── src/
-│   ├── NaijaPrimeSchool.Domain/          # Entities, base types, interfaces. No dependencies on infra.
-│   ├── NaijaPrimeSchool.Application/     # DTOs, service contracts, shared abstractions (ICurrentUser, OperationResult)
-│   ├── NaijaPrimeSchool.Infrastructure/  # EF Core DbContext, SQL Server, Identity, service implementations, seed & migrations
-│   ├── NaijaPrimeSchool.Web/             # Blazor server host (auth endpoints, layout, pages, Program.cs)
-│   └── NaijaPrimeSchool.Web.Client/      # Blazor WebAssembly client (Auto interactivity)
-└── NaijaPrimeSchool.sln
+│   ├── NaijaPrimeSchool.Domain/                # Entities, base types, interfaces. No dependencies on infra.
+│   │   ├── Common/                              # BaseEntity, IAuditable, ISoftDelete
+│   │   ├── Identity/                            # ApplicationUser, ApplicationRole, Title, Gender, Roles (sprint 1)
+│   │   └── Academics/                           # Session, Term, SchoolClass, Subject, Timetable* (sprint 2)
+│   ├── NaijaPrimeSchool.Application/            # DTOs, service contracts, shared abstractions
+│   │   ├── Common/                              # ICurrentUser, OperationResult
+│   │   ├── Users/                               # IUserService, ILookupService, DTOs (sprint 1)
+│   │   └── Academics/                           # I*Service interfaces and DTOs (sprint 2)
+│   ├── NaijaPrimeSchool.Infrastructure/         # EF Core DbContext, Identity stores, service impls, seed, migrations
+│   ├── NaijaPrimeSchool.Web/                    # Blazor server host (auth endpoints, layout, pages, Program.cs)
+│   │   └── Components/Pages/
+│   │       ├── Users/                           # User management pages (sprint 1)
+│   │       └── Academics/                       # Sessions, Terms, Classes, Subjects, Periods, Timetable (sprint 2)
+│   └── NaijaPrimeSchool.Web.Client/             # Blazor WebAssembly client (Auto interactivity)
+├── tools/                                       # Scripts (e.g. sprint guide generators)
+└── NaijaPrimeSchool.slnx
 ```
 
 Dependency direction flows inward: `Web` → `Infrastructure` → `Application` → `Domain`. The Domain layer has no outward dependencies other than `Microsoft.Extensions.Identity.Stores` (for `IdentityUser<Guid>`/`IdentityRole<Guid>` base types).
@@ -195,21 +228,34 @@ User management screens are gated behind the `ManageUsers` policy, which require
 | `src/NaijaPrimeSchool.Web/Components/Account/Pages/Login.razor` | Sign-in page (Radzen UI) |
 | `src/NaijaPrimeSchool.Web/Components/Pages/Users/` | List / Create / Edit / Roles / Reset password |
 | `src/NaijaPrimeSchool.Web/Components/Layout/MainLayout.razor` | Radzen shell with sidebar + header |
-| `src/NaijaPrimeSchool.Web/wwwroot/app.css` | Green + gold school theme |
+| `src/NaijaPrimeSchool.Web/wwwroot/app.css` | Green + gold school theme + timetable grid styles |
+| `src/NaijaPrimeSchool.Domain/Academics/` | Session, Term, SchoolClass, Subject, Timetable* (sprint 2) |
+| `src/NaijaPrimeSchool.Application/Academics/` | I*Service contracts and DTOs for the academic domain |
+| `src/NaijaPrimeSchool.Infrastructure/Services/SessionService.cs` | Sessions CRUD + SetCurrent |
+| `src/NaijaPrimeSchool.Infrastructure/Services/TermService.cs` | Terms CRUD + SetCurrent |
+| `src/NaijaPrimeSchool.Infrastructure/Services/SchoolClassService.cs` | Class arms CRUD |
+| `src/NaijaPrimeSchool.Infrastructure/Services/SubjectService.cs` | Subjects CRUD |
+| `src/NaijaPrimeSchool.Infrastructure/Services/TimetableService.cs` | Periods CRUD + entry list / upsert / delete |
+| `src/NaijaPrimeSchool.Web/Components/Pages/Academics/` | Sessions, Terms, Classes, Subjects, Periods, Timetable grid |
+| `tools/generate_sprint2_guide.py` | Generator for `Sprint 2 - Implementation Guide.docx` |
 
 ---
 
 ## Roadmap
 
+Delivered:
+
+- ✅ **Sprint 1** — Identity & user management (cookie auth, roles, lockout, SuperAdmin user CRUD)
+- ✅ **Sprint 2** — Academic domain (sessions, terms, classes, subjects, periods, timetable grid)
+
 Planned for upcoming sprints:
 
-- Academic domain: sessions, terms, classes, subjects, timetables
-- Students & parents (enrolment, linkage, guardians)
-- Attendance (daily + per-subject)
-- Assessments, exams, result computation, report cards
-- Fees, invoices, receipts, bursar workflows
-- Store & inventory management for the storekeeper
-- Parent and student portals
+- Sprint 3 — Students & parents (enrolment, linkage, guardians)
+- Sprint 4 — Attendance (daily + per-subject)
+- Sprint 5 — Assessments, exams, result computation, report cards
+- Sprint 6 — Fees, invoices, receipts, bursar workflows
+- Sprint 7 — Store & inventory management for the storekeeper
+- Sprint 8 — Parent and student portals
 - Notifications (email / SMS)
 - Audit log viewer
 

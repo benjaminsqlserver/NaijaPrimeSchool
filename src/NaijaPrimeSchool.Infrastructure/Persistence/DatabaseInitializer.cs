@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using NaijaPrimeSchool.Domain.Academics;
 using NaijaPrimeSchool.Domain.Identity;
 
 namespace NaijaPrimeSchool.Infrastructure.Persistence;
@@ -23,8 +24,83 @@ public static class DatabaseInitializer
         await db.Database.MigrateAsync(ct);
 
         await SeedLookupsAsync(db, ct);
+        await SeedAcademicLookupsAsync(db, ct);
         await SeedRolesAsync(sp, ct);
         await SeedSuperAdminAsync(sp, logger, ct);
+    }
+
+    private static async Task SeedAcademicLookupsAsync(ApplicationDbContext db, CancellationToken ct)
+    {
+        if (!await db.TermTypes.IgnoreQueryFilters().AnyAsync(ct))
+        {
+            db.TermTypes.AddRange(
+                new TermType { Name = "First Term", DisplayOrder = 1 },
+                new TermType { Name = "Second Term", DisplayOrder = 2 },
+                new TermType { Name = "Third Term", DisplayOrder = 3 });
+        }
+
+        if (!await db.ClassLevels.IgnoreQueryFilters().AnyAsync(ct))
+        {
+            string[] levels =
+            [
+                "Creche",
+                "Pre-Nursery",
+                "Nursery 1",
+                "Nursery 2",
+                "KG 1",
+                "KG 2",
+                "Primary 1",
+                "Primary 2",
+                "Primary 3",
+                "Primary 4",
+                "Primary 5",
+                "Primary 6",
+            ];
+            for (var i = 0; i < levels.Length; i++)
+            {
+                db.ClassLevels.Add(new ClassLevel { Name = levels[i], DisplayOrder = i + 1 });
+            }
+        }
+
+        if (!await db.WeekDays.IgnoreQueryFilters().AnyAsync(ct))
+        {
+            db.WeekDays.AddRange(
+                new WeekDay { Name = "Monday",    ShortName = "Mon", DisplayOrder = 1 },
+                new WeekDay { Name = "Tuesday",   ShortName = "Tue", DisplayOrder = 2 },
+                new WeekDay { Name = "Wednesday", ShortName = "Wed", DisplayOrder = 3 },
+                new WeekDay { Name = "Thursday",  ShortName = "Thu", DisplayOrder = 4 },
+                new WeekDay { Name = "Friday",    ShortName = "Fri", DisplayOrder = 5 });
+        }
+
+        if (!await db.TimetablePeriods.IgnoreQueryFilters().AnyAsync(ct))
+        {
+            (string Name, int Hour, int Minute, int DurationMinutes, int Order, bool IsBreak)[] periods =
+            [
+                ("Period 1",      8, 0,  40, 1, false),
+                ("Period 2",      8, 40, 40, 2, false),
+                ("Period 3",      9, 20, 40, 3, false),
+                ("Short Break",  10, 0,  20, 4, true),
+                ("Period 4",     10, 20, 40, 5, false),
+                ("Period 5",     11, 0,  40, 6, false),
+                ("Lunch",        11, 40, 40, 7, true),
+                ("Period 6",     12, 20, 40, 8, false),
+                ("Period 7",     13, 0,  40, 9, false),
+            ];
+            foreach (var p in periods)
+            {
+                var start = new TimeOnly(p.Hour, p.Minute);
+                db.TimetablePeriods.Add(new TimetablePeriod
+                {
+                    Name = p.Name,
+                    StartTime = start,
+                    EndTime = start.AddMinutes(p.DurationMinutes),
+                    DisplayOrder = p.Order,
+                    IsBreak = p.IsBreak,
+                });
+            }
+        }
+
+        await db.SaveChangesAsync(ct);
     }
 
     private static async Task SeedLookupsAsync(ApplicationDbContext db, CancellationToken ct)

@@ -1,0 +1,224 @@
+@page "/classes"
+@using NaijaPrimeSchool.Application.Academics
+@using NaijaPrimeSchool.Application.Academics.Dtos
+@attribute [Authorize(Roles = $"{Roles.SuperAdmin},{Roles.HeadTeacher}")]
+@rendermode InteractiveServer
+
+@inject ISchoolClassService ClassService
+@inject ISessionService SessionService
+@inject ILookupService LookupService
+@inject NotificationService Notification
+@inject DialogService Dialog
+
+<PageTitle>Classes · Naija Prime School</PageTitle>
+
+<div class="nps-page-header">
+    <div>
+        <h1>Classes</h1>
+        <p>Class arms (e.g. Primary 1A, JSS 2B) operating in each session.</p>
+    </div>
+    <div class="nps-page-actions">
+        <RadzenButton Text="New class" Icon="add" ButtonStyle="ButtonStyle.Primary"
+                      Click="@(() => OpenForm(null))" />
+    </div>
+</div>
+
+<RadzenCard class="nps-card" Style="margin-bottom:1rem;">
+    <div class="nps-filter-bar">
+        <div class="nps-field">
+            <label>Filter by session</label>
+            <RadzenDropDown TValue="Guid?" Data="@sessions" TextProperty="Name" ValueProperty="Id"
+                            @bind-Value="filterSessionId" AllowClear="true" Placeholder="All sessions"
+                            Change="@(_ => LoadAsync())" Style="min-width: 240px;" />
+        </div>
+    </div>
+</RadzenCard>
+
+<RadzenCard class="nps-card">
+    <RadzenDataGrid TItem="SchoolClassDto" Data="@classes" IsLoading="@loading"
+                    AllowPaging="true" PageSize="20" EmptyText="No classes yet.">
+        <Columns>
+            <RadzenDataGridColumn TItem="SchoolClassDto" Title="Name" Property="Name" />
+            <RadzenDataGridColumn TItem="SchoolClassDto" Title="Level" Property="ClassLevelName" Width="160px" />
+            <RadzenDataGridColumn TItem="SchoolClassDto" Title="Session" Property="SessionName" Width="160px" />
+            <RadzenDataGridColumn TItem="SchoolClassDto" Title="Class teacher" Property="ClassTeacherName" />
+            <RadzenDataGridColumn TItem="SchoolClassDto" Title="Actions" Sortable="false" Width="160px" TextAlign="TextAlign.Right">
+                <Template Context="c">
+                    <div class="nps-inline-actions">
+                        <RadzenButton Icon="edit" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                      ButtonStyle="ButtonStyle.Light" Click="@(() => OpenForm(c))" title="Edit" />
+                        <RadzenButton Icon="delete" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                      ButtonStyle="ButtonStyle.Danger" Click="@(() => DeleteAsync(c))" title="Delete" />
+                    </div>
+                </Template>
+            </RadzenDataGridColumn>
+        </Columns>
+    </RadzenDataGrid>
+</RadzenCard>
+
+@if (showForm)
+{
+    <RadzenCard class="nps-card" Style="margin-top:1rem;">
+        <h3 style="margin:0 0 1rem;">@(editingId.HasValue ? "Edit class" : "New class")</h3>
+        <RadzenTemplateForm TItem="ClassFormModel" Data="@form" Submit="@SaveAsync">
+            <DataAnnotationsValidator />
+            <div class="nps-form-grid">
+                <div class="nps-field">
+                    <label>Name *</label>
+                    <RadzenTextBox @bind-Value="form.Name" Placeholder="Primary 1A" />
+                    <ValidationMessage For="() => form.Name" />
+                </div>
+                <div class="nps-field">
+                    <label>Class level *</label>
+                    <RadzenDropDown TValue="Guid?" Data="@classLevels" TextProperty="Name" ValueProperty="Id"
+                                    @bind-Value="form.ClassLevelId" Placeholder="Pick a level" />
+                </div>
+                <div class="nps-field">
+                    <label>Session *</label>
+                    <RadzenDropDown TValue="Guid?" Data="@sessions" TextProperty="Name" ValueProperty="Id"
+                                    @bind-Value="form.SessionId" Placeholder="Pick a session" />
+                </div>
+                <div class="nps-field">
+                    <label>Class teacher</label>
+                    <RadzenDropDown TValue="Guid?" Data="@teachers" TextProperty="Name" ValueProperty="Id"
+                                    @bind-Value="form.ClassTeacherId" AllowClear="true"
+                                    Placeholder="Optional" />
+                </div>
+                <div class="nps-field nps-span-2">
+                    <label>Description</label>
+                    <RadzenTextArea @bind-Value="form.Description" Rows="2" />
+                </div>
+            </div>
+            <div class="nps-form-actions">
+                <RadzenButton Text="Cancel" ButtonType="ButtonType.Button"
+                              ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat"
+                              Click="@(() => showForm = false)" />
+                <RadzenButton Text="@(saving ? "Saving..." : "Save")"
+                              Icon="save" ButtonType="ButtonType.Submit"
+                              ButtonStyle="ButtonStyle.Primary" Disabled="@saving" />
+            </div>
+        </RadzenTemplateForm>
+    </RadzenCard>
+}
+
+@code {
+    private IReadOnlyList<SchoolClassDto> classes = [];
+    private IReadOnlyList<SessionDto> sessions = [];
+    private IReadOnlyList<LookupDto> classLevels = [];
+    private IReadOnlyList<LookupDto> teachers = [];
+    private bool loading;
+    private bool saving;
+    private bool showForm;
+    private Guid? editingId;
+    private Guid? filterSessionId;
+
+    private ClassFormModel form = new();
+
+    private class ClassFormModel
+    {
+        [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(80)]
+        public string Name { get; set; } = string.Empty;
+
+        public Guid? ClassLevelId { get; set; }
+        public Guid? SessionId { get; set; }
+        public Guid? ClassTeacherId { get; set; }
+
+        [System.ComponentModel.DataAnnotations.StringLength(300)]
+        public string? Description { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        sessions = await SessionService.ListAsync();
+        classLevels = await LookupService.GetClassLevelsAsync();
+        teachers = await LookupService.GetTeachersAsync();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        try { classes = await ClassService.ListAsync(filterSessionId); }
+        finally { loading = false; }
+    }
+
+    private void OpenForm(SchoolClassDto? c)
+    {
+        editingId = c?.Id;
+        form = new ClassFormModel
+        {
+            Name = c?.Name ?? string.Empty,
+            ClassLevelId = c?.ClassLevelId,
+            SessionId = c?.SessionId ?? sessions.FirstOrDefault(s => s.IsCurrent)?.Id,
+            ClassTeacherId = c?.ClassTeacherId,
+            Description = c?.Description,
+        };
+        showForm = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (form.ClassLevelId is null || form.SessionId is null)
+        {
+            Notification.Notify(NotificationSeverity.Warning, "Required",
+                "Class level and session are required.");
+            return;
+        }
+
+        saving = true;
+        try
+        {
+            OperationResult result = editingId.HasValue
+                ? await ClassService.UpdateAsync(new UpdateSchoolClassRequest
+                {
+                    Id = editingId.Value,
+                    Name = form.Name,
+                    Description = form.Description,
+                    ClassLevelId = form.ClassLevelId.Value,
+                    SessionId = form.SessionId.Value,
+                    ClassTeacherId = form.ClassTeacherId,
+                })
+                : await ClassService.CreateAsync(new CreateSchoolClassRequest
+                {
+                    Name = form.Name,
+                    Description = form.Description,
+                    ClassLevelId = form.ClassLevelId.Value,
+                    SessionId = form.SessionId.Value,
+                    ClassTeacherId = form.ClassTeacherId,
+                });
+
+            if (result.Succeeded)
+            {
+                Notification.Notify(NotificationSeverity.Success, "Saved", $"Class '{form.Name}' saved.");
+                showForm = false;
+                await LoadAsync();
+            }
+            else
+            {
+                Notification.Notify(NotificationSeverity.Error, "Failed", string.Join("; ", result.Errors));
+            }
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private async Task DeleteAsync(SchoolClassDto c)
+    {
+        var confirm = await Dialog.Confirm($"Delete class '{c.Name}'?", "Confirm delete",
+            new ConfirmOptions { OkButtonText = "Delete", CancelButtonText = "Cancel" });
+        if (confirm != true) return;
+
+        var result = await ClassService.SoftDeleteAsync(c.Id);
+        if (result.Succeeded)
+        {
+            Notification.Notify(NotificationSeverity.Success, "Deleted", $"Class '{c.Name}' deleted.");
+            await LoadAsync();
+        }
+        else
+        {
+            Notification.Notify(NotificationSeverity.Error, "Failed", string.Join("; ", result.Errors));
+        }
+    }
+}
