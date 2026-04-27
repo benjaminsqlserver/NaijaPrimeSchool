@@ -6,8 +6,8 @@ Two sprints have shipped. **Sprint 1** delivered the authentication & authorizat
 
 Implementation walk-throughs for both sprints live at the repo root as Word documents:
 
-- `Sprint 1 - Implementation Guide.docx`
-- `Sprint 2 - Implementation Guide.docx`
+- `Sprint 1 - Implementation Guide.pdf`
+- `Sprint 2 - Implementation Guide.pdf`
 
 ---
 
@@ -259,14 +259,6 @@ Planned for upcoming sprints:
 - Notifications (email / SMS)
 - Audit log viewer
 
----
-
-## Contributing
-
-1. Fork the repo and create a feature branch.
-2. Follow the existing Clean Architecture boundaries — no Razor components in `Application` or `Domain`, no EF Core in `Application`.
-3. Run `dotnet build` and ensure there are no warnings.
-4. Open a pull request describing the change and linking any relevant issues.
 
 ---
 

@@ -1,6 +1,8 @@
 <Solution>
   <Folder Name="/Solution Items/">
     <File Path="README.md" />
+    <File Path="Sprint 1 - Implementation Guide.pdf" />
+    <File Path="Sprint 2 - Implementation Guide.pdf" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/NaijaPrimeSchool.Application/NaijaPrimeSchool.Application.csproj" />
