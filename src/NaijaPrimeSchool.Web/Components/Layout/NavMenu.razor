@@ -26,6 +26,18 @@
         </Authorized>
     </AuthorizeView>
 
+    <AuthorizeView Roles="@($"{Roles.SuperAdmin},{Roles.HeadTeacher}")">
+        <Authorized>
+            <RadzenPanelMenuItem Text="Family" Icon="family_restroom" Expanded="true">
+                <RadzenPanelMenuItem Text="Students" Icon="boy" Path="/students" />
+                <RadzenPanelMenuItem Text="Add Student" Icon="person_add" Path="/students/new" />
+                <RadzenPanelMenuItem Text="Parents" Icon="people_outline" Path="/parents" />
+                <RadzenPanelMenuItem Text="Add Parent" Icon="group_add" Path="/parents/new" />
+                <RadzenPanelMenuItem Text="Enrolments" Icon="how_to_reg" Path="/enrolments" />
+            </RadzenPanelMenuItem>
+        </Authorized>
+    </AuthorizeView>
+
     <AuthorizeView Roles="@($"{Roles.SuperAdmin},{Roles.SchoolBursar}")">
         <Authorized>
             <RadzenPanelMenuItem Text="Finance" Icon="payments" Disabled="true" />

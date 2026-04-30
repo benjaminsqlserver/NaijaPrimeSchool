@@ -1,0 +1,304 @@
+@page "/parents/{Id:guid}"
+@attribute [Authorize(Roles = $"{Roles.SuperAdmin},{Roles.HeadTeacher}")]
+@rendermode InteractiveServer
+
+@inject IParentService ParentService
+@inject ILookupService LookupService
+@inject NavigationManager Nav
+@inject NotificationService Notification
+
+<PageTitle>Edit parent · Naija Prime School</PageTitle>
+
+@if (loading)
+{
+    <p>Loading parent...</p>
+}
+else if (parent is null)
+{
+    <RadzenAlert Severity="AlertSeverity.Warning">Parent not found.</RadzenAlert>
+}
+else
+{
+    <div class="nps-page-header">
+        <div>
+            <h1>@(string.IsNullOrEmpty(parent.TitleName) ? "" : parent.TitleName + " ")@parent.FullName</h1>
+            <p>@parent.PrimaryPhone @(string.IsNullOrEmpty(parent.Email) ? "" : "· " + parent.Email)</p>
+        </div>
+        <div class="nps-page-actions">
+            @if (parent.IsActive)
+            {
+                <RadzenButton Text="Deactivate" Icon="block" Variant="Variant.Flat"
+                              ButtonStyle="ButtonStyle.Warning" Click="@(() => SetActiveAsync(false))" />
+            }
+            else
+            {
+                <RadzenButton Text="Activate" Icon="check_circle" Variant="Variant.Flat"
+                              ButtonStyle="ButtonStyle.Success" Click="@(() => SetActiveAsync(true))" />
+            }
+            <RadzenButton Text="Back" Icon="arrow_back" Variant="Variant.Flat"
+                          ButtonStyle="ButtonStyle.Light" Click="@(() => Nav.NavigateTo("/parents"))" />
+        </div>
+    </div>
+
+    <RadzenTabs @bind-SelectedIndex="selectedTab">
+        <Tabs>
+            <RadzenTabsItem Text="Profile">
+                <RadzenCard class="nps-card">
+                    <RadzenTemplateForm TItem="ParentFormModel" Data="@form" Submit="@SaveAsync">
+                        <DataAnnotationsValidator />
+                        <div class="nps-form-grid">
+                            <div class="nps-field">
+                                <label>Title</label>
+                                <RadzenDropDown TValue="Guid?" Data="@titles" TextProperty="Name" ValueProperty="Id"
+                                                @bind-Value="form.TitleId" AllowClear="true" />
+                            </div>
+                            <div class="nps-field">
+                                <label>Gender</label>
+                                <RadzenDropDown TValue="Guid?" Data="@genders" TextProperty="Name" ValueProperty="Id"
+                                                @bind-Value="form.GenderId" AllowClear="true" />
+                            </div>
+                            <div class="nps-field">
+                                <label>First name *</label>
+                                <RadzenTextBox @bind-Value="form.FirstName" />
+                            </div>
+                            <div class="nps-field">
+                                <label>Last name *</label>
+                                <RadzenTextBox @bind-Value="form.LastName" />
+                            </div>
+                            <div class="nps-field">
+                                <label>Middle name</label>
+                                <RadzenTextBox @bind-Value="form.MiddleName" />
+                            </div>
+                            <div class="nps-field">
+                                <label>Marital status</label>
+                                <RadzenDropDown TValue="Guid?" Data="@maritalStatuses" TextProperty="Name" ValueProperty="Id"
+                                                @bind-Value="form.MaritalStatusId" AllowClear="true" />
+                            </div>
+                            <div class="nps-field">
+                                <label>Primary phone</label>
+                                <RadzenTextBox @bind-Value="form.PrimaryPhone" />
+                            </div>
+                            <div class="nps-field">
+                                <label>Alternate phone</label>
+                                <RadzenTextBox @bind-Value="form.AlternatePhone" />
+                            </div>
+                            <div class="nps-field nps-span-2">
+                                <label>Email</label>
+                                <RadzenTextBox @bind-Value="form.Email" />
+                            </div>
+                            <div class="nps-field nps-span-2">
+                                <label>Residential address</label>
+                                <RadzenTextArea @bind-Value="form.ResidentialAddress" Rows="2" />
+                            </div>
+                            <div class="nps-field">
+                                <label>Occupation</label>
+                                <RadzenTextBox @bind-Value="form.Occupation" />
+                            </div>
+                            <div class="nps-field">
+                                <label>Employer</label>
+                                <RadzenTextBox @bind-Value="form.Employer" />
+                            </div>
+                        </div>
+                        <div class="nps-form-actions">
+                            <RadzenButton Text="@(saving ? "Saving..." : "Save changes")"
+                                          Icon="save" ButtonType="ButtonType.Submit"
+                                          ButtonStyle="ButtonStyle.Primary" Disabled="@saving" />
+                        </div>
+                    </RadzenTemplateForm>
+                </RadzenCard>
+            </RadzenTabsItem>
+
+            <RadzenTabsItem Text="@($"Linked pupils ({studentLinks.Count})")">
+                <RadzenCard class="nps-card">
+                    <p style="color: var(--nps-ink-500);">
+                        Use the student profile (Family → Students → pick a pupil) to add or remove links.
+                    </p>
+                    <RadzenDataGrid TItem="StudentParentDto" Data="@studentLinks" AllowPaging="false"
+                                    EmptyText="No pupils linked to this parent yet.">
+                        <Columns>
+                            <RadzenDataGridColumn TItem="StudentParentDto" Title="Pupil">
+                                <Template Context="l">
+                                    <strong>@l.StudentName</strong>
+                                    <br />
+                                    <small style="color: var(--nps-ink-500);">@l.StudentAdmissionNumber</small>
+                                </Template>
+                            </RadzenDataGridColumn>
+                            <RadzenDataGridColumn TItem="StudentParentDto" Title="Relationship" Property="RelationshipName" Width="160px" />
+                            <RadzenDataGridColumn TItem="StudentParentDto" Title="Primary" Width="100px">
+                                <Template Context="l">
+                                    @if (l.IsPrimaryContact)
+                                    {
+                                        <RadzenBadge Text="Yes" BadgeStyle="BadgeStyle.Success" Variant="Variant.Flat" />
+                                    }
+                                </Template>
+                            </RadzenDataGridColumn>
+                            <RadzenDataGridColumn TItem="StudentParentDto" Title="Pickup" Width="100px">
+                                <Template Context="l">
+                                    @if (l.CanPickUp)
+                                    {
+                                        <RadzenBadge Text="Yes" BadgeStyle="BadgeStyle.Success" Variant="Variant.Flat" />
+                                    }
+                                    else
+                                    {
+                                        <RadzenBadge Text="No" BadgeStyle="BadgeStyle.Warning" Variant="Variant.Flat" />
+                                    }
+                                </Template>
+                            </RadzenDataGridColumn>
+                            <RadzenDataGridColumn TItem="StudentParentDto" Title="Open"
+                                                  Width="120px" Sortable="false" TextAlign="TextAlign.Right">
+                                <Template Context="l">
+                                    <RadzenButton Icon="open_in_new" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                                  ButtonStyle="ButtonStyle.Light" title="Open student"
+                                                  Click="@(() => Nav.NavigateTo($"/students/{l.StudentId}"))" />
+                                </Template>
+                            </RadzenDataGridColumn>
+                        </Columns>
+                    </RadzenDataGrid>
+                </RadzenCard>
+            </RadzenTabsItem>
+        </Tabs>
+    </RadzenTabs>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private bool loading = true;
+    private bool saving;
+    private int selectedTab;
+
+    private ParentDto? parent;
+    private ParentFormModel form = new();
+
+    private IReadOnlyList<LookupDto> titles = [];
+    private IReadOnlyList<LookupDto> genders = [];
+    private IReadOnlyList<LookupDto> maritalStatuses = [];
+    private IReadOnlyList<StudentParentDto> studentLinks = [];
+
+    private class ParentFormModel
+    {
+        [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(80)]
+        public string FirstName { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(80)]
+        public string LastName { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.StringLength(80)]
+        public string? MiddleName { get; set; }
+
+        public Guid? TitleId { get; set; }
+        public Guid? GenderId { get; set; }
+        public Guid? MaritalStatusId { get; set; }
+
+        [System.ComponentModel.DataAnnotations.StringLength(30)]
+        public string? PrimaryPhone { get; set; }
+
+        [System.ComponentModel.DataAnnotations.StringLength(30)]
+        public string? AlternatePhone { get; set; }
+
+        [System.ComponentModel.DataAnnotations.EmailAddress, System.ComponentModel.DataAnnotations.StringLength(256)]
+        public string? Email { get; set; }
+
+        [System.ComponentModel.DataAnnotations.StringLength(300)]
+        public string? ResidentialAddress { get; set; }
+
+        [System.ComponentModel.DataAnnotations.StringLength(120)]
+        public string? Occupation { get; set; }
+
+        [System.ComponentModel.DataAnnotations.StringLength(120)]
+        public string? Employer { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        titles = await LookupService.GetTitlesAsync();
+        genders = await LookupService.GetGendersAsync();
+        maritalStatuses = await LookupService.GetMaritalStatusesAsync();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        try
+        {
+            parent = await ParentService.GetByIdAsync(Id);
+            if (parent is not null)
+            {
+                form = new ParentFormModel
+                {
+                    FirstName = parent.FirstName,
+                    LastName = parent.LastName,
+                    MiddleName = parent.MiddleName,
+                    TitleId = parent.TitleId,
+                    GenderId = parent.GenderId,
+                    MaritalStatusId = parent.MaritalStatusId,
+                    PrimaryPhone = parent.PrimaryPhone,
+                    AlternatePhone = parent.AlternatePhone,
+                    Email = parent.Email,
+                    ResidentialAddress = parent.ResidentialAddress,
+                    Occupation = parent.Occupation,
+                    Employer = parent.Employer,
+                };
+                studentLinks = await ParentService.GetStudentLinksAsync(Id);
+            }
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        saving = true;
+        try
+        {
+            var result = await ParentService.UpdateAsync(new UpdateParentRequest
+            {
+                Id = Id,
+                FirstName = form.FirstName,
+                LastName = form.LastName,
+                MiddleName = form.MiddleName,
+                TitleId = form.TitleId,
+                GenderId = form.GenderId,
+                MaritalStatusId = form.MaritalStatusId,
+                PrimaryPhone = form.PrimaryPhone,
+                AlternatePhone = form.AlternatePhone,
+                Email = form.Email,
+                ResidentialAddress = form.ResidentialAddress,
+                Occupation = form.Occupation,
+                Employer = form.Employer,
+            });
+
+            if (result.Succeeded)
+            {
+                Notification.Notify(NotificationSeverity.Success, "Saved", "Parent profile updated.");
+                await LoadAsync();
+            }
+            else
+            {
+                Notification.Notify(NotificationSeverity.Error, "Failed", string.Join("; ", result.Errors));
+            }
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private async Task SetActiveAsync(bool active)
+    {
+        var result = await ParentService.SetActiveAsync(Id, active, CancellationToken.None);
+        if (result.Succeeded)
+        {
+            Notification.Notify(NotificationSeverity.Success, "Updated",
+                active ? "Parent activated." : "Parent deactivated.");
+            await LoadAsync();
+        }
+        else
+        {
+            Notification.Notify(NotificationSeverity.Error, "Failed", string.Join("; ", result.Errors));
+        }
+    }
+}

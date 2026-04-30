@@ -68,4 +68,95 @@ public class LookupService(
             })
             .ToList();
     }
+
+    public async Task<IReadOnlyList<LookupDto>> GetRelationshipsAsync(CancellationToken ct = default) =>
+        await db.Relationships
+            .OrderBy(r => r.DisplayOrder)
+            .Select(r => new LookupDto { Id = r.Id, Name = r.Name })
+            .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<LookupDto>> GetEnrolmentStatusesAsync(CancellationToken ct = default) =>
+        await db.EnrolmentStatuses
+            .OrderBy(s => s.DisplayOrder)
+            .Select(s => new LookupDto { Id = s.Id, Name = s.Name })
+            .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<LookupDto>> GetBloodGroupsAsync(CancellationToken ct = default) =>
+        await db.BloodGroups
+            .OrderBy(g => g.DisplayOrder)
+            .Select(g => new LookupDto { Id = g.Id, Name = g.Name })
+            .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<LookupDto>> GetMaritalStatusesAsync(CancellationToken ct = default) =>
+        await db.MaritalStatuses
+            .OrderBy(m => m.DisplayOrder)
+            .Select(m => new LookupDto { Id = m.Id, Name = m.Name })
+            .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<LookupDto>> GetClassesForSessionAsync(Guid? sessionId = null, CancellationToken ct = default)
+    {
+        var query = db.SchoolClasses.AsQueryable();
+        if (sessionId.HasValue)
+            query = query.Where(c => c.SessionId == sessionId.Value);
+
+        return await query
+            .OrderBy(c => c.ClassLevel!.DisplayOrder)
+            .ThenBy(c => c.Name)
+            .Select(c => new LookupDto
+            {
+                Id = c.Id,
+                Name = c.Name + " — " + c.Session!.Name,
+                Code = c.Session!.Name,
+            })
+            .ToListAsync(ct);
+    }
+
+    public async Task<IReadOnlyList<LookupDto>> GetStudentsAsync(string? searchTerm = null, CancellationToken ct = default)
+    {
+        var query = db.Students.AsQueryable();
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            var term = searchTerm.Trim().ToLower();
+            query = query.Where(s =>
+                s.FirstName.ToLower().Contains(term) ||
+                s.LastName.ToLower().Contains(term) ||
+                s.AdmissionNumber.ToLower().Contains(term));
+        }
+
+        return await query
+            .OrderBy(s => s.FirstName).ThenBy(s => s.LastName)
+            .Take(50)
+            .Select(s => new LookupDto
+            {
+                Id = s.Id,
+                Name = (s.FirstName + " " + s.LastName).Trim(),
+                Code = s.AdmissionNumber,
+            })
+            .ToListAsync(ct);
+    }
+
+    public async Task<IReadOnlyList<LookupDto>> GetParentsAsync(string? searchTerm = null, CancellationToken ct = default)
+    {
+        var query = db.Parents.AsQueryable();
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            var term = searchTerm.Trim().ToLower();
+            query = query.Where(p =>
+                p.FirstName.ToLower().Contains(term) ||
+                p.LastName.ToLower().Contains(term) ||
+                (p.PrimaryPhone != null && p.PrimaryPhone.Contains(term)) ||
+                (p.Email != null && p.Email.ToLower().Contains(term)));
+        }
+
+        return await query
+            .OrderBy(p => p.FirstName).ThenBy(p => p.LastName)
+            .Take(50)
+            .Select(p => new LookupDto
+            {
+                Id = p.Id,
+                Name = (p.FirstName + " " + p.LastName).Trim(),
+                Code = p.PrimaryPhone,
+            })
+            .ToListAsync(ct);
+    }
 }

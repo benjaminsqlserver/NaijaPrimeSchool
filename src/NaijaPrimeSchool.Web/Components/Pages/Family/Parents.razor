@@ -1,0 +1,163 @@
+@page "/parents"
+@attribute [Authorize(Roles = $"{Roles.SuperAdmin},{Roles.HeadTeacher}")]
+@rendermode InteractiveServer
+
+@inject IParentService ParentService
+@inject NavigationManager Nav
+@inject DialogService Dialog
+@inject NotificationService Notification
+
+<PageTitle>Parents · Naija Prime School</PageTitle>
+
+<div class="nps-page-header">
+    <div>
+        <h1>Parents &amp; guardians</h1>
+        <p>The parents directory. Add new parents, edit contact details, then link them to pupils from the student profile.</p>
+    </div>
+    <div class="nps-page-actions">
+        <RadzenButton Text="Add new parent" Icon="person_add" ButtonStyle="ButtonStyle.Primary"
+                      Click="@(() => Nav.NavigateTo("/parents/new"))" />
+    </div>
+</div>
+
+<RadzenCard class="nps-card" Style="margin-bottom: 1rem;">
+    <div class="nps-filter-bar">
+        <div class="nps-field">
+            <label>Search</label>
+            <RadzenTextBox @bind-Value="searchTerm" Placeholder="Name, phone, or email"
+                           Change="@(_ => LoadAsync())" Style="min-width: 260px;" />
+        </div>
+        <div class="nps-field">
+            <label>Status</label>
+            <RadzenDropDown TValue="bool?" @bind-Value="isActive"
+                            Data="@statusOptions" TextProperty="Text" ValueProperty="Value"
+                            AllowClear="true" Placeholder="All"
+                            Change="@(_ => LoadAsync())" Style="min-width: 160px;" />
+        </div>
+        <RadzenButton Text="Refresh" Icon="refresh" Variant="Variant.Flat"
+                      ButtonStyle="ButtonStyle.Light" Click="@LoadAsync" />
+    </div>
+</RadzenCard>
+
+<RadzenCard class="nps-card">
+    <RadzenDataGrid @ref="grid" TItem="ParentDto" Data="@parents" Count="@total"
+                    IsLoading="@loading" AllowPaging="true" AllowSorting="true"
+                    PageSize="20" PageSizeOptions="@(new[] {10, 20, 50})"
+                    LoadData="@OnLoadData" EmptyText="No parents match your filters.">
+        <Columns>
+            <RadzenDataGridColumn TItem="ParentDto" Title="Name" Property="FullName">
+                <Template Context="p">
+                    <strong>@(string.IsNullOrEmpty(p.TitleName) ? "" : p.TitleName + " ")@p.FullName</strong>
+                    <br />
+                    <small style="color: var(--nps-ink-500);">@p.Occupation</small>
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="ParentDto" Title="Contact" Sortable="false">
+                <Template Context="p">
+                    <div style="display:flex; flex-direction:column;">
+                        <span>@p.PrimaryPhone</span>
+                        <small style="color: var(--nps-ink-500);">@p.Email</small>
+                    </div>
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="ParentDto" Title="Pupils" Property="StudentCount" Width="100px" />
+            <RadzenDataGridColumn TItem="ParentDto" Title="Status" Width="120px" Property="IsActive">
+                <Template Context="p">
+                    @if (p.IsActive)
+                    {
+                        <RadzenBadge Text="Active" BadgeStyle="BadgeStyle.Success" Variant="Variant.Flat" />
+                    }
+                    else
+                    {
+                        <RadzenBadge Text="Inactive" BadgeStyle="BadgeStyle.Secondary" Variant="Variant.Flat" />
+                    }
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="ParentDto" Title="Actions" Sortable="false" Filterable="false"
+                                  TextAlign="TextAlign.Right" Width="180px">
+                <Template Context="p">
+                    <div class="nps-inline-actions">
+                        <RadzenButton Icon="edit" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                      ButtonStyle="ButtonStyle.Light" title="Edit"
+                                      Click="@(() => Nav.NavigateTo($"/parents/{p.Id}"))" />
+                        <RadzenButton Icon="delete" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                      ButtonStyle="ButtonStyle.Danger" title="Delete"
+                                      Click="@(() => DeleteAsync(p))" />
+                    </div>
+                </Template>
+            </RadzenDataGridColumn>
+        </Columns>
+    </RadzenDataGrid>
+</RadzenCard>
+
+@code {
+    private RadzenDataGrid<ParentDto>? grid;
+    private List<ParentDto> parents = [];
+    private int total;
+    private bool loading;
+
+    private string? searchTerm;
+    private bool? isActive;
+
+    private record StatusOption(string Text, bool? Value);
+    private readonly List<StatusOption> statusOptions =
+    [
+        new StatusOption("Active", true),
+        new StatusOption("Inactive", false),
+    ];
+
+    private int skip;
+    private int take = 20;
+    private string? orderBy;
+
+    private async Task OnLoadData(LoadDataArgs args)
+    {
+        skip = args.Skip ?? 0;
+        take = args.Top ?? 20;
+        orderBy = args.OrderBy;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        try
+        {
+            var result = await ParentService.ListAsync(new ParentListFilter
+            {
+                SearchTerm = searchTerm,
+                IsActive = isActive,
+                Skip = skip,
+                Take = take,
+                OrderBy = orderBy,
+            });
+            parents = result.Items;
+            total = result.TotalCount;
+        }
+        finally
+        {
+            loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task DeleteAsync(ParentDto p)
+    {
+        var confirm = await Dialog.Confirm(
+            $"Delete parent '{p.FullName}'? Linked pupils must be unlinked first.",
+            "Delete parent",
+            new ConfirmOptions { OkButtonText = "Delete", CancelButtonText = "Cancel" });
+        if (confirm != true) return;
+
+        var result = await ParentService.SoftDeleteAsync(p.Id);
+        if (result.Succeeded)
+        {
+            Notification.Notify(NotificationSeverity.Success, "Deleted", $"'{p.FullName}' removed.");
+            await LoadAsync();
+        }
+        else
+        {
+            Notification.Notify(NotificationSeverity.Error, "Failed", string.Join("; ", result.Errors));
+        }
+    }
+}

@@ -3,6 +3,7 @@
     <File Path="README.md" />
     <File Path="Sprint 1 - Implementation Guide.pdf" />
     <File Path="Sprint 2 - Implementation Guide.pdf" />
+    <File Path="Sprint 3 - Implementation Guide.docx" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/NaijaPrimeSchool.Application/NaijaPrimeSchool.Application.csproj" />

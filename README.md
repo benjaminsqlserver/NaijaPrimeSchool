@@ -2,12 +2,13 @@
 
 A modern school management system for Nigerian primary schools, built with **.NET 10**, **Blazor Auto**, **Clean Architecture**, **SQL Server**, and **Radzen Blazor Components**.
 
-Two sprints have shipped. **Sprint 1** delivered the authentication & authorization foundation: user accounts, role-based access control, login/logout, activation/deactivation, and the SuperAdmin user-management screens. **Sprint 2** built the academic domain on top of that foundation: sessions, terms, class arms, subjects, timetable periods, and a click-to-edit weekly timetable grid.
+Three sprints have shipped. **Sprint 1** delivered the authentication & authorization foundation: user accounts, role-based access control, login/logout, activation/deactivation, and the SuperAdmin user-management screens. **Sprint 2** built the academic domain on top of that foundation: sessions, terms, class arms, subjects, timetable periods, and a click-to-edit weekly timetable grid. **Sprint 3** plugs students and parents into that academic structure: pupil profiles, parent/guardian directory, parent-to-pupil linkage with relationship + primary-contact + pickup flags, and per-session enrolment with a withdrawal lifecycle.
 
-Implementation walk-throughs for both sprints live at the repo root as pdf documents:
+Implementation walk-throughs for each sprint live at the repo root:
 
 - `Sprint 1 - Implementation Guide.pdf`
 - `Sprint 2 - Implementation Guide.pdf`
+- `Sprint 3 - Implementation Guide.docx`
 
 ---
 
@@ -42,6 +43,28 @@ Implementation walk-throughs for both sprints live at the repo root as pdf docum
   - One subject per (term, class, weekday, period) slot, enforced by a unique index
 - **Pages added** (`/sessions`, `/terms`, `/classes`, `/subjects`, `/timetable-periods`, `/timetable`), all gated to **SuperAdmin** + **HeadTeacher**, with the timetable read view also visible to **Teacher**
 
+## Sprint 3 — Students & parents ✅
+
+- **Pupils**
+  - **Students** with admission number, admission date, demographics, photo, blood group, allergies and medical notes
+  - Optional `UserId` hook for a future student portal login
+  - Active / inactive flag and soft delete (refused while an enrolment is still open)
+- **Parents & guardians**
+  - **Parents** directory with title, marital status, primary + alternate phones, email, occupation, employer
+  - Optional `UserId` hook for a future parent portal login
+  - Soft delete refused while linkages still exist
+- **Linkage**
+  - **StudentParent** join entity carrying `Relationship` (Father, Mother, Guardian, Uncle, …), `IsPrimaryContact`, `CanPickUp` and free-text notes
+  - At most one parent appears per pupil (composite unique index)
+  - At most one primary contact per pupil (enforced in service)
+- **Enrolment**
+  - **Enrolment** ties a pupil to a `SchoolClass` with `EnrolledOn`, optional `WithdrawnOn`, `EnrolmentStatus` (Active / Suspended / Withdrawn / Transferred / Graduated)
+  - One enrolment per (pupil, class) and at most one open enrolment per (pupil, session) — service-enforced
+  - Withdraw flow that stamps `WithdrawnOn`, flips the status, and appends notes
+- **Lookup tables (no enums)**
+  - `Relationships`, `EnrolmentStatuses`, `BloodGroups`, `MaritalStatuses` — every domain concept that would normally be a C# enum is a first-class table, seeded on startup
+- **Pages added** (`/students`, `/students/new`, `/students/{id}`, `/parents`, `/parents/new`, `/parents/{id}`, `/enrolments`), all gated to **SuperAdmin** + **HeadTeacher**. Edit-pupil and edit-parent pages use Radzen tabs to keep profile editing separate from linkage management.
+
 ## Cross-cutting (every sprint)
 
 - **Beautiful, inviting UI**
@@ -49,7 +72,7 @@ Implementation walk-throughs for both sprints live at the repo root as pdf docum
   - Radzen Blazor components (DataGrid, Dialog, Notification, Layout, Sidebar, Forms)
   - Responsive layout
 - **Data integrity**
-  - No enums; every lookup (roles, titles, genders, term types, class levels, week days, …) is a first-class table
+  - No enums; every lookup (roles, titles, genders, term types, class levels, week days, relationships, enrolment statuses, blood groups, marital statuses, …) is a first-class table
   - Soft delete for all entities, enforced globally via EF Core query filters
   - Auditing (CreatedOn/By, ModifiedOn/By, DeletedOn/By) applied automatically in `SaveChanges`
 
@@ -75,16 +98,19 @@ NaijaPrimeSchool/
 │   ├── NaijaPrimeSchool.Domain/                # Entities, base types, interfaces. No dependencies on infra.
 │   │   ├── Common/                              # BaseEntity, IAuditable, ISoftDelete
 │   │   ├── Identity/                            # ApplicationUser, ApplicationRole, Title, Gender, Roles (sprint 1)
-│   │   └── Academics/                           # Session, Term, SchoolClass, Subject, Timetable* (sprint 2)
+│   │   ├── Academics/                           # Session, Term, SchoolClass, Subject, Timetable* (sprint 2)
+│   │   └── Family/                              # Student, Parent, StudentParent, Enrolment + lookups (sprint 3)
 │   ├── NaijaPrimeSchool.Application/            # DTOs, service contracts, shared abstractions
 │   │   ├── Common/                              # ICurrentUser, OperationResult
 │   │   ├── Users/                               # IUserService, ILookupService, DTOs (sprint 1)
-│   │   └── Academics/                           # I*Service interfaces and DTOs (sprint 2)
+│   │   ├── Academics/                           # I*Service interfaces and DTOs (sprint 2)
+│   │   └── Family/                              # IStudentService, IParentService, IEnrolmentService, DTOs (sprint 3)
 │   ├── NaijaPrimeSchool.Infrastructure/         # EF Core DbContext, Identity stores, service impls, seed, migrations
 │   ├── NaijaPrimeSchool.Web/                    # Blazor server host (auth endpoints, layout, pages, Program.cs)
 │   │   └── Components/Pages/
 │   │       ├── Users/                           # User management pages (sprint 1)
-│   │       └── Academics/                       # Sessions, Terms, Classes, Subjects, Periods, Timetable (sprint 2)
+│   │       ├── Academics/                       # Sessions, Terms, Classes, Subjects, Periods, Timetable (sprint 2)
+│   │       └── Family/                          # Students, Parents, Enrolments (sprint 3)
 │   └── NaijaPrimeSchool.Web.Client/             # Blazor WebAssembly client (Auto interactivity)
 ├── tools/                                       # Scripts (e.g. sprint guide generators)
 └── NaijaPrimeSchool.slnx
@@ -237,7 +263,14 @@ User management screens are gated behind the `ManageUsers` policy, which require
 | `src/NaijaPrimeSchool.Infrastructure/Services/SubjectService.cs` | Subjects CRUD |
 | `src/NaijaPrimeSchool.Infrastructure/Services/TimetableService.cs` | Periods CRUD + entry list / upsert / delete |
 | `src/NaijaPrimeSchool.Web/Components/Pages/Academics/` | Sessions, Terms, Classes, Subjects, Periods, Timetable grid |
+| `src/NaijaPrimeSchool.Domain/Family/` | Student, Parent, StudentParent, Enrolment + lookups (sprint 3) |
+| `src/NaijaPrimeSchool.Application/Family/` | I*Service contracts and DTOs for the family domain |
+| `src/NaijaPrimeSchool.Infrastructure/Services/StudentService.cs` | Student CRUD + parent linkage |
+| `src/NaijaPrimeSchool.Infrastructure/Services/ParentService.cs` | Parent CRUD |
+| `src/NaijaPrimeSchool.Infrastructure/Services/EnrolmentService.cs` | Enrolment CRUD + Withdraw |
+| `src/NaijaPrimeSchool.Web/Components/Pages/Family/` | Students, Parents, Enrolments admin pages |
 | `tools/generate_sprint2_guide.py` | Generator for `Sprint 2 - Implementation Guide.docx` |
+| `tools/generate_sprint3_guide.py` | Generator for `Sprint 3 - Implementation Guide.docx` |
 
 ---
 
@@ -247,10 +280,10 @@ Delivered:
 
 - ✅ **Sprint 1** — Identity & user management (cookie auth, roles, lockout, SuperAdmin user CRUD)
 - ✅ **Sprint 2** — Academic domain (sessions, terms, classes, subjects, periods, timetable grid)
+- ✅ **Sprint 3** — Students & parents (pupil profiles, parent directory, linkage, enrolment)
 
 Planned for upcoming sprints:
 
-- Sprint 3 — Students & parents (enrolment, linkage, guardians)
 - Sprint 4 — Attendance (daily + per-subject)
 - Sprint 5 — Assessments, exams, result computation, report cards
 - Sprint 6 — Fees, invoices, receipts, bursar workflows

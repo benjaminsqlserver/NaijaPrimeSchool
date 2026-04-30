@@ -1,0 +1,213 @@
+@page "/students/new"
+@attribute [Authorize(Roles = $"{Roles.SuperAdmin},{Roles.HeadTeacher}")]
+@rendermode InteractiveServer
+
+@inject IStudentService StudentService
+@inject ILookupService LookupService
+@inject ISessionService SessionService
+@inject NavigationManager Nav
+@inject NotificationService Notification
+
+<PageTitle>New student · Naija Prime School</PageTitle>
+
+<div class="nps-page-header">
+    <div>
+        <h1>New student</h1>
+        <p>Capture a pupil's profile and (optionally) enrol them straight into a class.</p>
+    </div>
+    <div class="nps-page-actions">
+        <RadzenButton Text="Back to students" Icon="arrow_back" Variant="Variant.Flat"
+                      ButtonStyle="ButtonStyle.Light" Click="@(() => Nav.NavigateTo("/students"))" />
+    </div>
+</div>
+
+<RadzenCard class="nps-card">
+    <RadzenTemplateForm TItem="StudentFormModel" Data="@form" Submit="@SaveAsync">
+        <DataAnnotationsValidator />
+
+        <h3 style="margin: 0 0 1rem;">Identity</h3>
+        <div class="nps-form-grid">
+            <div class="nps-field">
+                <label>Admission number *</label>
+                <RadzenTextBox @bind-Value="form.AdmissionNumber" Placeholder="e.g. NPS/2026/0001" />
+                <ValidationMessage For="() => form.AdmissionNumber" />
+            </div>
+            <div class="nps-field">
+                <label>Admission date *</label>
+                <RadzenDatePicker TValue="DateTime?" @bind-Value="form.AdmissionDate"
+                                  DateFormat="d MMM yyyy" ShowTime="false" />
+            </div>
+            <div class="nps-field">
+                <label>First name *</label>
+                <RadzenTextBox @bind-Value="form.FirstName" />
+                <ValidationMessage For="() => form.FirstName" />
+            </div>
+            <div class="nps-field">
+                <label>Last name *</label>
+                <RadzenTextBox @bind-Value="form.LastName" />
+                <ValidationMessage For="() => form.LastName" />
+            </div>
+            <div class="nps-field">
+                <label>Middle name</label>
+                <RadzenTextBox @bind-Value="form.MiddleName" />
+            </div>
+            <div class="nps-field">
+                <label>Date of birth *</label>
+                <RadzenDatePicker TValue="DateTime?" @bind-Value="form.DateOfBirth"
+                                  DateFormat="d MMM yyyy" ShowTime="false" />
+            </div>
+            <div class="nps-field">
+                <label>Gender</label>
+                <RadzenDropDown TValue="Guid?" Data="@genders" TextProperty="Name" ValueProperty="Id"
+                                @bind-Value="form.GenderId" AllowClear="true" Placeholder="Pick one" />
+            </div>
+            <div class="nps-field">
+                <label>Blood group</label>
+                <RadzenDropDown TValue="Guid?" Data="@bloodGroups" TextProperty="Name" ValueProperty="Id"
+                                @bind-Value="form.BloodGroupId" AllowClear="true" Placeholder="Pick one" />
+            </div>
+            <div class="nps-field">
+                <label>State of origin</label>
+                <RadzenTextBox @bind-Value="form.StateOfOrigin" Placeholder="e.g. Ogun" />
+            </div>
+            <div class="nps-field nps-span-2">
+                <label>Residential address</label>
+                <RadzenTextArea @bind-Value="form.ResidentialAddress" Rows="2" />
+            </div>
+        </div>
+
+        <h3 style="margin: 1.5rem 0 1rem;">Health</h3>
+        <div class="nps-form-grid">
+            <div class="nps-field nps-span-2">
+                <label>Allergies</label>
+                <RadzenTextArea @bind-Value="form.Allergies" Rows="2"
+                                Placeholder="Known allergies, if any (medication, food, environmental)" />
+            </div>
+            <div class="nps-field nps-span-2">
+                <label>Medical notes</label>
+                <RadzenTextArea @bind-Value="form.MedicalNotes" Rows="3"
+                                Placeholder="Conditions or medication that staff should be aware of" />
+            </div>
+        </div>
+
+        <h3 style="margin: 1.5rem 0 1rem;">Initial enrolment (optional)</h3>
+        <div class="nps-form-grid">
+            <div class="nps-field nps-span-2">
+                <label>Class</label>
+                <RadzenDropDown TValue="Guid?" Data="@classes" TextProperty="Name" ValueProperty="Id"
+                                @bind-Value="form.InitialClassId" AllowClear="true"
+                                Placeholder="Pick a class to enrol straight away (or skip)" />
+                <small style="color: var(--nps-ink-500); margin-top: 0.25rem;">
+                    The pupil's admission date will be used as the enrolment date.
+                </small>
+            </div>
+        </div>
+
+        <div class="nps-form-actions">
+            <RadzenButton Text="Cancel" ButtonType="ButtonType.Button"
+                          ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat"
+                          Click="@(() => Nav.NavigateTo("/students"))" />
+            <RadzenButton Text="@(saving ? "Saving..." : "Save student")"
+                          Icon="save" ButtonType="ButtonType.Submit"
+                          ButtonStyle="ButtonStyle.Primary" Disabled="@saving" />
+        </div>
+    </RadzenTemplateForm>
+</RadzenCard>
+
+@code {
+    private StudentFormModel form = new();
+    private bool saving;
+
+    private IReadOnlyList<LookupDto> genders = [];
+    private IReadOnlyList<LookupDto> bloodGroups = [];
+    private IReadOnlyList<LookupDto> classes = [];
+
+    private class StudentFormModel
+    {
+        [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(30)]
+        public string AdmissionNumber { get; set; } = string.Empty;
+
+        public DateTime? AdmissionDate { get; set; } = DateTime.Today;
+
+        [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(80)]
+        public string FirstName { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(80)]
+        public string LastName { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.StringLength(80)]
+        public string? MiddleName { get; set; }
+
+        public DateTime? DateOfBirth { get; set; }
+        public Guid? GenderId { get; set; }
+        public Guid? BloodGroupId { get; set; }
+
+        [System.ComponentModel.DataAnnotations.StringLength(80)]
+        public string? StateOfOrigin { get; set; }
+
+        [System.ComponentModel.DataAnnotations.StringLength(300)]
+        public string? ResidentialAddress { get; set; }
+
+        [System.ComponentModel.DataAnnotations.StringLength(500)]
+        public string? Allergies { get; set; }
+
+        [System.ComponentModel.DataAnnotations.StringLength(1000)]
+        public string? MedicalNotes { get; set; }
+
+        public Guid? InitialClassId { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        genders = await LookupService.GetGendersAsync();
+        bloodGroups = await LookupService.GetBloodGroupsAsync();
+        var current = await SessionService.GetCurrentAsync();
+        classes = await LookupService.GetClassesForSessionAsync(current?.Id);
+    }
+
+    private async Task SaveAsync()
+    {
+        if (form.AdmissionDate is null || form.DateOfBirth is null)
+        {
+            Notification.Notify(NotificationSeverity.Warning, "Dates required",
+                "Pick an admission date and a date of birth.");
+            return;
+        }
+
+        saving = true;
+        try
+        {
+            var result = await StudentService.CreateAsync(new CreateStudentRequest
+            {
+                AdmissionNumber = form.AdmissionNumber,
+                AdmissionDate = DateOnly.FromDateTime(form.AdmissionDate.Value),
+                FirstName = form.FirstName,
+                LastName = form.LastName,
+                MiddleName = form.MiddleName,
+                DateOfBirth = DateOnly.FromDateTime(form.DateOfBirth.Value),
+                GenderId = form.GenderId,
+                BloodGroupId = form.BloodGroupId,
+                StateOfOrigin = form.StateOfOrigin,
+                ResidentialAddress = form.ResidentialAddress,
+                Allergies = form.Allergies,
+                MedicalNotes = form.MedicalNotes,
+                InitialClassId = form.InitialClassId,
+            });
+
+            if (result.Succeeded)
+            {
+                Notification.Notify(NotificationSeverity.Success, "Saved",
+                    $"Student '{form.FirstName} {form.LastName}' created.");
+                Nav.NavigateTo($"/students/{result.Data}");
+            }
+            else
+            {
+                Notification.Notify(NotificationSeverity.Error, "Failed", string.Join("; ", result.Errors));
+            }
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+}

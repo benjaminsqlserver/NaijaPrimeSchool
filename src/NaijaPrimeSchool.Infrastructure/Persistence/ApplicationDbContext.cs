@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using NaijaPrimeSchool.Application.Common;
 using NaijaPrimeSchool.Domain.Academics;
 using NaijaPrimeSchool.Domain.Common;
+using NaijaPrimeSchool.Domain.Family;
 using NaijaPrimeSchool.Domain.Identity;
 
 namespace NaijaPrimeSchool.Infrastructure.Persistence;
@@ -35,6 +36,15 @@ public class ApplicationDbContext(
     public DbSet<WeekDay> WeekDays => Set<WeekDay>();
     public DbSet<TimetablePeriod> TimetablePeriods => Set<TimetablePeriod>();
     public DbSet<TimetableEntry> TimetableEntries => Set<TimetableEntry>();
+
+    public DbSet<Relationship> Relationships => Set<Relationship>();
+    public DbSet<EnrolmentStatus> EnrolmentStatuses => Set<EnrolmentStatus>();
+    public DbSet<BloodGroup> BloodGroups => Set<BloodGroup>();
+    public DbSet<MaritalStatus> MaritalStatuses => Set<MaritalStatus>();
+    public DbSet<Student> Students => Set<Student>();
+    public DbSet<Parent> Parents => Set<Parent>();
+    public DbSet<StudentParent> StudentParents => Set<StudentParent>();
+    public DbSet<Enrolment> Enrolments => Set<Enrolment>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -115,6 +125,7 @@ public class ApplicationDbContext(
         });
 
         ConfigureAcademics(builder);
+        ConfigureFamily(builder);
     }
 
     private static void ConfigureAcademics(ModelBuilder builder)
@@ -267,6 +278,164 @@ public class ApplicationDbContext(
             // One subject per (term, class, day, period) slot.
             b.HasIndex(e => new { e.TermId, e.SchoolClassId, e.WeekDayId, e.TimetablePeriodId })
                 .IsUnique();
+            b.HasIndex(e => e.IsDeleted);
+            b.HasQueryFilter(e => !e.IsDeleted);
+        });
+    }
+
+    private static void ConfigureFamily(ModelBuilder builder)
+    {
+        ConfigureLookup<Relationship>(builder, "Relationships", extra: b =>
+        {
+            b.Property(r => r.Name).HasMaxLength(40).IsRequired();
+            b.HasIndex(r => r.Name).IsUnique();
+        });
+
+        ConfigureLookup<EnrolmentStatus>(builder, "EnrolmentStatuses", extra: b =>
+        {
+            b.Property(s => s.Name).HasMaxLength(40).IsRequired();
+            b.HasIndex(s => s.Name).IsUnique();
+        });
+
+        ConfigureLookup<BloodGroup>(builder, "BloodGroups", extra: b =>
+        {
+            b.Property(g => g.Name).HasMaxLength(10).IsRequired();
+            b.HasIndex(g => g.Name).IsUnique();
+        });
+
+        ConfigureLookup<MaritalStatus>(builder, "MaritalStatuses", extra: b =>
+        {
+            b.Property(m => m.Name).HasMaxLength(40).IsRequired();
+            b.HasIndex(m => m.Name).IsUnique();
+        });
+
+        builder.Entity<Student>(b =>
+        {
+            b.ToTable("Students");
+            b.HasKey(s => s.Id);
+            b.Property(s => s.AdmissionNumber).HasMaxLength(30).IsRequired();
+            b.Property(s => s.FirstName).HasMaxLength(80).IsRequired();
+            b.Property(s => s.LastName).HasMaxLength(80).IsRequired();
+            b.Property(s => s.MiddleName).HasMaxLength(80);
+            b.Property(s => s.StateOfOrigin).HasMaxLength(80);
+            b.Property(s => s.ResidentialAddress).HasMaxLength(300);
+            b.Property(s => s.PhotoUrl).HasMaxLength(500);
+            b.Property(s => s.Allergies).HasMaxLength(500);
+            b.Property(s => s.MedicalNotes).HasMaxLength(1000);
+            b.Property(s => s.CreatedBy).HasMaxLength(100);
+            b.Property(s => s.ModifiedBy).HasMaxLength(100);
+            b.Property(s => s.DeletedBy).HasMaxLength(100);
+            b.Ignore(s => s.FullName);
+
+            b.HasOne(s => s.Gender).WithMany()
+                .HasForeignKey(s => s.GenderId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            b.HasOne(s => s.BloodGroup).WithMany(g => g.Students)
+                .HasForeignKey(s => s.BloodGroupId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            b.HasOne(s => s.User).WithMany()
+                .HasForeignKey(s => s.UserId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            b.HasIndex(s => s.AdmissionNumber).IsUnique();
+            b.HasIndex(s => s.UserId).IsUnique()
+                .HasFilter("[UserId] IS NOT NULL");
+            b.HasIndex(s => s.IsDeleted);
+            b.HasQueryFilter(s => !s.IsDeleted);
+        });
+
+        builder.Entity<Parent>(b =>
+        {
+            b.ToTable("Parents");
+            b.HasKey(p => p.Id);
+            b.Property(p => p.FirstName).HasMaxLength(80).IsRequired();
+            b.Property(p => p.LastName).HasMaxLength(80).IsRequired();
+            b.Property(p => p.MiddleName).HasMaxLength(80);
+            b.Property(p => p.PrimaryPhone).HasMaxLength(30);
+            b.Property(p => p.AlternatePhone).HasMaxLength(30);
+            b.Property(p => p.Email).HasMaxLength(256);
+            b.Property(p => p.ResidentialAddress).HasMaxLength(300);
+            b.Property(p => p.Occupation).HasMaxLength(120);
+            b.Property(p => p.Employer).HasMaxLength(120);
+            b.Property(p => p.CreatedBy).HasMaxLength(100);
+            b.Property(p => p.ModifiedBy).HasMaxLength(100);
+            b.Property(p => p.DeletedBy).HasMaxLength(100);
+            b.Ignore(p => p.FullName);
+
+            b.HasOne(p => p.Title).WithMany()
+                .HasForeignKey(p => p.TitleId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            b.HasOne(p => p.Gender).WithMany()
+                .HasForeignKey(p => p.GenderId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            b.HasOne(p => p.MaritalStatus).WithMany(m => m.Parents)
+                .HasForeignKey(p => p.MaritalStatusId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            b.HasOne(p => p.User).WithMany()
+                .HasForeignKey(p => p.UserId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            b.HasIndex(p => p.UserId).IsUnique()
+                .HasFilter("[UserId] IS NOT NULL");
+            b.HasIndex(p => p.IsDeleted);
+            b.HasQueryFilter(p => !p.IsDeleted);
+        });
+
+        builder.Entity<StudentParent>(b =>
+        {
+            b.ToTable("StudentParents");
+            b.HasKey(sp => sp.Id);
+            b.Property(sp => sp.Notes).HasMaxLength(300);
+            b.Property(sp => sp.CreatedBy).HasMaxLength(100);
+            b.Property(sp => sp.ModifiedBy).HasMaxLength(100);
+            b.Property(sp => sp.DeletedBy).HasMaxLength(100);
+
+            b.HasOne(sp => sp.Student).WithMany(s => s.ParentLinks)
+                .HasForeignKey(sp => sp.StudentId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            b.HasOne(sp => sp.Parent).WithMany(p => p.StudentLinks)
+                .HasForeignKey(sp => sp.ParentId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            b.HasOne(sp => sp.Relationship).WithMany(r => r.StudentLinks)
+                .HasForeignKey(sp => sp.RelationshipId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // A given parent should appear at most once per student.
+            b.HasIndex(sp => new { sp.StudentId, sp.ParentId }).IsUnique();
+            b.HasIndex(sp => sp.IsDeleted);
+            b.HasQueryFilter(sp => !sp.IsDeleted);
+        });
+
+        builder.Entity<Enrolment>(b =>
+        {
+            b.ToTable("Enrolments");
+            b.HasKey(e => e.Id);
+            b.Property(e => e.Notes).HasMaxLength(500);
+            b.Property(e => e.CreatedBy).HasMaxLength(100);
+            b.Property(e => e.ModifiedBy).HasMaxLength(100);
+            b.Property(e => e.DeletedBy).HasMaxLength(100);
+
+            b.HasOne(e => e.Student).WithMany(s => s.Enrolments)
+                .HasForeignKey(e => e.StudentId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            b.HasOne(e => e.SchoolClass).WithMany(c => c.Enrolments)
+                .HasForeignKey(e => e.SchoolClassId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasOne(e => e.EnrolmentStatus).WithMany(s => s.Enrolments)
+                .HasForeignKey(e => e.EnrolmentStatusId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // A student appears at most once in a given class.
+            b.HasIndex(e => new { e.StudentId, e.SchoolClassId }).IsUnique();
             b.HasIndex(e => e.IsDeleted);
             b.HasQueryFilter(e => !e.IsDeleted);
         });

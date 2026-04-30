@@ -1,0 +1,224 @@
+@page "/students"
+@attribute [Authorize(Roles = $"{Roles.SuperAdmin},{Roles.HeadTeacher}")]
+@rendermode InteractiveServer
+
+@inject IStudentService StudentService
+@inject ILookupService LookupService
+@inject ISessionService SessionService
+@inject NavigationManager Nav
+@inject DialogService Dialog
+@inject NotificationService Notification
+
+<PageTitle>Students · Naija Prime School</PageTitle>
+
+<div class="nps-page-header">
+    <div>
+        <h1>Students</h1>
+        <p>Pupils enrolled across the school. Add new pupils, manage profiles, and review parent linkage.</p>
+    </div>
+    <div class="nps-page-actions">
+        <RadzenButton Text="Add new student" Icon="person_add"
+                      ButtonStyle="ButtonStyle.Primary" Click="@(() => Nav.NavigateTo("/students/new"))" />
+    </div>
+</div>
+
+<RadzenCard class="nps-card" Style="margin-bottom: 1rem;">
+    <div class="nps-filter-bar">
+        <div class="nps-field">
+            <label>Search</label>
+            <RadzenTextBox @bind-Value="searchTerm" Placeholder="Name or admission number"
+                           Change="@(_ => LoadAsync())" Style="min-width: 260px;" />
+        </div>
+        <div class="nps-field">
+            <label>Session</label>
+            <RadzenDropDown TValue="Guid?" Data="@sessions" TextProperty="Name" ValueProperty="Id"
+                            @bind-Value="sessionId" AllowClear="true" Placeholder="All sessions"
+                            Change="@(_ => SessionChangedAsync())" Style="min-width: 200px;" />
+        </div>
+        <div class="nps-field">
+            <label>Class</label>
+            <RadzenDropDown TValue="Guid?" Data="@classes" TextProperty="Name" ValueProperty="Id"
+                            @bind-Value="classId" AllowClear="true" Placeholder="All classes"
+                            Change="@(_ => LoadAsync())" Style="min-width: 240px;" />
+        </div>
+        <div class="nps-field">
+            <label>Status</label>
+            <RadzenDropDown TValue="bool?" @bind-Value="isActive"
+                            Data="@statusOptions" TextProperty="Text" ValueProperty="Value"
+                            AllowClear="true" Placeholder="All"
+                            Change="@(_ => LoadAsync())" Style="min-width: 160px;" />
+        </div>
+        <RadzenButton Text="Refresh" Icon="refresh" Variant="Variant.Flat"
+                      ButtonStyle="ButtonStyle.Light" Click="@LoadAsync" />
+    </div>
+</RadzenCard>
+
+<RadzenCard class="nps-card">
+    <RadzenDataGrid @ref="grid" TItem="StudentDto" Data="@students" Count="@total"
+                    IsLoading="@loading" AllowPaging="true" AllowSorting="true"
+                    PageSize="20" PageSizeOptions="@(new[] {10, 20, 50})"
+                    LoadData="@OnLoadData" EmptyText="No students match your filters.">
+        <Columns>
+            <RadzenDataGridColumn TItem="StudentDto" Title="Pupil" Property="FullName">
+                <Template Context="s">
+                    <div style="display:flex; flex-direction:column;">
+                        <strong>@s.FullName</strong>
+                        <small style="color: var(--nps-ink-500);">@s.AdmissionNumber</small>
+                    </div>
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="StudentDto" Title="Current class" Property="CurrentClassName">
+                <Template Context="s">
+                    @if (string.IsNullOrEmpty(s.CurrentClassName))
+                    {
+                        <span style="color: var(--nps-ink-500); font-style: italic;">Not enrolled</span>
+                    }
+                    else
+                    {
+                        <strong>@s.CurrentClassName</strong>
+                        <br />
+                        <small style="color: var(--nps-ink-500);">@s.CurrentSessionName</small>
+                    }
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="StudentDto" Title="Primary contact" Sortable="false">
+                <Template Context="s">
+                    @if (string.IsNullOrEmpty(s.PrimaryContactName))
+                    {
+                        <RadzenBadge Text="No parent linked" BadgeStyle="BadgeStyle.Warning" Variant="Variant.Flat" />
+                    }
+                    else
+                    {
+                        <div style="display:flex; flex-direction:column;">
+                            <strong>@s.PrimaryContactName</strong>
+                            <small style="color: var(--nps-ink-500);">@s.PrimaryContactPhone</small>
+                        </div>
+                    }
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="StudentDto" Title="DOB" Property="DateOfBirth"
+                                  FormatString="{0:d MMM yyyy}" Width="140px" />
+            <RadzenDataGridColumn TItem="StudentDto" Title="Status" Width="120px" Property="IsActive">
+                <Template Context="s">
+                    @if (s.IsActive)
+                    {
+                        <RadzenBadge Text="Active" BadgeStyle="BadgeStyle.Success" Variant="Variant.Flat" />
+                    }
+                    else
+                    {
+                        <RadzenBadge Text="Inactive" BadgeStyle="BadgeStyle.Secondary" Variant="Variant.Flat" />
+                    }
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="StudentDto" Title="Actions" Sortable="false" Filterable="false"
+                                  TextAlign="TextAlign.Right" Width="220px">
+                <Template Context="s">
+                    <div class="nps-inline-actions">
+                        <RadzenButton Icon="edit" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                      ButtonStyle="ButtonStyle.Light" title="Edit"
+                                      Click="@(() => Nav.NavigateTo($"/students/{s.Id}"))" />
+                        <RadzenButton Icon="family_restroom" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                      ButtonStyle="ButtonStyle.Info" title="Manage parents"
+                                      Click="@(() => Nav.NavigateTo($"/students/{s.Id}#parents"))" />
+                        <RadzenButton Icon="delete" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                      ButtonStyle="ButtonStyle.Danger" title="Delete"
+                                      Click="@(() => DeleteAsync(s))" />
+                    </div>
+                </Template>
+            </RadzenDataGridColumn>
+        </Columns>
+    </RadzenDataGrid>
+</RadzenCard>
+
+@code {
+    private RadzenDataGrid<StudentDto>? grid;
+    private List<StudentDto> students = [];
+    private int total;
+    private bool loading;
+
+    private string? searchTerm;
+    private Guid? sessionId;
+    private Guid? classId;
+    private bool? isActive;
+
+    private IReadOnlyList<SessionDto> sessions = [];
+    private IReadOnlyList<LookupDto> classes = [];
+
+    private record StatusOption(string Text, bool? Value);
+    private readonly List<StatusOption> statusOptions =
+    [
+        new StatusOption("Active", true),
+        new StatusOption("Inactive", false),
+    ];
+
+    private int skip;
+    private int take = 20;
+    private string? orderBy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        sessions = await SessionService.ListAsync();
+        sessionId = sessions.FirstOrDefault(s => s.IsCurrent)?.Id;
+        classes = await LookupService.GetClassesForSessionAsync(sessionId);
+    }
+
+    private async Task SessionChangedAsync()
+    {
+        classId = null;
+        classes = await LookupService.GetClassesForSessionAsync(sessionId);
+        await LoadAsync();
+    }
+
+    private async Task OnLoadData(LoadDataArgs args)
+    {
+        skip = args.Skip ?? 0;
+        take = args.Top ?? 20;
+        orderBy = args.OrderBy;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        try
+        {
+            var result = await StudentService.ListAsync(new StudentListFilter
+            {
+                SearchTerm = searchTerm,
+                SessionId = sessionId,
+                ClassId = classId,
+                IsActive = isActive,
+                Skip = skip,
+                Take = take,
+                OrderBy = orderBy,
+            });
+            students = result.Items;
+            total = result.TotalCount;
+        }
+        finally
+        {
+            loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task DeleteAsync(StudentDto s)
+    {
+        var confirm = await Dialog.Confirm(
+            $"Delete student '{s.FullName}' ({s.AdmissionNumber})? Active enrolments must be withdrawn first.",
+            "Delete student",
+            new ConfirmOptions { OkButtonText = "Delete", CancelButtonText = "Cancel" });
+        if (confirm != true) return;
+
+        var result = await StudentService.SoftDeleteAsync(s.Id);
+        if (result.Succeeded)
+        {
+            Notification.Notify(NotificationSeverity.Success, "Deleted", $"'{s.FullName}' removed.");
+            await LoadAsync();
+        }
+        else
+        {
+            Notification.Notify(NotificationSeverity.Error, "Failed", string.Join("; ", result.Errors));
+        }
+    }
+}

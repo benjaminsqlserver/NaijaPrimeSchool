@@ -1,0 +1,186 @@
+@page "/enrolments"
+@attribute [Authorize(Roles = $"{Roles.SuperAdmin},{Roles.HeadTeacher}")]
+@rendermode InteractiveServer
+
+@inject IEnrolmentService EnrolmentService
+@inject ISessionService SessionService
+@inject ILookupService LookupService
+@inject NavigationManager Nav
+@inject DialogService Dialog
+@inject NotificationService Notification
+
+<PageTitle>Enrolments · Naija Prime School</PageTitle>
+
+<div class="nps-page-header">
+    <div>
+        <h1>Enrolments</h1>
+        <p>Browse pupils by session and class. Withdraw, switch, or delete enrolments inline.</p>
+    </div>
+</div>
+
+<RadzenCard class="nps-card" Style="margin-bottom: 1rem;">
+    <div class="nps-filter-bar">
+        <div class="nps-field">
+            <label>Session</label>
+            <RadzenDropDown TValue="Guid?" Data="@sessions" TextProperty="Name" ValueProperty="Id"
+                            @bind-Value="sessionId" AllowClear="true" Placeholder="All sessions"
+                            Change="@(_ => SessionChangedAsync())" Style="min-width: 200px;" />
+        </div>
+        <div class="nps-field">
+            <label>Class</label>
+            <RadzenDropDown TValue="Guid?" Data="@classes" TextProperty="Name" ValueProperty="Id"
+                            @bind-Value="classId" AllowClear="true" Placeholder="All classes"
+                            Change="@(_ => LoadAsync())" Style="min-width: 240px;" />
+        </div>
+        <div class="nps-field">
+            <label>Status</label>
+            <RadzenDropDown TValue="Guid?" Data="@statuses" TextProperty="Name" ValueProperty="Id"
+                            @bind-Value="statusId" AllowClear="true" Placeholder="All statuses"
+                            Change="@(_ => LoadAsync())" Style="min-width: 200px;" />
+        </div>
+        <RadzenButton Text="Refresh" Icon="refresh" Variant="Variant.Flat"
+                      ButtonStyle="ButtonStyle.Light" Click="@LoadAsync" />
+    </div>
+</RadzenCard>
+
+<RadzenCard class="nps-card">
+    <RadzenDataGrid TItem="EnrolmentDto" Data="@enrolments" IsLoading="@loading"
+                    AllowPaging="true" PageSize="25" EmptyText="No enrolments match your filters.">
+        <Columns>
+            <RadzenDataGridColumn TItem="EnrolmentDto" Title="Pupil">
+                <Template Context="e">
+                    <strong>@e.StudentName</strong>
+                    <br />
+                    <small style="color: var(--nps-ink-500);">@e.StudentAdmissionNumber</small>
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="EnrolmentDto" Title="Class">
+                <Template Context="e">
+                    <strong>@e.SchoolClassName</strong>
+                    <br />
+                    <small style="color: var(--nps-ink-500);">@e.SessionName</small>
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="EnrolmentDto" Title="Enrolled" Property="EnrolledOn"
+                                  FormatString="{0:d MMM yyyy}" Width="140px" />
+            <RadzenDataGridColumn TItem="EnrolmentDto" Title="Withdrawn" Width="140px">
+                <Template Context="e">
+                    @(e.WithdrawnOn.HasValue ? e.WithdrawnOn.Value.ToString("d MMM yyyy") : "—")
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="EnrolmentDto" Title="Status" Width="140px">
+                <Template Context="e">
+                    <RadzenBadge Text="@e.EnrolmentStatusName"
+                                 BadgeStyle="@(e.WithdrawnOn.HasValue ? BadgeStyle.Secondary : BadgeStyle.Success)"
+                                 Variant="Variant.Flat" />
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="EnrolmentDto" Title="Actions" Sortable="false"
+                                  Width="200px" TextAlign="TextAlign.Right">
+                <Template Context="e">
+                    <div class="nps-inline-actions">
+                        <RadzenButton Icon="open_in_new" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                      ButtonStyle="ButtonStyle.Light" title="Open student"
+                                      Click="@(() => Nav.NavigateTo($"/students/{e.StudentId}"))" />
+                        @if (!e.WithdrawnOn.HasValue)
+                        {
+                            <RadzenButton Icon="logout" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                          ButtonStyle="ButtonStyle.Warning" title="Withdraw"
+                                          Click="@(() => WithdrawAsync(e))" />
+                        }
+                        <RadzenButton Icon="delete" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                      ButtonStyle="ButtonStyle.Danger" title="Delete"
+                                      Click="@(() => DeleteAsync(e))" />
+                    </div>
+                </Template>
+            </RadzenDataGridColumn>
+        </Columns>
+    </RadzenDataGrid>
+</RadzenCard>
+
+@code {
+    private IReadOnlyList<EnrolmentDto> enrolments = [];
+    private IReadOnlyList<SessionDto> sessions = [];
+    private IReadOnlyList<LookupDto> classes = [];
+    private IReadOnlyList<LookupDto> statuses = [];
+    private bool loading;
+
+    private Guid? sessionId;
+    private Guid? classId;
+    private Guid? statusId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        sessions = await SessionService.ListAsync();
+        sessionId = sessions.FirstOrDefault(s => s.IsCurrent)?.Id;
+        classes = await LookupService.GetClassesForSessionAsync(sessionId);
+        statuses = await LookupService.GetEnrolmentStatusesAsync();
+        await LoadAsync();
+    }
+
+    private async Task SessionChangedAsync()
+    {
+        classId = null;
+        classes = await LookupService.GetClassesForSessionAsync(sessionId);
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        try
+        {
+            enrolments = await EnrolmentService.ListAsync(new EnrolmentListFilter
+            {
+                SessionId = sessionId,
+                SchoolClassId = classId,
+                EnrolmentStatusId = statusId,
+            });
+        }
+        finally
+        {
+            loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task WithdrawAsync(EnrolmentDto e)
+    {
+        var confirm = await Dialog.Confirm(
+            $"Withdraw {e.StudentName} from {e.SchoolClassName}?",
+            "Withdraw enrolment",
+            new ConfirmOptions { OkButtonText = "Withdraw", CancelButtonText = "Cancel" });
+        if (confirm != true) return;
+
+        var result = await EnrolmentService.WithdrawAsync(e.Id, DateOnly.FromDateTime(DateTime.Today), null, CancellationToken.None);
+        if (result.Succeeded)
+        {
+            Notification.Notify(NotificationSeverity.Success, "Withdrawn", "Enrolment withdrawn.");
+            await LoadAsync();
+        }
+        else
+        {
+            Notification.Notify(NotificationSeverity.Error, "Failed", string.Join("; ", result.Errors));
+        }
+    }
+
+    private async Task DeleteAsync(EnrolmentDto e)
+    {
+        var confirm = await Dialog.Confirm(
+            $"Delete enrolment of {e.StudentName} in {e.SchoolClassName}?",
+            "Delete enrolment",
+            new ConfirmOptions { OkButtonText = "Delete", CancelButtonText = "Cancel" });
+        if (confirm != true) return;
+
+        var result = await EnrolmentService.SoftDeleteAsync(e.Id);
+        if (result.Succeeded)
+        {
+            Notification.Notify(NotificationSeverity.Success, "Deleted", "Enrolment removed.");
+            await LoadAsync();
+        }
+        else
+        {
+            Notification.Notify(NotificationSeverity.Error, "Failed", string.Join("; ", result.Errors));
+        }
+    }
+}

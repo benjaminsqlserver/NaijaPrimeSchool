@@ -1,0 +1,178 @@
+@page "/parents/new"
+@attribute [Authorize(Roles = $"{Roles.SuperAdmin},{Roles.HeadTeacher}")]
+@rendermode InteractiveServer
+
+@inject IParentService ParentService
+@inject ILookupService LookupService
+@inject NavigationManager Nav
+@inject NotificationService Notification
+
+<PageTitle>New parent · Naija Prime School</PageTitle>
+
+<div class="nps-page-header">
+    <div>
+        <h1>New parent</h1>
+        <p>Capture the parent's details. You can link pupils to them from any student profile afterwards.</p>
+    </div>
+    <div class="nps-page-actions">
+        <RadzenButton Text="Back to parents" Icon="arrow_back" Variant="Variant.Flat"
+                      ButtonStyle="ButtonStyle.Light" Click="@(() => Nav.NavigateTo("/parents"))" />
+    </div>
+</div>
+
+<RadzenCard class="nps-card">
+    <RadzenTemplateForm TItem="ParentFormModel" Data="@form" Submit="@SaveAsync">
+        <DataAnnotationsValidator />
+        <div class="nps-form-grid">
+            <div class="nps-field">
+                <label>Title</label>
+                <RadzenDropDown TValue="Guid?" Data="@titles" TextProperty="Name" ValueProperty="Id"
+                                @bind-Value="form.TitleId" AllowClear="true" Placeholder="Mr., Mrs., ..." />
+            </div>
+            <div class="nps-field">
+                <label>Gender</label>
+                <RadzenDropDown TValue="Guid?" Data="@genders" TextProperty="Name" ValueProperty="Id"
+                                @bind-Value="form.GenderId" AllowClear="true" Placeholder="Pick one" />
+            </div>
+            <div class="nps-field">
+                <label>First name *</label>
+                <RadzenTextBox @bind-Value="form.FirstName" />
+                <ValidationMessage For="() => form.FirstName" />
+            </div>
+            <div class="nps-field">
+                <label>Last name *</label>
+                <RadzenTextBox @bind-Value="form.LastName" />
+                <ValidationMessage For="() => form.LastName" />
+            </div>
+            <div class="nps-field">
+                <label>Middle name</label>
+                <RadzenTextBox @bind-Value="form.MiddleName" />
+            </div>
+            <div class="nps-field">
+                <label>Marital status</label>
+                <RadzenDropDown TValue="Guid?" Data="@maritalStatuses" TextProperty="Name" ValueProperty="Id"
+                                @bind-Value="form.MaritalStatusId" AllowClear="true" Placeholder="Pick one" />
+            </div>
+            <div class="nps-field">
+                <label>Primary phone</label>
+                <RadzenTextBox @bind-Value="form.PrimaryPhone" Placeholder="+234..." />
+            </div>
+            <div class="nps-field">
+                <label>Alternate phone</label>
+                <RadzenTextBox @bind-Value="form.AlternatePhone" />
+            </div>
+            <div class="nps-field nps-span-2">
+                <label>Email</label>
+                <RadzenTextBox @bind-Value="form.Email" Placeholder="parent@example.com" />
+            </div>
+            <div class="nps-field nps-span-2">
+                <label>Residential address</label>
+                <RadzenTextArea @bind-Value="form.ResidentialAddress" Rows="2" />
+            </div>
+            <div class="nps-field">
+                <label>Occupation</label>
+                <RadzenTextBox @bind-Value="form.Occupation" />
+            </div>
+            <div class="nps-field">
+                <label>Employer</label>
+                <RadzenTextBox @bind-Value="form.Employer" />
+            </div>
+        </div>
+        <div class="nps-form-actions">
+            <RadzenButton Text="Cancel" ButtonType="ButtonType.Button"
+                          ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat"
+                          Click="@(() => Nav.NavigateTo("/parents"))" />
+            <RadzenButton Text="@(saving ? "Saving..." : "Save parent")"
+                          Icon="save" ButtonType="ButtonType.Submit"
+                          ButtonStyle="ButtonStyle.Primary" Disabled="@saving" />
+        </div>
+    </RadzenTemplateForm>
+</RadzenCard>
+
+@code {
+    private ParentFormModel form = new();
+    private bool saving;
+
+    private IReadOnlyList<LookupDto> titles = [];
+    private IReadOnlyList<LookupDto> genders = [];
+    private IReadOnlyList<LookupDto> maritalStatuses = [];
+
+    private class ParentFormModel
+    {
+        [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(80)]
+        public string FirstName { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(80)]
+        public string LastName { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.StringLength(80)]
+        public string? MiddleName { get; set; }
+
+        public Guid? TitleId { get; set; }
+        public Guid? GenderId { get; set; }
+        public Guid? MaritalStatusId { get; set; }
+
+        [System.ComponentModel.DataAnnotations.StringLength(30)]
+        public string? PrimaryPhone { get; set; }
+
+        [System.ComponentModel.DataAnnotations.StringLength(30)]
+        public string? AlternatePhone { get; set; }
+
+        [System.ComponentModel.DataAnnotations.EmailAddress, System.ComponentModel.DataAnnotations.StringLength(256)]
+        public string? Email { get; set; }
+
+        [System.ComponentModel.DataAnnotations.StringLength(300)]
+        public string? ResidentialAddress { get; set; }
+
+        [System.ComponentModel.DataAnnotations.StringLength(120)]
+        public string? Occupation { get; set; }
+
+        [System.ComponentModel.DataAnnotations.StringLength(120)]
+        public string? Employer { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        titles = await LookupService.GetTitlesAsync();
+        genders = await LookupService.GetGendersAsync();
+        maritalStatuses = await LookupService.GetMaritalStatusesAsync();
+    }
+
+    private async Task SaveAsync()
+    {
+        saving = true;
+        try
+        {
+            var result = await ParentService.CreateAsync(new CreateParentRequest
+            {
+                FirstName = form.FirstName,
+                LastName = form.LastName,
+                MiddleName = form.MiddleName,
+                TitleId = form.TitleId,
+                GenderId = form.GenderId,
+                MaritalStatusId = form.MaritalStatusId,
+                PrimaryPhone = form.PrimaryPhone,
+                AlternatePhone = form.AlternatePhone,
+                Email = form.Email,
+                ResidentialAddress = form.ResidentialAddress,
+                Occupation = form.Occupation,
+                Employer = form.Employer,
+            });
+
+            if (result.Succeeded)
+            {
+                Notification.Notify(NotificationSeverity.Success, "Saved",
+                    $"Parent '{form.FirstName} {form.LastName}' created.");
+                Nav.NavigateTo($"/parents/{result.Data}");
+            }
+            else
+            {
+                Notification.Notify(NotificationSeverity.Error, "Failed", string.Join("; ", result.Errors));
+            }
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+}

@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NaijaPrimeSchool.Domain.Academics;
+using NaijaPrimeSchool.Domain.Family;
 using NaijaPrimeSchool.Domain.Identity;
 
 namespace NaijaPrimeSchool.Infrastructure.Persistence;
@@ -25,8 +26,69 @@ public static class DatabaseInitializer
 
         await SeedLookupsAsync(db, ct);
         await SeedAcademicLookupsAsync(db, ct);
+        await SeedFamilyLookupsAsync(db, ct);
         await SeedRolesAsync(sp, ct);
         await SeedSuperAdminAsync(sp, logger, ct);
+    }
+
+    private static async Task SeedFamilyLookupsAsync(ApplicationDbContext db, CancellationToken ct)
+    {
+        if (!await db.Relationships.IgnoreQueryFilters().AnyAsync(ct))
+        {
+            string[] relationships =
+            [
+                "Father",
+                "Mother",
+                "Stepfather",
+                "Stepmother",
+                "Grandfather",
+                "Grandmother",
+                "Uncle",
+                "Aunt",
+                "Guardian",
+                "Other",
+            ];
+            for (var i = 0; i < relationships.Length; i++)
+            {
+                db.Relationships.Add(new Relationship { Name = relationships[i], DisplayOrder = i + 1 });
+            }
+        }
+
+        if (!await db.EnrolmentStatuses.IgnoreQueryFilters().AnyAsync(ct))
+        {
+            string[] statuses =
+            [
+                "Active",
+                "Suspended",
+                "Withdrawn",
+                "Transferred",
+                "Graduated",
+            ];
+            for (var i = 0; i < statuses.Length; i++)
+            {
+                db.EnrolmentStatuses.Add(new EnrolmentStatus { Name = statuses[i], DisplayOrder = i + 1 });
+            }
+        }
+
+        if (!await db.BloodGroups.IgnoreQueryFilters().AnyAsync(ct))
+        {
+            string[] groups = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-", "Unknown"];
+            for (var i = 0; i < groups.Length; i++)
+            {
+                db.BloodGroups.Add(new BloodGroup { Name = groups[i], DisplayOrder = i + 1 });
+            }
+        }
+
+        if (!await db.MaritalStatuses.IgnoreQueryFilters().AnyAsync(ct))
+        {
+            string[] statuses = ["Single", "Married", "Divorced", "Widowed", "Separated"];
+            for (var i = 0; i < statuses.Length; i++)
+            {
+                db.MaritalStatuses.Add(new MaritalStatus { Name = statuses[i], DisplayOrder = i + 1 });
+            }
+        }
+
+        await db.SaveChangesAsync(ct);
     }
 
     private static async Task SeedAcademicLookupsAsync(ApplicationDbContext db, CancellationToken ct)

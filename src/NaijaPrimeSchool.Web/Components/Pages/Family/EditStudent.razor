@@ -1,0 +1,665 @@
+@page "/students/{Id:guid}"
+@attribute [Authorize(Roles = $"{Roles.SuperAdmin},{Roles.HeadTeacher}")]
+@rendermode InteractiveServer
+
+@inject IStudentService StudentService
+@inject IEnrolmentService EnrolmentService
+@inject ILookupService LookupService
+@inject ISessionService SessionService
+@inject NavigationManager Nav
+@inject DialogService Dialog
+@inject NotificationService Notification
+
+<PageTitle>Edit student · Naija Prime School</PageTitle>
+
+@if (loadingProfile)
+{
+    <p>Loading student...</p>
+}
+else if (student is null)
+{
+    <RadzenAlert Severity="AlertSeverity.Warning">Student not found.</RadzenAlert>
+}
+else
+{
+    <div class="nps-page-header">
+        <div>
+            <h1>@student.FullName</h1>
+            <p>Admission number <strong>@student.AdmissionNumber</strong> &middot;
+               admitted @student.AdmissionDate.ToString("d MMM yyyy")</p>
+        </div>
+        <div class="nps-page-actions">
+            @if (student.IsActive)
+            {
+                <RadzenButton Text="Deactivate" Icon="block" Variant="Variant.Flat"
+                              ButtonStyle="ButtonStyle.Warning" Click="@(() => SetActiveAsync(false))" />
+            }
+            else
+            {
+                <RadzenButton Text="Activate" Icon="check_circle" Variant="Variant.Flat"
+                              ButtonStyle="ButtonStyle.Success" Click="@(() => SetActiveAsync(true))" />
+            }
+            <RadzenButton Text="Back" Icon="arrow_back" Variant="Variant.Flat"
+                          ButtonStyle="ButtonStyle.Light" Click="@(() => Nav.NavigateTo("/students"))" />
+        </div>
+    </div>
+
+    <RadzenTabs @bind-SelectedIndex="selectedTab">
+        <Tabs>
+            <RadzenTabsItem Text="Profile">
+                <RadzenCard class="nps-card">
+                    <RadzenTemplateForm TItem="StudentFormModel" Data="@form" Submit="@SaveAsync">
+                        <DataAnnotationsValidator />
+                        <div class="nps-form-grid">
+                            <div class="nps-field">
+                                <label>Admission number *</label>
+                                <RadzenTextBox @bind-Value="form.AdmissionNumber" />
+                                <ValidationMessage For="() => form.AdmissionNumber" />
+                            </div>
+                            <div class="nps-field">
+                                <label>Admission date *</label>
+                                <RadzenDatePicker TValue="DateTime?" @bind-Value="form.AdmissionDate"
+                                                  DateFormat="d MMM yyyy" ShowTime="false" />
+                            </div>
+                            <div class="nps-field">
+                                <label>First name *</label>
+                                <RadzenTextBox @bind-Value="form.FirstName" />
+                            </div>
+                            <div class="nps-field">
+                                <label>Last name *</label>
+                                <RadzenTextBox @bind-Value="form.LastName" />
+                            </div>
+                            <div class="nps-field">
+                                <label>Middle name</label>
+                                <RadzenTextBox @bind-Value="form.MiddleName" />
+                            </div>
+                            <div class="nps-field">
+                                <label>Date of birth *</label>
+                                <RadzenDatePicker TValue="DateTime?" @bind-Value="form.DateOfBirth"
+                                                  DateFormat="d MMM yyyy" ShowTime="false" />
+                            </div>
+                            <div class="nps-field">
+                                <label>Gender</label>
+                                <RadzenDropDown TValue="Guid?" Data="@genders" TextProperty="Name" ValueProperty="Id"
+                                                @bind-Value="form.GenderId" AllowClear="true" />
+                            </div>
+                            <div class="nps-field">
+                                <label>Blood group</label>
+                                <RadzenDropDown TValue="Guid?" Data="@bloodGroups" TextProperty="Name" ValueProperty="Id"
+                                                @bind-Value="form.BloodGroupId" AllowClear="true" />
+                            </div>
+                            <div class="nps-field">
+                                <label>State of origin</label>
+                                <RadzenTextBox @bind-Value="form.StateOfOrigin" />
+                            </div>
+                            <div class="nps-field nps-span-2">
+                                <label>Residential address</label>
+                                <RadzenTextArea @bind-Value="form.ResidentialAddress" Rows="2" />
+                            </div>
+                            <div class="nps-field nps-span-2">
+                                <label>Allergies</label>
+                                <RadzenTextArea @bind-Value="form.Allergies" Rows="2" />
+                            </div>
+                            <div class="nps-field nps-span-2">
+                                <label>Medical notes</label>
+                                <RadzenTextArea @bind-Value="form.MedicalNotes" Rows="3" />
+                            </div>
+                        </div>
+                        <div class="nps-form-actions">
+                            <RadzenButton Text="@(saving ? "Saving..." : "Save changes")"
+                                          Icon="save" ButtonType="ButtonType.Submit"
+                                          ButtonStyle="ButtonStyle.Primary" Disabled="@saving" />
+                        </div>
+                    </RadzenTemplateForm>
+                </RadzenCard>
+            </RadzenTabsItem>
+
+            <RadzenTabsItem Text="@($"Parents ({parentLinks.Count})")">
+                <RadzenCard class="nps-card">
+                    <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h3 style="margin:0;">Linked parents and guardians</h3>
+                        <RadzenButton Text="Link a parent" Icon="add" ButtonStyle="ButtonStyle.Primary"
+                                      Click="@OpenLinkForm" />
+                    </div>
+
+                    @if (parentLinks.Count == 0)
+                    {
+                        <p style="color: var(--nps-ink-500);">
+                            No parents are linked yet. Click <strong>Link a parent</strong> to choose from
+                            the parents directory, or add a new parent first under Family → Parents.
+                        </p>
+                    }
+                    else
+                    {
+                        <RadzenDataGrid TItem="StudentParentDto" Data="@parentLinks" AllowPaging="false"
+                                        EmptyText="No parents linked.">
+                            <Columns>
+                                <RadzenDataGridColumn TItem="StudentParentDto" Title="Parent" Property="ParentName">
+                                    <Template Context="l">
+                                        <strong>@l.ParentName</strong>
+                                        @if (l.IsPrimaryContact)
+                                        {
+                                            <RadzenBadge Text="Primary" BadgeStyle="BadgeStyle.Success"
+                                                         Variant="Variant.Flat" Style="margin-left:.5rem;" />
+                                        }
+                                        @if (!l.CanPickUp)
+                                        {
+                                            <RadzenBadge Text="Cannot pick up" BadgeStyle="BadgeStyle.Warning"
+                                                         Variant="Variant.Flat" Style="margin-left:.5rem;" />
+                                        }
+                                        <br />
+                                        <small style="color: var(--nps-ink-500);">
+                                            @l.ParentPhone @(string.IsNullOrEmpty(l.ParentEmail) ? "" : " · " + l.ParentEmail)
+                                        </small>
+                                    </Template>
+                                </RadzenDataGridColumn>
+                                <RadzenDataGridColumn TItem="StudentParentDto" Title="Relationship" Property="RelationshipName" Width="160px" />
+                                <RadzenDataGridColumn TItem="StudentParentDto" Title="Notes" Property="Notes" />
+                                <RadzenDataGridColumn TItem="StudentParentDto" Title="Actions"
+                                                      Width="160px" Sortable="false" TextAlign="TextAlign.Right">
+                                    <Template Context="l">
+                                        <div class="nps-inline-actions">
+                                            <RadzenButton Icon="edit" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                                          ButtonStyle="ButtonStyle.Light"
+                                                          Click="@(() => OpenLinkEditForm(l))" title="Edit link" />
+                                            <RadzenButton Icon="link_off" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                                          ButtonStyle="ButtonStyle.Danger"
+                                                          Click="@(() => UnlinkAsync(l))" title="Unlink" />
+                                        </div>
+                                    </Template>
+                                </RadzenDataGridColumn>
+                            </Columns>
+                        </RadzenDataGrid>
+                    }
+
+                    @if (showLinkForm)
+                    {
+                        <RadzenCard class="nps-card" Style="margin-top:1rem; background: var(--nps-green-200);">
+                            <h3 style="margin:0 0 1rem;">@(linkEditingId.HasValue ? "Edit link" : "Link a parent")</h3>
+                            <div class="nps-form-grid">
+                                @if (!linkEditingId.HasValue)
+                                {
+                                    <div class="nps-field nps-span-2">
+                                        <label>Parent *</label>
+                                        <RadzenDropDown TValue="Guid?" Data="@parents" TextProperty="Name" ValueProperty="Id"
+                                                        @bind-Value="linkForm.ParentId" Placeholder="Search and pick a parent"
+                                                        AllowFiltering="true" FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive" />
+                                    </div>
+                                }
+                                <div class="nps-field">
+                                    <label>Relationship *</label>
+                                    <RadzenDropDown TValue="Guid?" Data="@relationships" TextProperty="Name" ValueProperty="Id"
+                                                    @bind-Value="linkForm.RelationshipId" Placeholder="e.g. Father" />
+                                </div>
+                                <div class="nps-field">
+                                    <label>Primary contact</label>
+                                    <RadzenSwitch @bind-Value="linkForm.IsPrimaryContact" />
+                                </div>
+                                <div class="nps-field">
+                                    <label>Authorised to collect</label>
+                                    <RadzenSwitch @bind-Value="linkForm.CanPickUp" />
+                                </div>
+                                <div class="nps-field nps-span-2">
+                                    <label>Notes</label>
+                                    <RadzenTextArea @bind-Value="linkForm.Notes" Rows="2" />
+                                </div>
+                            </div>
+                            <div class="nps-form-actions">
+                                <RadzenButton Text="Cancel" ButtonType="ButtonType.Button"
+                                              ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat"
+                                              Click="@(() => showLinkForm = false)" />
+                                <RadzenButton Text="@(linkSaving ? "Saving..." : "Save link")"
+                                              Icon="save" ButtonStyle="ButtonStyle.Primary"
+                                              Disabled="@linkSaving" Click="@SaveLinkAsync" />
+                            </div>
+                        </RadzenCard>
+                    }
+                </RadzenCard>
+            </RadzenTabsItem>
+
+            <RadzenTabsItem Text="@($"Enrolment history ({enrolments.Count})")">
+                <RadzenCard class="nps-card">
+                    <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h3 style="margin:0;">Enrolments</h3>
+                        <RadzenButton Text="New enrolment" Icon="add" ButtonStyle="ButtonStyle.Primary"
+                                      Click="@OpenEnrolmentForm" />
+                    </div>
+                    <RadzenDataGrid TItem="EnrolmentDto" Data="@enrolments" AllowPaging="false"
+                                    EmptyText="No enrolment records yet.">
+                        <Columns>
+                            <RadzenDataGridColumn TItem="EnrolmentDto" Title="Class">
+                                <Template Context="e">
+                                    <strong>@e.SchoolClassName</strong>
+                                    <br />
+                                    <small style="color: var(--nps-ink-500);">@e.SessionName</small>
+                                </Template>
+                            </RadzenDataGridColumn>
+                            <RadzenDataGridColumn TItem="EnrolmentDto" Title="Enrolled" Property="EnrolledOn"
+                                                  FormatString="{0:d MMM yyyy}" Width="140px" />
+                            <RadzenDataGridColumn TItem="EnrolmentDto" Title="Withdrawn" Property="WithdrawnOn"
+                                                  FormatString="{0:d MMM yyyy}" Width="140px">
+                                <Template Context="e">
+                                    @(e.WithdrawnOn.HasValue ? e.WithdrawnOn.Value.ToString("d MMM yyyy") : "—")
+                                </Template>
+                            </RadzenDataGridColumn>
+                            <RadzenDataGridColumn TItem="EnrolmentDto" Title="Status" Width="140px">
+                                <Template Context="e">
+                                    <RadzenBadge Text="@e.EnrolmentStatusName"
+                                                 BadgeStyle="@(e.WithdrawnOn.HasValue ? BadgeStyle.Secondary : BadgeStyle.Success)"
+                                                 Variant="Variant.Flat" />
+                                </Template>
+                            </RadzenDataGridColumn>
+                            <RadzenDataGridColumn TItem="EnrolmentDto" Title="Actions"
+                                                  Width="160px" Sortable="false" TextAlign="TextAlign.Right">
+                                <Template Context="e">
+                                    <div class="nps-inline-actions">
+                                        @if (!e.WithdrawnOn.HasValue)
+                                        {
+                                            <RadzenButton Icon="logout" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                                          ButtonStyle="ButtonStyle.Warning"
+                                                          Click="@(() => WithdrawAsync(e))" title="Withdraw" />
+                                        }
+                                        <RadzenButton Icon="delete" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                                      ButtonStyle="ButtonStyle.Danger"
+                                                      Click="@(() => DeleteEnrolmentAsync(e))" title="Delete" />
+                                    </div>
+                                </Template>
+                            </RadzenDataGridColumn>
+                        </Columns>
+                    </RadzenDataGrid>
+
+                    @if (showEnrolmentForm)
+                    {
+                        <RadzenCard class="nps-card" Style="margin-top:1rem; background: var(--nps-green-200);">
+                            <h3 style="margin:0 0 1rem;">New enrolment</h3>
+                            <div class="nps-form-grid">
+                                <div class="nps-field nps-span-2">
+                                    <label>Class *</label>
+                                    <RadzenDropDown TValue="Guid?" Data="@allClasses" TextProperty="Name" ValueProperty="Id"
+                                                    @bind-Value="enrolmentForm.ClassId"
+                                                    Placeholder="Pick a class"
+                                                    AllowFiltering="true" />
+                                </div>
+                                <div class="nps-field">
+                                    <label>Enrolment date *</label>
+                                    <RadzenDatePicker TValue="DateTime?" @bind-Value="enrolmentForm.EnrolledOn"
+                                                      DateFormat="d MMM yyyy" ShowTime="false" />
+                                </div>
+                                <div class="nps-field nps-span-2">
+                                    <label>Notes</label>
+                                    <RadzenTextArea @bind-Value="enrolmentForm.Notes" Rows="2" />
+                                </div>
+                            </div>
+                            <div class="nps-form-actions">
+                                <RadzenButton Text="Cancel" ButtonType="ButtonType.Button"
+                                              ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat"
+                                              Click="@(() => showEnrolmentForm = false)" />
+                                <RadzenButton Text="@(enrolmentSaving ? "Saving..." : "Enrol")"
+                                              Icon="save" ButtonStyle="ButtonStyle.Primary"
+                                              Disabled="@enrolmentSaving" Click="@SaveEnrolmentAsync" />
+                            </div>
+                        </RadzenCard>
+                    }
+                </RadzenCard>
+            </RadzenTabsItem>
+        </Tabs>
+    </RadzenTabs>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private bool loadingProfile = true;
+    private bool saving;
+    private int selectedTab;
+
+    private StudentDto? student;
+    private StudentFormModel form = new();
+
+    private IReadOnlyList<LookupDto> genders = [];
+    private IReadOnlyList<LookupDto> bloodGroups = [];
+    private IReadOnlyList<LookupDto> relationships = [];
+    private IReadOnlyList<LookupDto> parents = [];
+    private IReadOnlyList<LookupDto> allClasses = [];
+
+    private IReadOnlyList<StudentParentDto> parentLinks = [];
+    private IReadOnlyList<EnrolmentDto> enrolments = [];
+
+    private bool showLinkForm;
+    private bool linkSaving;
+    private Guid? linkEditingId;
+    private LinkFormModel linkForm = new();
+
+    private bool showEnrolmentForm;
+    private bool enrolmentSaving;
+    private EnrolmentFormModel enrolmentForm = new();
+
+    private class StudentFormModel
+    {
+        [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(30)]
+        public string AdmissionNumber { get; set; } = string.Empty;
+
+        public DateTime? AdmissionDate { get; set; }
+
+        [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(80)]
+        public string FirstName { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(80)]
+        public string LastName { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.StringLength(80)]
+        public string? MiddleName { get; set; }
+
+        public DateTime? DateOfBirth { get; set; }
+        public Guid? GenderId { get; set; }
+        public Guid? BloodGroupId { get; set; }
+
+        [System.ComponentModel.DataAnnotations.StringLength(80)]
+        public string? StateOfOrigin { get; set; }
+
+        [System.ComponentModel.DataAnnotations.StringLength(300)]
+        public string? ResidentialAddress { get; set; }
+
+        [System.ComponentModel.DataAnnotations.StringLength(500)]
+        public string? Allergies { get; set; }
+
+        [System.ComponentModel.DataAnnotations.StringLength(1000)]
+        public string? MedicalNotes { get; set; }
+    }
+
+    private class LinkFormModel
+    {
+        public Guid? ParentId { get; set; }
+        public Guid? RelationshipId { get; set; }
+        public bool IsPrimaryContact { get; set; }
+        public bool CanPickUp { get; set; } = true;
+        public string? Notes { get; set; }
+    }
+
+    private class EnrolmentFormModel
+    {
+        public Guid? ClassId { get; set; }
+        public DateTime? EnrolledOn { get; set; } = DateTime.Today;
+        public string? Notes { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        genders = await LookupService.GetGendersAsync();
+        bloodGroups = await LookupService.GetBloodGroupsAsync();
+        relationships = await LookupService.GetRelationshipsAsync();
+        parents = await LookupService.GetParentsAsync();
+        allClasses = await LookupService.GetClassesForSessionAsync();
+
+        await LoadStudentAsync();
+        await LoadLinksAsync();
+        await LoadEnrolmentsAsync();
+    }
+
+    private async Task LoadStudentAsync()
+    {
+        loadingProfile = true;
+        try
+        {
+            student = await StudentService.GetByIdAsync(Id);
+            if (student is not null)
+            {
+                form = new StudentFormModel
+                {
+                    AdmissionNumber = student.AdmissionNumber,
+                    AdmissionDate = student.AdmissionDate.ToDateTime(TimeOnly.MinValue),
+                    FirstName = student.FirstName,
+                    LastName = student.LastName,
+                    MiddleName = student.MiddleName,
+                    DateOfBirth = student.DateOfBirth.ToDateTime(TimeOnly.MinValue),
+                    GenderId = student.GenderId,
+                    BloodGroupId = student.BloodGroupId,
+                    StateOfOrigin = student.StateOfOrigin,
+                    ResidentialAddress = student.ResidentialAddress,
+                    Allergies = student.Allergies,
+                    MedicalNotes = student.MedicalNotes,
+                };
+            }
+        }
+        finally
+        {
+            loadingProfile = false;
+        }
+    }
+
+    private async Task LoadLinksAsync() =>
+        parentLinks = await StudentService.GetParentLinksAsync(Id);
+
+    private async Task LoadEnrolmentsAsync() =>
+        enrolments = await EnrolmentService.ListAsync(new EnrolmentListFilter { StudentId = Id });
+
+    private async Task SaveAsync()
+    {
+        if (form.AdmissionDate is null || form.DateOfBirth is null) return;
+
+        saving = true;
+        try
+        {
+            var result = await StudentService.UpdateAsync(new UpdateStudentRequest
+            {
+                Id = Id,
+                AdmissionNumber = form.AdmissionNumber,
+                AdmissionDate = DateOnly.FromDateTime(form.AdmissionDate.Value),
+                FirstName = form.FirstName,
+                LastName = form.LastName,
+                MiddleName = form.MiddleName,
+                DateOfBirth = DateOnly.FromDateTime(form.DateOfBirth.Value),
+                GenderId = form.GenderId,
+                BloodGroupId = form.BloodGroupId,
+                StateOfOrigin = form.StateOfOrigin,
+                ResidentialAddress = form.ResidentialAddress,
+                Allergies = form.Allergies,
+                MedicalNotes = form.MedicalNotes,
+            });
+
+            if (result.Succeeded)
+            {
+                Notification.Notify(NotificationSeverity.Success, "Saved", "Student profile updated.");
+                await LoadStudentAsync();
+            }
+            else
+            {
+                Notification.Notify(NotificationSeverity.Error, "Failed", string.Join("; ", result.Errors));
+            }
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private async Task SetActiveAsync(bool active)
+    {
+        var result = await StudentService.SetActiveAsync(Id, active, CancellationToken.None);
+        if (result.Succeeded)
+        {
+            Notification.Notify(NotificationSeverity.Success, "Updated",
+                active ? "Student activated." : "Student deactivated.");
+            await LoadStudentAsync();
+        }
+        else
+        {
+            Notification.Notify(NotificationSeverity.Error, "Failed", string.Join("; ", result.Errors));
+        }
+    }
+
+    private void OpenLinkForm()
+    {
+        linkEditingId = null;
+        linkForm = new LinkFormModel();
+        showLinkForm = true;
+    }
+
+    private void OpenLinkEditForm(StudentParentDto link)
+    {
+        linkEditingId = link.Id;
+        linkForm = new LinkFormModel
+        {
+            ParentId = link.ParentId,
+            RelationshipId = link.RelationshipId,
+            IsPrimaryContact = link.IsPrimaryContact,
+            CanPickUp = link.CanPickUp,
+            Notes = link.Notes,
+        };
+        showLinkForm = true;
+    }
+
+    private async Task SaveLinkAsync()
+    {
+        if (linkForm.RelationshipId is null
+            || (!linkEditingId.HasValue && linkForm.ParentId is null))
+        {
+            Notification.Notify(NotificationSeverity.Warning, "Missing fields",
+                "Pick a parent and a relationship.");
+            return;
+        }
+
+        linkSaving = true;
+        try
+        {
+            OperationResult result = linkEditingId.HasValue
+                ? await StudentService.UpdateParentLinkAsync(new UpdateStudentParentLinkRequest
+                {
+                    Id = linkEditingId.Value,
+                    RelationshipId = linkForm.RelationshipId.Value,
+                    IsPrimaryContact = linkForm.IsPrimaryContact,
+                    CanPickUp = linkForm.CanPickUp,
+                    Notes = linkForm.Notes,
+                })
+                : await StudentService.LinkParentAsync(new LinkStudentParentRequest
+                {
+                    StudentId = Id,
+                    ParentId = linkForm.ParentId!.Value,
+                    RelationshipId = linkForm.RelationshipId.Value,
+                    IsPrimaryContact = linkForm.IsPrimaryContact,
+                    CanPickUp = linkForm.CanPickUp,
+                    Notes = linkForm.Notes,
+                });
+
+            if (result.Succeeded)
+            {
+                Notification.Notify(NotificationSeverity.Success, "Saved", "Parent link saved.");
+                showLinkForm = false;
+                await LoadLinksAsync();
+            }
+            else
+            {
+                Notification.Notify(NotificationSeverity.Error, "Failed", string.Join("; ", result.Errors));
+            }
+        }
+        finally
+        {
+            linkSaving = false;
+        }
+    }
+
+    private async Task UnlinkAsync(StudentParentDto link)
+    {
+        var confirm = await Dialog.Confirm(
+            $"Unlink '{link.ParentName}' from this student?",
+            "Unlink parent",
+            new ConfirmOptions { OkButtonText = "Unlink", CancelButtonText = "Cancel" });
+        if (confirm != true) return;
+
+        var result = await StudentService.UnlinkParentAsync(link.Id);
+        if (result.Succeeded)
+        {
+            Notification.Notify(NotificationSeverity.Success, "Unlinked", $"'{link.ParentName}' removed.");
+            await LoadLinksAsync();
+        }
+        else
+        {
+            Notification.Notify(NotificationSeverity.Error, "Failed", string.Join("; ", result.Errors));
+        }
+    }
+
+    private void OpenEnrolmentForm()
+    {
+        enrolmentForm = new EnrolmentFormModel();
+        showEnrolmentForm = true;
+    }
+
+    private async Task SaveEnrolmentAsync()
+    {
+        if (enrolmentForm.ClassId is null || enrolmentForm.EnrolledOn is null)
+        {
+            Notification.Notify(NotificationSeverity.Warning, "Missing fields",
+                "Pick a class and enrolment date.");
+            return;
+        }
+
+        enrolmentSaving = true;
+        try
+        {
+            var result = await EnrolmentService.CreateAsync(new CreateEnrolmentRequest
+            {
+                StudentId = Id,
+                SchoolClassId = enrolmentForm.ClassId.Value,
+                EnrolledOn = DateOnly.FromDateTime(enrolmentForm.EnrolledOn.Value),
+                Notes = enrolmentForm.Notes,
+            });
+
+            if (result.Succeeded)
+            {
+                Notification.Notify(NotificationSeverity.Success, "Enrolled", "Pupil enrolled in class.");
+                showEnrolmentForm = false;
+                await LoadEnrolmentsAsync();
+                await LoadStudentAsync();
+            }
+            else
+            {
+                Notification.Notify(NotificationSeverity.Error, "Failed", string.Join("; ", result.Errors));
+            }
+        }
+        finally
+        {
+            enrolmentSaving = false;
+        }
+    }
+
+    private async Task WithdrawAsync(EnrolmentDto e)
+    {
+        var confirm = await Dialog.Confirm(
+            $"Withdraw pupil from {e.SchoolClassName} ({e.SessionName})?",
+            "Withdraw enrolment",
+            new ConfirmOptions { OkButtonText = "Withdraw", CancelButtonText = "Cancel" });
+        if (confirm != true) return;
+
+        var result = await EnrolmentService.WithdrawAsync(e.Id, DateOnly.FromDateTime(DateTime.Today), null, CancellationToken.None);
+        if (result.Succeeded)
+        {
+            Notification.Notify(NotificationSeverity.Success, "Withdrawn", "Enrolment withdrawn.");
+            await LoadEnrolmentsAsync();
+            await LoadStudentAsync();
+        }
+        else
+        {
+            Notification.Notify(NotificationSeverity.Error, "Failed", string.Join("; ", result.Errors));
+        }
+    }
+
+    private async Task DeleteEnrolmentAsync(EnrolmentDto e)
+    {
+        var confirm = await Dialog.Confirm(
+            $"Delete enrolment in {e.SchoolClassName}? This cannot be reversed from the UI.",
+            "Delete enrolment",
+            new ConfirmOptions { OkButtonText = "Delete", CancelButtonText = "Cancel" });
+        if (confirm != true) return;
+
+        var result = await EnrolmentService.SoftDeleteAsync(e.Id);
+        if (result.Succeeded)
+        {
+            Notification.Notify(NotificationSeverity.Success, "Deleted", "Enrolment removed.");
+            await LoadEnrolmentsAsync();
+        }
+        else
+        {
+            Notification.Notify(NotificationSeverity.Error, "Failed", string.Join("; ", result.Errors));
+        }
+    }
+}
