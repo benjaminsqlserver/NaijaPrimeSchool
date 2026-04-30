@@ -8,7 +8,7 @@ Implementation walk-throughs for each sprint live at the repo root:
 
 - `Sprint 1 - Implementation Guide.pdf`
 - `Sprint 2 - Implementation Guide.pdf`
-- `Sprint 3 - Implementation Guide.docx`
+- `Sprint 3 - Implementation Guide.pdf`
 
 ---
 
