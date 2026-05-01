@@ -20,4 +20,6 @@ public interface ILookupService
     Task<IReadOnlyList<LookupDto>> GetClassesForSessionAsync(Guid? sessionId = null, CancellationToken ct = default);
     Task<IReadOnlyList<LookupDto>> GetStudentsAsync(string? searchTerm = null, CancellationToken ct = default);
     Task<IReadOnlyList<LookupDto>> GetParentsAsync(string? searchTerm = null, CancellationToken ct = default);
+
+    Task<IReadOnlyList<LookupDto>> GetAttendanceStatusesAsync(CancellationToken ct = default);
 }

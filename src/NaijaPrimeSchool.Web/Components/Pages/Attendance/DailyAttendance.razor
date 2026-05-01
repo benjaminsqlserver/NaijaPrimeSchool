@@ -1,0 +1,329 @@
+@page "/attendance/daily"
+@attribute [Authorize(Roles = $"{Roles.SuperAdmin},{Roles.HeadTeacher},{Roles.Teacher}")]
+@rendermode InteractiveServer
+
+@inject IDailyAttendanceService AttendanceService
+@inject ISessionService SessionService
+@inject ILookupService LookupService
+@inject NotificationService Notification
+@inject DialogService Dialog
+
+<PageTitle>Daily attendance · Naija Prime School</PageTitle>
+
+<div class="nps-page-header">
+    <div>
+        <h1>Daily attendance</h1>
+        <p>Pick a class and a date, then mark each pupil's attendance status. Submit the register when you're done.</p>
+    </div>
+</div>
+
+<RadzenCard class="nps-card" Style="margin-bottom: 1rem;">
+    <div class="nps-filter-bar">
+        <div class="nps-field">
+            <label>Session</label>
+            <RadzenDropDown TValue="Guid?" Data="@sessions" TextProperty="Name" ValueProperty="Id"
+                            @bind-Value="sessionId" Placeholder="Pick a session"
+                            Change="@(_ => SessionChangedAsync())" Style="min-width: 200px;" />
+        </div>
+        <div class="nps-field">
+            <label>Class</label>
+            <RadzenDropDown TValue="Guid?" Data="@classes" TextProperty="Name" ValueProperty="Id"
+                            @bind-Value="schoolClassId" Placeholder="Pick a class"
+                            Change="@(_ => LoadAsync())" Style="min-width: 240px;" />
+        </div>
+        <div class="nps-field">
+            <label>Date</label>
+            <RadzenDatePicker TValue="DateTime?" @bind-Value="date" DateFormat="d MMM yyyy" ShowTime="false"
+                              Change="@(_ => LoadAsync())" Style="min-width: 180px;" />
+        </div>
+        <RadzenButton Text="Open register" Icon="how_to_reg" Variant="Variant.Flat"
+                      ButtonStyle="ButtonStyle.Primary" Disabled="@(schoolClassId is null || date is null)"
+                      Click="@OpenAsync" />
+    </div>
+</RadzenCard>
+
+@if (loading)
+{
+    <p>Loading register...</p>
+}
+else if (detail is null)
+{
+    <RadzenCard class="nps-card">
+        <p style="color: var(--nps-ink-500);">
+            No register found for the selected class and date. Click <strong>Open register</strong>
+            to create one — pupils currently enrolled in the class will be pre-loaded as Present.
+        </p>
+    </RadzenCard>
+}
+else
+{
+    <RadzenCard class="nps-card">
+        <div style="display:flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem; gap:1rem; flex-wrap:wrap;">
+            <div>
+                <h3 style="margin:0;">@detail.Register.SchoolClassName · @detail.Register.Date.ToString("dddd, d MMMM yyyy")</h3>
+                <p style="margin:.25rem 0 0; color: var(--nps-ink-500);">
+                    Term: <strong>@detail.Register.TermName</strong> · Session: <strong>@detail.Register.SessionName</strong>
+                </p>
+                <div style="margin-top:.5rem; display:flex; gap:.5rem; flex-wrap:wrap;">
+                    <RadzenBadge Text="@($"Present: {detail.Register.PresentCount}")" BadgeStyle="BadgeStyle.Success" Variant="Variant.Flat" />
+                    <RadzenBadge Text="@($"Absent: {detail.Register.AbsentCount}")" BadgeStyle="BadgeStyle.Danger" Variant="Variant.Flat" />
+                    <RadzenBadge Text="@($"Late: {detail.Register.LateCount}")" BadgeStyle="BadgeStyle.Warning" Variant="Variant.Flat" />
+                    <RadzenBadge Text="@($"Total: {detail.Register.TotalCount}")" BadgeStyle="BadgeStyle.Info" Variant="Variant.Flat" />
+                </div>
+            </div>
+            <div class="nps-inline-actions">
+                @if (detail.Register.IsSubmitted)
+                {
+                    <RadzenBadge Text="@($"Submitted {detail.Register.SubmittedOn:d MMM HH:mm}")"
+                                 BadgeStyle="BadgeStyle.Success" Variant="Variant.Flat" />
+                    <RadzenButton Text="Reopen" Icon="lock_open" ButtonStyle="ButtonStyle.Warning"
+                                  Variant="Variant.Flat" Click="@ReopenAsync" />
+                }
+                else
+                {
+                    <RadzenButton Text="Save changes" Icon="save" ButtonStyle="ButtonStyle.Light"
+                                  Variant="Variant.Flat" Click="@SaveAsync" Disabled="@saving" />
+                    <RadzenButton Text="Submit register" Icon="check_circle" ButtonStyle="ButtonStyle.Primary"
+                                  Click="@SubmitAsync" Disabled="@saving" />
+                }
+                <RadzenButton Icon="delete" ButtonStyle="ButtonStyle.Danger" Variant="Variant.Flat"
+                              Click="@DeleteAsync" title="Delete register" />
+            </div>
+        </div>
+
+        <RadzenDataGrid TItem="DailyAttendanceEntryDto" Data="@detail.Entries" AllowPaging="false"
+                        EmptyText="No pupils on this register.">
+            <Columns>
+                <RadzenDataGridColumn TItem="DailyAttendanceEntryDto" Title="Pupil">
+                    <Template Context="e">
+                        <strong>@e.StudentName</strong>
+                        <br />
+                        <small style="color: var(--nps-ink-500);">@e.StudentAdmissionNumber</small>
+                    </Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="DailyAttendanceEntryDto" Title="Status" Width="200px">
+                    <Template Context="e">
+                        <RadzenDropDown TValue="Guid" Data="@statuses" TextProperty="Name" ValueProperty="Id"
+                                        Value="@e.AttendanceStatusId"
+                                        Change="@(args => OnStatusChanged(e, (Guid)args!))"
+                                        Disabled="@detail.Register.IsSubmitted"
+                                        Style="width: 100%;" />
+                    </Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="DailyAttendanceEntryDto" Title="Arrival" Width="140px">
+                    <Template Context="e">
+                        @if (e.AttendanceStatusCode == "L")
+                        {
+                            <RadzenTextBox Value="@(e.ArrivalTime?.ToString("HH:mm"))"
+                                           Change="@(v => OnArrivalChanged(e, v))"
+                                           Disabled="@detail.Register.IsSubmitted"
+                                           Placeholder="HH:mm" Style="width: 100%;" />
+                        }
+                        else
+                        {
+                            <span style="color: var(--nps-ink-500);">—</span>
+                        }
+                    </Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="DailyAttendanceEntryDto" Title="Remarks">
+                    <Template Context="e">
+                        <RadzenTextBox @bind-Value="e.Remarks"
+                                       Disabled="@detail.Register.IsSubmitted"
+                                       Style="width: 100%;" />
+                    </Template>
+                </RadzenDataGridColumn>
+            </Columns>
+        </RadzenDataGrid>
+    </RadzenCard>
+}
+
+@code {
+    private IReadOnlyList<SessionDto> sessions = [];
+    private IReadOnlyList<LookupDto> classes = [];
+    private IReadOnlyList<LookupDto> statuses = [];
+
+    private Guid? sessionId;
+    private Guid? schoolClassId;
+    private DateTime? date = DateTime.Today;
+
+    private DailyAttendanceRegisterDetailDto? detail;
+    private bool loading;
+    private bool saving;
+
+    protected override async Task OnInitializedAsync()
+    {
+        sessions = await SessionService.ListAsync();
+        sessionId = sessions.FirstOrDefault(s => s.IsCurrent)?.Id ?? sessions.FirstOrDefault()?.Id;
+        classes = await LookupService.GetClassesForSessionAsync(sessionId);
+        statuses = await LookupService.GetAttendanceStatusesAsync();
+    }
+
+    private async Task SessionChangedAsync()
+    {
+        schoolClassId = null;
+        detail = null;
+        classes = await LookupService.GetClassesForSessionAsync(sessionId);
+    }
+
+    private async Task LoadAsync()
+    {
+        if (schoolClassId is null || date is null)
+        {
+            detail = null;
+            return;
+        }
+
+        loading = true;
+        try
+        {
+            detail = await AttendanceService.GetForClassDateAsync(schoolClassId.Value, DateOnly.FromDateTime(date.Value));
+        }
+        finally
+        {
+            loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task OpenAsync()
+    {
+        if (schoolClassId is null || date is null) return;
+
+        saving = true;
+        try
+        {
+            var result = await AttendanceService.OpenAsync(new OpenDailyRegisterRequest
+            {
+                SchoolClassId = schoolClassId.Value,
+                Date = DateOnly.FromDateTime(date.Value),
+            });
+
+            if (result.Succeeded)
+            {
+                Notification.Notify(NotificationSeverity.Success, "Opened", "Register opened.");
+                await LoadAsync();
+            }
+            else
+            {
+                Notification.Notify(NotificationSeverity.Error, "Failed", string.Join("; ", result.Errors));
+            }
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private void OnStatusChanged(DailyAttendanceEntryDto entry, Guid statusId)
+    {
+        entry.AttendanceStatusId = statusId;
+        var status = statuses.FirstOrDefault(s => s.Id == statusId);
+        if (status is not null)
+        {
+            entry.AttendanceStatusCode = status.Code ?? string.Empty;
+            entry.AttendanceStatusName = status.Name;
+        }
+    }
+
+    private void OnArrivalChanged(DailyAttendanceEntryDto entry, string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            entry.ArrivalTime = null;
+            return;
+        }
+        if (TimeOnly.TryParse(value, out var parsed))
+            entry.ArrivalTime = parsed;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (detail is null) return;
+
+        saving = true;
+        try
+        {
+            var result = await AttendanceService.BulkSetAsync(new BulkSetDailyAttendanceRequest
+            {
+                RegisterId = detail.Register.Id,
+                Entries = detail.Entries.Select(e => new UpsertDailyEntryRequest
+                {
+                    Id = e.Id,
+                    RegisterId = e.RegisterId,
+                    StudentId = e.StudentId,
+                    AttendanceStatusId = e.AttendanceStatusId,
+                    ArrivalTime = e.ArrivalTime,
+                    Remarks = e.Remarks,
+                }).ToList(),
+            });
+
+            if (result.Succeeded)
+            {
+                Notification.Notify(NotificationSeverity.Success, "Saved", "Attendance saved.");
+                await LoadAsync();
+            }
+            else
+            {
+                Notification.Notify(NotificationSeverity.Error, "Failed", string.Join("; ", result.Errors));
+            }
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (detail is null) return;
+
+        await SaveAsync();
+
+        var result = await AttendanceService.SubmitAsync(detail.Register.Id);
+        if (result.Succeeded)
+        {
+            Notification.Notify(NotificationSeverity.Success, "Submitted", "Register submitted.");
+            await LoadAsync();
+        }
+        else
+        {
+            Notification.Notify(NotificationSeverity.Error, "Failed", string.Join("; ", result.Errors));
+        }
+    }
+
+    private async Task ReopenAsync()
+    {
+        if (detail is null) return;
+        var result = await AttendanceService.ReopenAsync(detail.Register.Id);
+        if (result.Succeeded)
+        {
+            Notification.Notify(NotificationSeverity.Success, "Reopened", "Register reopened for editing.");
+            await LoadAsync();
+        }
+        else
+        {
+            Notification.Notify(NotificationSeverity.Error, "Failed", string.Join("; ", result.Errors));
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (detail is null) return;
+        var confirm = await Dialog.Confirm(
+            $"Delete the register for {detail.Register.SchoolClassName} on {detail.Register.Date:d MMM yyyy}?",
+            "Delete register",
+            new ConfirmOptions { OkButtonText = "Delete", CancelButtonText = "Cancel" });
+        if (confirm != true) return;
+
+        var result = await AttendanceService.SoftDeleteAsync(detail.Register.Id);
+        if (result.Succeeded)
+        {
+            Notification.Notify(NotificationSeverity.Success, "Deleted", "Register removed.");
+            detail = null;
+        }
+        else
+        {
+            Notification.Notify(NotificationSeverity.Error, "Failed", string.Join("; ", result.Errors));
+        }
+    }
+}

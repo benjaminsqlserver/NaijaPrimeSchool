@@ -1,3 +1,4 @@
+using NaijaPrimeSchool.Domain.Attendance;
 using NaijaPrimeSchool.Domain.Common;
 using NaijaPrimeSchool.Domain.Identity;
 
@@ -25,4 +26,6 @@ public class TimetableEntry : BaseEntity
 
     public string? Room { get; set; }
     public string? Notes { get; set; }
+
+    public ICollection<SubjectAttendanceSession> AttendanceSessions { get; set; } = [];
 }

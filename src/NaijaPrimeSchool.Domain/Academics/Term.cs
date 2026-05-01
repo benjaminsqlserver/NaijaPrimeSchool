@@ -1,3 +1,4 @@
+using NaijaPrimeSchool.Domain.Attendance;
 using NaijaPrimeSchool.Domain.Common;
 
 namespace NaijaPrimeSchool.Domain.Academics;
@@ -15,4 +16,5 @@ public class Term : BaseEntity
     public bool IsCurrent { get; set; }
 
     public ICollection<TimetableEntry> TimetableEntries { get; set; } = [];
+    public ICollection<DailyAttendanceRegister> DailyAttendanceRegisters { get; set; } = [];
 }
