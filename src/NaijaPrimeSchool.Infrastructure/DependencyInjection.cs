@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using NaijaPrimeSchool.Application.Academics;
+using NaijaPrimeSchool.Application.Attendance;
 using NaijaPrimeSchool.Application.Family;
 using NaijaPrimeSchool.Application.Users;
 using NaijaPrimeSchool.Domain.Identity;
@@ -58,6 +59,9 @@ public static class DependencyInjection
         services.AddScoped<IStudentService, StudentService>();
         services.AddScoped<IParentService, ParentService>();
         services.AddScoped<IEnrolmentService, EnrolmentService>();
+
+        services.AddScoped<IDailyAttendanceService, DailyAttendanceService>();
+        services.AddScoped<ISubjectAttendanceService, SubjectAttendanceService>();
 
         return services;
     }

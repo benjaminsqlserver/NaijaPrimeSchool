@@ -1,0 +1,316 @@
+@page "/attendance/subject"
+@attribute [Authorize(Roles = $"{Roles.SuperAdmin},{Roles.HeadTeacher},{Roles.Teacher}")]
+@rendermode InteractiveServer
+
+@inject ISubjectAttendanceService AttendanceService
+@inject ITimetableService Timetable
+@inject ITermService TermService
+@inject ISchoolClassService ClassService
+@inject ISessionService SessionService
+@inject ILookupService LookupService
+@inject NotificationService Notification
+@inject DialogService Dialog
+
+<PageTitle>Subject attendance · Naija Prime School</PageTitle>
+
+<div class="nps-page-header">
+    <div>
+        <h1>Subject attendance</h1>
+        <p>Pick a term, class and date — every lesson scheduled for that day on the timetable will appear. Click any lesson to take attendance for it.</p>
+    </div>
+</div>
+
+<RadzenCard class="nps-card" Style="margin-bottom: 1rem;">
+    <div class="nps-filter-bar">
+        <div class="nps-field">
+            <label>Term</label>
+            <RadzenDropDown TValue="Guid?" Data="@terms" TextProperty="Display" ValueProperty="Id"
+                            @bind-Value="termId" Placeholder="Pick a term"
+                            Change="@(_ => TermChangedAsync())" Style="min-width: 240px;" />
+        </div>
+        <div class="nps-field">
+            <label>Class</label>
+            <RadzenDropDown TValue="Guid?" Data="@classes" TextProperty="Name" ValueProperty="Id"
+                            @bind-Value="schoolClassId" Placeholder="Pick a class"
+                            Change="@(_ => LoadLessonsAsync())" Style="min-width: 240px;" />
+        </div>
+        <div class="nps-field">
+            <label>Date</label>
+            <RadzenDatePicker TValue="DateTime?" @bind-Value="date" DateFormat="d MMM yyyy" ShowTime="false"
+                              Change="@(_ => LoadLessonsAsync())" Style="min-width: 180px;" />
+        </div>
+    </div>
+</RadzenCard>
+
+@if (lessons.Count == 0 && termId is not null && schoolClassId is not null && date is not null)
+{
+    <RadzenCard class="nps-card">
+        <p style="color: var(--nps-ink-500);">
+            No lessons scheduled for this class on @date?.ToString("dddd, d MMMM yyyy").
+        </p>
+    </RadzenCard>
+}
+else if (lessons.Count > 0)
+{
+    <RadzenCard class="nps-card">
+        <h3 style="margin: 0 0 1rem;">Lessons on @date?.ToString("dddd, d MMMM yyyy")</h3>
+        <RadzenDataGrid TItem="TimetableEntryDto" Data="@lessons" AllowPaging="false"
+                        EmptyText="No lessons.">
+            <Columns>
+                <RadzenDataGridColumn TItem="TimetableEntryDto" Title="Period" Width="200px">
+                    <Template Context="t">
+                        <strong>@t.PeriodName</strong>
+                        <br />
+                        <small style="color: var(--nps-ink-500);">@t.PeriodStart.ToString("HH:mm") – @t.PeriodEnd.ToString("HH:mm")</small>
+                    </Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="TimetableEntryDto" Title="Subject">
+                    <Template Context="t">
+                        <strong>@t.SubjectName</strong>
+                        <br />
+                        <small style="color: var(--nps-ink-500);">@t.SubjectCode @(string.IsNullOrEmpty(t.TeacherName) ? "" : "· " + t.TeacherName)</small>
+                    </Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="TimetableEntryDto" Title="Action" Width="220px" TextAlign="TextAlign.Right" Sortable="false">
+                    <Template Context="t">
+                        <RadzenButton Text="Take attendance" Icon="how_to_reg"
+                                      ButtonStyle="ButtonStyle.Primary" Size="ButtonSize.Small"
+                                      Click="@(() => OpenSessionAsync(t))" />
+                    </Template>
+                </RadzenDataGridColumn>
+            </Columns>
+        </RadzenDataGrid>
+    </RadzenCard>
+}
+
+@if (detail is not null)
+{
+    <RadzenCard class="nps-card" Style="margin-top: 1rem;">
+        <div style="display:flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem; gap:1rem; flex-wrap:wrap;">
+            <div>
+                <h3 style="margin:0;">@detail.Session.SubjectName · @detail.Session.PeriodName</h3>
+                <p style="margin:.25rem 0 0; color: var(--nps-ink-500);">
+                    @detail.Session.SchoolClassName · @detail.Session.Date.ToString("dddd, d MMMM yyyy") ·
+                    @detail.Session.PeriodStart.ToString("HH:mm")–@detail.Session.PeriodEnd.ToString("HH:mm")
+                </p>
+                <div style="margin-top:.5rem; display:flex; gap:.5rem; flex-wrap:wrap;">
+                    <RadzenBadge Text="@($"Present: {detail.Session.PresentCount}")" BadgeStyle="BadgeStyle.Success" Variant="Variant.Flat" />
+                    <RadzenBadge Text="@($"Absent: {detail.Session.AbsentCount}")" BadgeStyle="BadgeStyle.Danger" Variant="Variant.Flat" />
+                    <RadzenBadge Text="@($"Total: {detail.Session.TotalCount}")" BadgeStyle="BadgeStyle.Info" Variant="Variant.Flat" />
+                </div>
+            </div>
+            <div class="nps-inline-actions">
+                @if (detail.Session.IsSubmitted)
+                {
+                    <RadzenBadge Text="@($"Submitted {detail.Session.SubmittedOn:d MMM HH:mm}")"
+                                 BadgeStyle="BadgeStyle.Success" Variant="Variant.Flat" />
+                    <RadzenButton Text="Reopen" Icon="lock_open" ButtonStyle="ButtonStyle.Warning"
+                                  Variant="Variant.Flat" Click="@ReopenAsync" />
+                }
+                else
+                {
+                    <RadzenButton Text="Save changes" Icon="save" ButtonStyle="ButtonStyle.Light"
+                                  Variant="Variant.Flat" Click="@SaveAsync" Disabled="@saving" />
+                    <RadzenButton Text="Submit" Icon="check_circle" ButtonStyle="ButtonStyle.Primary"
+                                  Click="@SubmitAsync" Disabled="@saving" />
+                }
+                <RadzenButton Text="Close" Icon="close" Variant="Variant.Flat"
+                              ButtonStyle="ButtonStyle.Light" Click="@(() => detail = null)" />
+            </div>
+        </div>
+
+        <RadzenDataGrid TItem="SubjectAttendanceEntryDto" Data="@detail.Entries" AllowPaging="false"
+                        EmptyText="No pupils on this register.">
+            <Columns>
+                <RadzenDataGridColumn TItem="SubjectAttendanceEntryDto" Title="Pupil">
+                    <Template Context="e">
+                        <strong>@e.StudentName</strong>
+                        <br />
+                        <small style="color: var(--nps-ink-500);">@e.StudentAdmissionNumber</small>
+                    </Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="SubjectAttendanceEntryDto" Title="Status" Width="200px">
+                    <Template Context="e">
+                        <RadzenDropDown TValue="Guid" Data="@statuses" TextProperty="Name" ValueProperty="Id"
+                                        Value="@e.AttendanceStatusId"
+                                        Change="@(args => OnStatusChanged(e, (Guid)args!))"
+                                        Disabled="@detail.Session.IsSubmitted"
+                                        Style="width: 100%;" />
+                    </Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="SubjectAttendanceEntryDto" Title="Remarks">
+                    <Template Context="e">
+                        <RadzenTextBox @bind-Value="e.Remarks"
+                                       Disabled="@detail.Session.IsSubmitted"
+                                       Style="width: 100%;" />
+                    </Template>
+                </RadzenDataGridColumn>
+            </Columns>
+        </RadzenDataGrid>
+    </RadzenCard>
+}
+
+@code {
+    private record TermOption(Guid Id, string Display);
+
+    private List<TermOption> terms = [];
+    private IReadOnlyList<LookupDto> classes = [];
+    private IReadOnlyList<LookupDto> statuses = [];
+    private List<TimetableEntryDto> lessons = [];
+
+    private Guid? termId;
+    private Guid? schoolClassId;
+    private DateTime? date = DateTime.Today;
+
+    private SubjectAttendanceSessionDetailDto? detail;
+    private bool saving;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var allTerms = await TermService.ListAsync();
+        terms = allTerms
+            .OrderByDescending(t => t.IsCurrent)
+            .ThenByDescending(t => t.StartDate)
+            .Select(t => new TermOption(t.Id, $"{t.SessionName} · {t.TermTypeName}"))
+            .ToList();
+
+        var current = allTerms.FirstOrDefault(t => t.IsCurrent);
+        termId = current?.Id ?? terms.FirstOrDefault()?.Id;
+
+        if (current is not null)
+            classes = await LookupService.GetClassesForSessionAsync(current.SessionId);
+        else
+            classes = await LookupService.GetClassesForSessionAsync();
+
+        statuses = await LookupService.GetAttendanceStatusesAsync();
+    }
+
+    private async Task TermChangedAsync()
+    {
+        var allTerms = await TermService.ListAsync();
+        var t = allTerms.FirstOrDefault(x => x.Id == termId);
+        if (t is null) return;
+        classes = await LookupService.GetClassesForSessionAsync(t.SessionId);
+        schoolClassId = null;
+        lessons = [];
+        detail = null;
+    }
+
+    private async Task LoadLessonsAsync()
+    {
+        detail = null;
+        if (termId is null || schoolClassId is null || date is null)
+        {
+            lessons = [];
+            return;
+        }
+
+        var entries = await Timetable.ListEntriesAsync(new TimetableQuery
+        {
+            TermId = termId.Value,
+            SchoolClassId = schoolClassId.Value,
+        });
+
+        var dayName = date.Value.DayOfWeek.ToString();
+        lessons = entries
+            .Where(e => string.Equals(e.WeekDayName, dayName, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(e => e.PeriodOrder)
+            .ToList();
+    }
+
+    private async Task OpenSessionAsync(TimetableEntryDto t)
+    {
+        if (date is null) return;
+        var result = await AttendanceService.OpenAsync(new OpenSubjectSessionRequest
+        {
+            TimetableEntryId = t.Id,
+            Date = DateOnly.FromDateTime(date.Value),
+        });
+
+        if (result.Succeeded)
+        {
+            detail = await AttendanceService.GetByIdAsync(result.Data);
+        }
+        else
+        {
+            Notification.Notify(NotificationSeverity.Error, "Failed", string.Join("; ", result.Errors));
+        }
+    }
+
+    private void OnStatusChanged(SubjectAttendanceEntryDto entry, Guid statusId)
+    {
+        entry.AttendanceStatusId = statusId;
+        var status = statuses.FirstOrDefault(s => s.Id == statusId);
+        if (status is not null)
+        {
+            entry.AttendanceStatusCode = status.Code ?? string.Empty;
+            entry.AttendanceStatusName = status.Name;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (detail is null) return;
+        saving = true;
+        try
+        {
+            var result = await AttendanceService.BulkSetAsync(new BulkSetSubjectAttendanceRequest
+            {
+                SessionId = detail.Session.Id,
+                Entries = detail.Entries.Select(e => new UpsertSubjectEntryRequest
+                {
+                    Id = e.Id,
+                    SessionId = e.SessionId,
+                    StudentId = e.StudentId,
+                    AttendanceStatusId = e.AttendanceStatusId,
+                    Remarks = e.Remarks,
+                }).ToList(),
+            });
+
+            if (result.Succeeded)
+            {
+                Notification.Notify(NotificationSeverity.Success, "Saved", "Attendance saved.");
+                detail = await AttendanceService.GetByIdAsync(detail.Session.Id);
+            }
+            else
+            {
+                Notification.Notify(NotificationSeverity.Error, "Failed", string.Join("; ", result.Errors));
+            }
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (detail is null) return;
+        await SaveAsync();
+        var result = await AttendanceService.SubmitAsync(detail.Session.Id);
+        if (result.Succeeded)
+        {
+            Notification.Notify(NotificationSeverity.Success, "Submitted", "Session submitted.");
+            detail = await AttendanceService.GetByIdAsync(detail.Session.Id);
+        }
+        else
+        {
+            Notification.Notify(NotificationSeverity.Error, "Failed", string.Join("; ", result.Errors));
+        }
+    }
+
+    private async Task ReopenAsync()
+    {
+        if (detail is null) return;
+        var result = await AttendanceService.ReopenAsync(detail.Session.Id);
+        if (result.Succeeded)
+        {
+            Notification.Notify(NotificationSeverity.Success, "Reopened", "Session reopened.");
+            detail = await AttendanceService.GetByIdAsync(detail.Session.Id);
+        }
+        else
+        {
+            Notification.Notify(NotificationSeverity.Error, "Failed", string.Join("; ", result.Errors));
+        }
+    }
+}

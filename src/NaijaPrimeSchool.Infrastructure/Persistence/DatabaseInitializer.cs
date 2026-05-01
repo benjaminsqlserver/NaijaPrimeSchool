@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NaijaPrimeSchool.Domain.Academics;
+using NaijaPrimeSchool.Domain.Attendance;
 using NaijaPrimeSchool.Domain.Family;
 using NaijaPrimeSchool.Domain.Identity;
 
@@ -27,8 +28,37 @@ public static class DatabaseInitializer
         await SeedLookupsAsync(db, ct);
         await SeedAcademicLookupsAsync(db, ct);
         await SeedFamilyLookupsAsync(db, ct);
+        await SeedAttendanceLookupsAsync(db, ct);
         await SeedRolesAsync(sp, ct);
         await SeedSuperAdminAsync(sp, logger, ct);
+    }
+
+    private static async Task SeedAttendanceLookupsAsync(ApplicationDbContext db, CancellationToken ct)
+    {
+        if (!await db.AttendanceStatuses.IgnoreQueryFilters().AnyAsync(ct))
+        {
+            (string Name, string Code, bool CountsAsPresent)[] statuses =
+            [
+                ("Present",   "P",  true),
+                ("Late",      "L",  true),
+                ("Excused",   "E",  false),
+                ("Sick",      "S",  false),
+                ("Absent",    "A",  false),
+                ("Suspended", "SP", false),
+            ];
+            for (var i = 0; i < statuses.Length; i++)
+            {
+                db.AttendanceStatuses.Add(new AttendanceStatus
+                {
+                    Name = statuses[i].Name,
+                    Code = statuses[i].Code,
+                    DisplayOrder = i + 1,
+                    CountsAsPresent = statuses[i].CountsAsPresent,
+                });
+            }
+        }
+
+        await db.SaveChangesAsync(ct);
     }
 
     private static async Task SeedFamilyLookupsAsync(ApplicationDbContext db, CancellationToken ct)

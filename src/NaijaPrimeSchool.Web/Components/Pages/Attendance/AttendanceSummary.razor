@@ -1,0 +1,108 @@
+@page "/attendance/summary"
+@attribute [Authorize(Roles = $"{Roles.SuperAdmin},{Roles.HeadTeacher},{Roles.Teacher}")]
+@rendermode InteractiveServer
+
+@inject IDailyAttendanceService DailyAttendance
+@inject ISessionService SessionService
+@inject ITermService TermService
+@inject ILookupService LookupService
+
+<PageTitle>Attendance summary · Naija Prime School</PageTitle>
+
+<div class="nps-page-header">
+    <div>
+        <h1>Attendance summary</h1>
+        <p>Daily-attendance percentages per pupil for the selected class and term.</p>
+    </div>
+</div>
+
+<RadzenCard class="nps-card" Style="margin-bottom: 1rem;">
+    <div class="nps-filter-bar">
+        <div class="nps-field">
+            <label>Session</label>
+            <RadzenDropDown TValue="Guid?" Data="@sessions" TextProperty="Name" ValueProperty="Id"
+                            @bind-Value="sessionId" Placeholder="Pick a session"
+                            Change="@(_ => SessionChangedAsync())" Style="min-width: 200px;" />
+        </div>
+        <div class="nps-field">
+            <label>Term</label>
+            <RadzenDropDown TValue="Guid?" Data="@terms" TextProperty="TermTypeName" ValueProperty="Id"
+                            @bind-Value="termId" AllowClear="true" Placeholder="All terms in session"
+                            Change="@(_ => LoadAsync())" Style="min-width: 200px;" />
+        </div>
+        <div class="nps-field">
+            <label>Class</label>
+            <RadzenDropDown TValue="Guid?" Data="@classes" TextProperty="Name" ValueProperty="Id"
+                            @bind-Value="schoolClassId" Placeholder="Pick a class"
+                            Change="@(_ => LoadAsync())" Style="min-width: 240px;" />
+        </div>
+    </div>
+</RadzenCard>
+
+@if (summary is not null)
+{
+    <RadzenCard class="nps-card">
+        <h3 style="margin: 0 0 1rem;">@summary.SchoolClassName</h3>
+        <RadzenDataGrid TItem="StudentAttendanceSummaryDto" Data="@summary.Students" AllowPaging="true" PageSize="25"
+                        EmptyText="No attendance data yet for this selection.">
+            <Columns>
+                <RadzenDataGridColumn TItem="StudentAttendanceSummaryDto" Title="Pupil">
+                    <Template Context="s">
+                        <strong>@s.StudentName</strong>
+                        <br />
+                        <small style="color: var(--nps-ink-500);">@s.StudentAdmissionNumber</small>
+                    </Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="StudentAttendanceSummaryDto" Title="Days counted" Property="DaysCounted" Width="140px" />
+                <RadzenDataGridColumn TItem="StudentAttendanceSummaryDto" Title="Present" Property="DaysPresent" Width="100px" />
+                <RadzenDataGridColumn TItem="StudentAttendanceSummaryDto" Title="Late" Property="DaysLate" Width="100px" />
+                <RadzenDataGridColumn TItem="StudentAttendanceSummaryDto" Title="Absent" Property="DaysAbsent" Width="100px" />
+                <RadzenDataGridColumn TItem="StudentAttendanceSummaryDto" Title="Excused" Property="DaysExcused" Width="100px" />
+                <RadzenDataGridColumn TItem="StudentAttendanceSummaryDto" Title="Present rate" Width="160px">
+                    <Template Context="s">
+                        <RadzenBadge Text="@($"{s.PresentRate}%")"
+                                     BadgeStyle="@(s.PresentRate >= 90 ? BadgeStyle.Success
+                                                   : s.PresentRate >= 75 ? BadgeStyle.Warning
+                                                   : BadgeStyle.Danger)"
+                                     Variant="Variant.Flat" />
+                    </Template>
+                </RadzenDataGridColumn>
+            </Columns>
+        </RadzenDataGrid>
+    </RadzenCard>
+}
+
+@code {
+    private IReadOnlyList<SessionDto> sessions = [];
+    private IReadOnlyList<TermDto> terms = [];
+    private IReadOnlyList<LookupDto> classes = [];
+
+    private Guid? sessionId;
+    private Guid? termId;
+    private Guid? schoolClassId;
+
+    private ClassAttendanceSummaryDto? summary;
+
+    protected override async Task OnInitializedAsync()
+    {
+        sessions = await SessionService.ListAsync();
+        sessionId = sessions.FirstOrDefault(s => s.IsCurrent)?.Id ?? sessions.FirstOrDefault()?.Id;
+        await SessionChangedAsync();
+    }
+
+    private async Task SessionChangedAsync()
+    {
+        if (sessionId is null) return;
+        terms = await TermService.ListAsync(sessionId);
+        termId = terms.FirstOrDefault(t => t.IsCurrent)?.Id;
+        classes = await LookupService.GetClassesForSessionAsync(sessionId);
+        schoolClassId = null;
+        summary = null;
+    }
+
+    private async Task LoadAsync()
+    {
+        if (schoolClassId is null) { summary = null; return; }
+        summary = await DailyAttendance.GetClassSummaryAsync(schoolClassId.Value, termId);
+    }
+}

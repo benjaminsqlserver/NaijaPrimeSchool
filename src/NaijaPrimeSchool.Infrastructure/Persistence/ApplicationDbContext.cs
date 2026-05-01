@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using NaijaPrimeSchool.Application.Common;
 using NaijaPrimeSchool.Domain.Academics;
+using NaijaPrimeSchool.Domain.Attendance;
 using NaijaPrimeSchool.Domain.Common;
 using NaijaPrimeSchool.Domain.Family;
 using NaijaPrimeSchool.Domain.Identity;
@@ -45,6 +46,12 @@ public class ApplicationDbContext(
     public DbSet<Parent> Parents => Set<Parent>();
     public DbSet<StudentParent> StudentParents => Set<StudentParent>();
     public DbSet<Enrolment> Enrolments => Set<Enrolment>();
+
+    public DbSet<AttendanceStatus> AttendanceStatuses => Set<AttendanceStatus>();
+    public DbSet<DailyAttendanceRegister> DailyAttendanceRegisters => Set<DailyAttendanceRegister>();
+    public DbSet<DailyAttendanceEntry> DailyAttendanceEntries => Set<DailyAttendanceEntry>();
+    public DbSet<SubjectAttendanceSession> SubjectAttendanceSessions => Set<SubjectAttendanceSession>();
+    public DbSet<SubjectAttendanceEntry> SubjectAttendanceEntries => Set<SubjectAttendanceEntry>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -126,6 +133,7 @@ public class ApplicationDbContext(
 
         ConfigureAcademics(builder);
         ConfigureFamily(builder);
+        ConfigureAttendance(builder);
     }
 
     private static void ConfigureAcademics(ModelBuilder builder)
@@ -436,6 +444,123 @@ public class ApplicationDbContext(
 
             // A student appears at most once in a given class.
             b.HasIndex(e => new { e.StudentId, e.SchoolClassId }).IsUnique();
+            b.HasIndex(e => e.IsDeleted);
+            b.HasQueryFilter(e => !e.IsDeleted);
+        });
+    }
+
+    private static void ConfigureAttendance(ModelBuilder builder)
+    {
+        ConfigureLookup<AttendanceStatus>(builder, "AttendanceStatuses", extra: b =>
+        {
+            b.Property(s => s.Name).HasMaxLength(40).IsRequired();
+            b.Property(s => s.Code).HasMaxLength(5).IsRequired();
+            b.HasIndex(s => s.Name).IsUnique();
+            b.HasIndex(s => s.Code).IsUnique();
+        });
+
+        builder.Entity<DailyAttendanceRegister>(b =>
+        {
+            b.ToTable("DailyAttendanceRegisters");
+            b.HasKey(r => r.Id);
+            b.Property(r => r.Notes).HasMaxLength(500);
+            b.Property(r => r.CreatedBy).HasMaxLength(100);
+            b.Property(r => r.ModifiedBy).HasMaxLength(100);
+            b.Property(r => r.DeletedBy).HasMaxLength(100);
+
+            b.HasOne(r => r.SchoolClass).WithMany(c => c.DailyAttendanceRegisters)
+                .HasForeignKey(r => r.SchoolClassId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasOne(r => r.Term).WithMany(t => t.DailyAttendanceRegisters)
+                .HasForeignKey(r => r.TermId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasOne(r => r.TakenBy).WithMany()
+                .HasForeignKey(r => r.TakenById)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            // One register per (class, date).
+            b.HasIndex(r => new { r.SchoolClassId, r.Date }).IsUnique();
+            b.HasIndex(r => r.Date);
+            b.HasIndex(r => r.IsDeleted);
+            b.HasQueryFilter(r => !r.IsDeleted);
+        });
+
+        builder.Entity<DailyAttendanceEntry>(b =>
+        {
+            b.ToTable("DailyAttendanceEntries");
+            b.HasKey(e => e.Id);
+            b.Property(e => e.Remarks).HasMaxLength(300);
+            b.Property(e => e.CreatedBy).HasMaxLength(100);
+            b.Property(e => e.ModifiedBy).HasMaxLength(100);
+            b.Property(e => e.DeletedBy).HasMaxLength(100);
+
+            b.HasOne(e => e.Register).WithMany(r => r.Entries)
+                .HasForeignKey(e => e.RegisterId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            b.HasOne(e => e.Student).WithMany(s => s.DailyAttendanceEntries)
+                .HasForeignKey(e => e.StudentId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasOne(e => e.AttendanceStatus).WithMany(s => s.DailyEntries)
+                .HasForeignKey(e => e.AttendanceStatusId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // One entry per (register, student).
+            b.HasIndex(e => new { e.RegisterId, e.StudentId }).IsUnique();
+            b.HasIndex(e => e.IsDeleted);
+            b.HasQueryFilter(e => !e.IsDeleted);
+        });
+
+        builder.Entity<SubjectAttendanceSession>(b =>
+        {
+            b.ToTable("SubjectAttendanceSessions");
+            b.HasKey(s => s.Id);
+            b.Property(s => s.Notes).HasMaxLength(500);
+            b.Property(s => s.CreatedBy).HasMaxLength(100);
+            b.Property(s => s.ModifiedBy).HasMaxLength(100);
+            b.Property(s => s.DeletedBy).HasMaxLength(100);
+
+            b.HasOne(s => s.TimetableEntry).WithMany(e => e.AttendanceSessions)
+                .HasForeignKey(s => s.TimetableEntryId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasOne(s => s.TakenBy).WithMany()
+                .HasForeignKey(s => s.TakenById)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            // One session per (timetable entry, date).
+            b.HasIndex(s => new { s.TimetableEntryId, s.Date }).IsUnique();
+            b.HasIndex(s => s.Date);
+            b.HasIndex(s => s.IsDeleted);
+            b.HasQueryFilter(s => !s.IsDeleted);
+        });
+
+        builder.Entity<SubjectAttendanceEntry>(b =>
+        {
+            b.ToTable("SubjectAttendanceEntries");
+            b.HasKey(e => e.Id);
+            b.Property(e => e.Remarks).HasMaxLength(300);
+            b.Property(e => e.CreatedBy).HasMaxLength(100);
+            b.Property(e => e.ModifiedBy).HasMaxLength(100);
+            b.Property(e => e.DeletedBy).HasMaxLength(100);
+
+            b.HasOne(e => e.Session).WithMany(s => s.Entries)
+                .HasForeignKey(e => e.SessionId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            b.HasOne(e => e.Student).WithMany(s => s.SubjectAttendanceEntries)
+                .HasForeignKey(e => e.StudentId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasOne(e => e.AttendanceStatus).WithMany(s => s.SubjectEntries)
+                .HasForeignKey(e => e.AttendanceStatusId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // One entry per (session, student).
+            b.HasIndex(e => new { e.SessionId, e.StudentId }).IsUnique();
             b.HasIndex(e => e.IsDeleted);
             b.HasQueryFilter(e => !e.IsDeleted);
         });

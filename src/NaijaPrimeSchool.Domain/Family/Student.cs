@@ -1,3 +1,4 @@
+using NaijaPrimeSchool.Domain.Attendance;
 using NaijaPrimeSchool.Domain.Common;
 using NaijaPrimeSchool.Domain.Identity;
 
@@ -33,6 +34,8 @@ public class Student : BaseEntity
 
     public ICollection<Enrolment> Enrolments { get; set; } = [];
     public ICollection<StudentParent> ParentLinks { get; set; } = [];
+    public ICollection<DailyAttendanceEntry> DailyAttendanceEntries { get; set; } = [];
+    public ICollection<SubjectAttendanceEntry> SubjectAttendanceEntries { get; set; } = [];
 
     public string FullName =>
         string.IsNullOrWhiteSpace(MiddleName)

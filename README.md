@@ -2,13 +2,14 @@
 
 A modern school management system for Nigerian primary schools, built with **.NET 10**, **Blazor Auto**, **Clean Architecture**, **SQL Server**, and **Radzen Blazor Components**.
 
-Three sprints have shipped. **Sprint 1** delivered the authentication & authorization foundation: user accounts, role-based access control, login/logout, activation/deactivation, and the SuperAdmin user-management screens. **Sprint 2** built the academic domain on top of that foundation: sessions, terms, class arms, subjects, timetable periods, and a click-to-edit weekly timetable grid. **Sprint 3** plugs students and parents into that academic structure: pupil profiles, parent/guardian directory, parent-to-pupil linkage with relationship + primary-contact + pickup flags, and per-session enrolment with a withdrawal lifecycle.
+Four sprints have shipped. **Sprint 1** delivered the authentication & authorization foundation: user accounts, role-based access control, login/logout, activation/deactivation, and the SuperAdmin user-management screens. **Sprint 2** built the academic domain on top of that foundation: sessions, terms, class arms, subjects, timetable periods, and a click-to-edit weekly timetable grid. **Sprint 3** plugged students and parents into that academic structure: pupil profiles, parent/guardian directory, parent-to-pupil linkage with relationship + primary-contact + pickup flags, and per-session enrolment with a withdrawal lifecycle. **Sprint 4** lands attendance: a daily class register, per-subject session attendance off the timetable, the AttendanceStatus lookup, a submit/reopen lifecycle, and a per-class percentage summary.
 
 Implementation walk-throughs for each sprint live at the repo root:
 
 - `Sprint 1 - Implementation Guide.pdf`
 - `Sprint 2 - Implementation Guide.pdf`
 - `Sprint 3 - Implementation Guide.pdf`
+- `Sprint 4 - Implementation Guide.docx` / `Sprint 4 - Implementation Guide.pdf`
 
 ---
 
@@ -65,6 +66,27 @@ Implementation walk-throughs for each sprint live at the repo root:
   - `Relationships`, `EnrolmentStatuses`, `BloodGroups`, `MaritalStatuses` — every domain concept that would normally be a C# enum is a first-class table, seeded on startup
 - **Pages added** (`/students`, `/students/new`, `/students/{id}`, `/parents`, `/parents/new`, `/parents/{id}`, `/enrolments`), all gated to **SuperAdmin** + **HeadTeacher**. Edit-pupil and edit-parent pages use Radzen tabs to keep profile editing separate from linkage management.
 
+## Sprint 4 — Attendance ✅
+
+- **Daily attendance**
+  - **DailyAttendanceRegister** keyed by (Class × Date), with the term auto-resolved from the date
+  - Pre-loads every pupil currently enrolled in the class on the date as Present, ready to mark
+  - **DailyAttendanceEntry** per pupil with status, optional arrival time (for Late), and remarks
+  - One register per (class, day), one entry per (register, pupil) — composite unique indexes
+- **Subject attendance**
+  - **SubjectAttendanceSession** keyed by (TimetableEntry × Date), tying attendance to a specific lesson on the timetable from sprint 2
+  - Refuses dates whose weekday does not match the timetable entry's `WeekDay`
+  - **SubjectAttendanceEntry** per pupil with status and remarks
+- **Lifecycle**
+  - Submit / reopen flow: registers are editable until submitted; reopening restores edit access without losing the original `SubmittedOn` timestamp
+  - Submitted registers cannot be soft-deleted until reopened
+  - Audit columns capture every change made post-reopen
+- **Lookup table (no enums)**
+  - `AttendanceStatuses` — Present, Late, Excused, Sick, Absent, Suspended — each with a short code (P, L, E, S, A, SP), display order, and a `CountsAsPresent` flag that drives the summary percentages
+- **Summary**
+  - Per-class summary view across a term: days counted, days present/late/absent/excused, plus a colour-coded percentage badge (≥ 90% green, ≥ 75% amber, otherwise red)
+- **Pages added** (`/attendance/daily`, `/attendance/subject`, `/attendance/summary`), gated to **SuperAdmin** + **HeadTeacher** + **Teacher** (teachers genuinely take registers, so they have write access)
+
 ## Cross-cutting (every sprint)
 
 - **Beautiful, inviting UI**
@@ -72,7 +94,7 @@ Implementation walk-throughs for each sprint live at the repo root:
   - Radzen Blazor components (DataGrid, Dialog, Notification, Layout, Sidebar, Forms)
   - Responsive layout
 - **Data integrity**
-  - No enums; every lookup (roles, titles, genders, term types, class levels, week days, relationships, enrolment statuses, blood groups, marital statuses, …) is a first-class table
+  - No enums; every lookup (roles, titles, genders, term types, class levels, week days, relationships, enrolment statuses, blood groups, marital statuses, attendance statuses, …) is a first-class table
   - Soft delete for all entities, enforced globally via EF Core query filters
   - Auditing (CreatedOn/By, ModifiedOn/By, DeletedOn/By) applied automatically in `SaveChanges`
 
@@ -99,18 +121,21 @@ NaijaPrimeSchool/
 │   │   ├── Common/                              # BaseEntity, IAuditable, ISoftDelete
 │   │   ├── Identity/                            # ApplicationUser, ApplicationRole, Title, Gender, Roles (sprint 1)
 │   │   ├── Academics/                           # Session, Term, SchoolClass, Subject, Timetable* (sprint 2)
-│   │   └── Family/                              # Student, Parent, StudentParent, Enrolment + lookups (sprint 3)
+│   │   ├── Family/                              # Student, Parent, StudentParent, Enrolment + lookups (sprint 3)
+│   │   └── Attendance/                          # Daily/Subject registers + AttendanceStatus lookup (sprint 4)
 │   ├── NaijaPrimeSchool.Application/            # DTOs, service contracts, shared abstractions
 │   │   ├── Common/                              # ICurrentUser, OperationResult
 │   │   ├── Users/                               # IUserService, ILookupService, DTOs (sprint 1)
 │   │   ├── Academics/                           # I*Service interfaces and DTOs (sprint 2)
-│   │   └── Family/                              # IStudentService, IParentService, IEnrolmentService, DTOs (sprint 3)
+│   │   ├── Family/                              # IStudentService, IParentService, IEnrolmentService, DTOs (sprint 3)
+│   │   └── Attendance/                          # IDailyAttendanceService, ISubjectAttendanceService, DTOs (sprint 4)
 │   ├── NaijaPrimeSchool.Infrastructure/         # EF Core DbContext, Identity stores, service impls, seed, migrations
 │   ├── NaijaPrimeSchool.Web/                    # Blazor server host (auth endpoints, layout, pages, Program.cs)
 │   │   └── Components/Pages/
 │   │       ├── Users/                           # User management pages (sprint 1)
 │   │       ├── Academics/                       # Sessions, Terms, Classes, Subjects, Periods, Timetable (sprint 2)
-│   │       └── Family/                          # Students, Parents, Enrolments (sprint 3)
+│   │       ├── Family/                          # Students, Parents, Enrolments (sprint 3)
+│   │       └── Attendance/                      # Daily, Subject and Summary attendance pages (sprint 4)
 │   └── NaijaPrimeSchool.Web.Client/             # Blazor WebAssembly client (Auto interactivity)
 ├── tools/                                       # Scripts (e.g. sprint guide generators)
 └── NaijaPrimeSchool.slnx
@@ -269,8 +294,14 @@ User management screens are gated behind the `ManageUsers` policy, which require
 | `src/NaijaPrimeSchool.Infrastructure/Services/ParentService.cs` | Parent CRUD |
 | `src/NaijaPrimeSchool.Infrastructure/Services/EnrolmentService.cs` | Enrolment CRUD + Withdraw |
 | `src/NaijaPrimeSchool.Web/Components/Pages/Family/` | Students, Parents, Enrolments admin pages |
+| `src/NaijaPrimeSchool.Domain/Attendance/` | DailyAttendance/SubjectAttendance entities + AttendanceStatus lookup (sprint 4) |
+| `src/NaijaPrimeSchool.Application/Attendance/` | I*Service contracts and DTOs for attendance |
+| `src/NaijaPrimeSchool.Infrastructure/Services/DailyAttendanceService.cs` | Daily register CRUD + class/student summaries |
+| `src/NaijaPrimeSchool.Infrastructure/Services/SubjectAttendanceService.cs` | Per-lesson register CRUD |
+| `src/NaijaPrimeSchool.Web/Components/Pages/Attendance/` | Daily, Subject, and Summary attendance pages |
 | `tools/generate_sprint2_guide.py` | Generator for `Sprint 2 - Implementation Guide.docx` |
 | `tools/generate_sprint3_guide.py` | Generator for `Sprint 3 - Implementation Guide.docx` |
+| `tools/generate_sprint4_guide.py` | Generator for `Sprint 4 - Implementation Guide.docx` |
 
 ---
 
@@ -281,10 +312,10 @@ Delivered:
 - ✅ **Sprint 1** — Identity & user management (cookie auth, roles, lockout, SuperAdmin user CRUD)
 - ✅ **Sprint 2** — Academic domain (sessions, terms, classes, subjects, periods, timetable grid)
 - ✅ **Sprint 3** — Students & parents (pupil profiles, parent directory, linkage, enrolment)
+- ✅ **Sprint 4** — Attendance (daily + per-subject registers, submit/reopen lifecycle, summary)
 
 Planned for upcoming sprints:
 
-- Sprint 4 — Attendance (daily + per-subject)
 - Sprint 5 — Assessments, exams, result computation, report cards
 - Sprint 6 — Fees, invoices, receipts, bursar workflows
 - Sprint 7 — Store & inventory management for the storekeeper

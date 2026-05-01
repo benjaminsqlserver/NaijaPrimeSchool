@@ -1,3 +1,4 @@
+using NaijaPrimeSchool.Domain.Attendance;
 using NaijaPrimeSchool.Domain.Common;
 using NaijaPrimeSchool.Domain.Family;
 using NaijaPrimeSchool.Domain.Identity;
@@ -20,4 +21,5 @@ public class SchoolClass : BaseEntity
 
     public ICollection<TimetableEntry> TimetableEntries { get; set; } = [];
     public ICollection<Enrolment> Enrolments { get; set; } = [];
+    public ICollection<DailyAttendanceRegister> DailyAttendanceRegisters { get; set; } = [];
 }

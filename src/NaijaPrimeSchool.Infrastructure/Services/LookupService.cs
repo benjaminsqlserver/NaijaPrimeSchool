@@ -159,4 +159,10 @@ public class LookupService(
             })
             .ToListAsync(ct);
     }
+
+    public async Task<IReadOnlyList<LookupDto>> GetAttendanceStatusesAsync(CancellationToken ct = default) =>
+        await db.AttendanceStatuses
+            .OrderBy(s => s.DisplayOrder)
+            .Select(s => new LookupDto { Id = s.Id, Name = s.Name, Code = s.Code })
+            .ToListAsync(ct);
 }

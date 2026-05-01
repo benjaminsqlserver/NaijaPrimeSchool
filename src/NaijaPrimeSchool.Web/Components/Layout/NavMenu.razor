@@ -38,6 +38,16 @@
         </Authorized>
     </AuthorizeView>
 
+    <AuthorizeView Roles="@($"{Roles.SuperAdmin},{Roles.HeadTeacher},{Roles.Teacher}")">
+        <Authorized>
+            <RadzenPanelMenuItem Text="Attendance" Icon="event_available" Expanded="true">
+                <RadzenPanelMenuItem Text="Daily attendance" Icon="today" Path="/attendance/daily" />
+                <RadzenPanelMenuItem Text="Subject attendance" Icon="schedule" Path="/attendance/subject" />
+                <RadzenPanelMenuItem Text="Summary" Icon="analytics" Path="/attendance/summary" />
+            </RadzenPanelMenuItem>
+        </Authorized>
+    </AuthorizeView>
+
     <AuthorizeView Roles="@($"{Roles.SuperAdmin},{Roles.SchoolBursar}")">
         <Authorized>
             <RadzenPanelMenuItem Text="Finance" Icon="payments" Disabled="true" />
