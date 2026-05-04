@@ -1,0 +1,190 @@
+@page "/assessments/{Id:guid}/scores"
+@attribute [Authorize(Roles = $"{Roles.SuperAdmin},{Roles.HeadTeacher},{Roles.Teacher}")]
+@rendermode InteractiveServer
+
+@inject IAssessmentService AssessmentService
+@inject NavigationManager Nav
+@inject DialogService Dialog
+@inject NotificationService Notification
+
+<PageTitle>Score sheet · Naija Prime School</PageTitle>
+
+@if (loading)
+{
+    <p>Loading score sheet...</p>
+}
+else if (sheet is null)
+{
+    <RadzenAlert Severity="AlertSeverity.Warning">Assessment not found.</RadzenAlert>
+}
+else
+{
+    <div class="nps-page-header">
+        <div>
+            <h1>@sheet.Assessment.Title</h1>
+            <p>
+                @sheet.Assessment.SchoolClassName · @sheet.Assessment.SubjectName
+                (@sheet.Assessment.SubjectCode) · @sheet.Assessment.AssessmentTypeName ·
+                max <strong>@sheet.Assessment.MaxScore</strong>
+            </p>
+        </div>
+        <div class="nps-page-actions">
+            @if (sheet.Assessment.IsPublished)
+            {
+                <RadzenBadge Text="Published — read only" BadgeStyle="BadgeStyle.Success" Variant="Variant.Flat" />
+            }
+            else
+            {
+                <RadzenButton Text="@(saving ? "Saving..." : "Save scores")"
+                              Icon="save" ButtonStyle="ButtonStyle.Primary"
+                              Disabled="@saving" Click="@SaveAllAsync" />
+            }
+            <RadzenButton Text="Back" Icon="arrow_back" Variant="Variant.Flat"
+                          ButtonStyle="ButtonStyle.Light" Click="@(() => Nav.NavigateTo("/assessments"))" />
+        </div>
+    </div>
+
+    <RadzenCard class="nps-card">
+        @if (sheet.Scores.Count == 0)
+        {
+            <p style="color: var(--nps-ink-500);">
+                No pupils are currently enrolled in <strong>@sheet.Assessment.SchoolClassName</strong>.
+                Enrol pupils first under Family → Students.
+            </p>
+        }
+        else
+        {
+            <table class="nps-score-grid">
+                <thead>
+                    <tr>
+                        <th style="width: 40px;">#</th>
+                        <th>Pupil</th>
+                        <th style="width: 120px;">Score</th>
+                        <th style="width: 100px;">Absent</th>
+                        <th>Remarks</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @for (var i = 0; i < sheet.Scores.Count; i++)
+                    {
+                        var idx = i;
+                        var row = sheet.Scores[idx];
+                        <tr>
+                            <td>@(idx + 1)</td>
+                            <td>
+                                <strong>@row.StudentName</strong>
+                                <br />
+                                <small style="color: var(--nps-ink-500);">@row.StudentAdmissionNumber</small>
+                            </td>
+                            <td>
+                                <RadzenNumeric TValue="decimal?" Value="row.Score"
+                                               Min="0" Max="@((decimal)sheet.Assessment.MaxScore)"
+                                               Step="0.5"
+                                               Disabled="@(sheet.Assessment.IsPublished || row.IsAbsent)"
+                                               Change="@((decimal? v) => UpdateScore(idx, v))" />
+                            </td>
+                            <td style="text-align: center;">
+                                <RadzenCheckBox TValue="bool" Value="row.IsAbsent"
+                                                Disabled="@sheet.Assessment.IsPublished"
+                                                Change="@((bool v) => UpdateAbsent(idx, v))" />
+                            </td>
+                            <td>
+                                <RadzenTextBox Value="row.Remarks ?? string.Empty"
+                                               Disabled="@sheet.Assessment.IsPublished"
+                                               Change="@((string v) => UpdateRemarks(idx, v))"
+                                               Style="width: 100%;" />
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </RadzenCard>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private AssessmentScoreSheetDto? sheet;
+    private bool loading = true;
+    private bool saving;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        try
+        {
+            sheet = await AssessmentService.GetScoreSheetAsync(Id);
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private void UpdateScore(int index, decimal? value)
+    {
+        if (sheet is null) return;
+        var row = sheet.Scores[index];
+        row.Score = value;
+        if (value.HasValue) row.IsAbsent = false;
+    }
+
+    private void UpdateAbsent(int index, bool value)
+    {
+        if (sheet is null) return;
+        var row = sheet.Scores[index];
+        row.IsAbsent = value;
+        if (value) row.Score = null;
+    }
+
+    private void UpdateRemarks(int index, string value)
+    {
+        if (sheet is null) return;
+        sheet.Scores[index].Remarks = string.IsNullOrWhiteSpace(value) ? null : value;
+    }
+
+    private async Task SaveAllAsync()
+    {
+        if (sheet is null) return;
+        saving = true;
+        try
+        {
+            var rows = sheet.Scores
+                .Where(s => s.Score.HasValue || s.IsAbsent || !string.IsNullOrWhiteSpace(s.Remarks))
+                .Select(s => new UpsertAssessmentScoreRequest
+                {
+                    Id = s.Id == Guid.Empty ? null : s.Id,
+                    TermAssessmentId = Id,
+                    StudentId = s.StudentId,
+                    Score = s.Score,
+                    IsAbsent = s.IsAbsent,
+                    Remarks = s.Remarks,
+                })
+                .ToList();
+
+            var result = await AssessmentService.BulkSetScoresAsync(new BulkSetScoresRequest
+            {
+                TermAssessmentId = Id,
+                Scores = rows,
+            });
+
+            if (result.Succeeded)
+            {
+                Notification.Notify(NotificationSeverity.Success, "Saved",
+                    $"{rows.Count} score(s) saved.");
+                await LoadAsync();
+            }
+            else
+            {
+                Notification.Notify(NotificationSeverity.Error, "Failed", string.Join("; ", result.Errors));
+            }
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+}

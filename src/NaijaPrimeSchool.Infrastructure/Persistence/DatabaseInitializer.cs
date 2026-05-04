@@ -6,6 +6,7 @@ using NaijaPrimeSchool.Domain.Academics;
 using NaijaPrimeSchool.Domain.Attendance;
 using NaijaPrimeSchool.Domain.Family;
 using NaijaPrimeSchool.Domain.Identity;
+using NaijaPrimeSchool.Domain.Results;
 
 namespace NaijaPrimeSchool.Infrastructure.Persistence;
 
@@ -29,8 +30,123 @@ public static class DatabaseInitializer
         await SeedAcademicLookupsAsync(db, ct);
         await SeedFamilyLookupsAsync(db, ct);
         await SeedAttendanceLookupsAsync(db, ct);
+        await SeedResultsLookupsAsync(db, ct);
         await SeedRolesAsync(sp, ct);
         await SeedSuperAdminAsync(sp, logger, ct);
+    }
+
+    private static async Task SeedResultsLookupsAsync(ApplicationDbContext db, CancellationToken ct)
+    {
+        if (!await db.AssessmentTypes.IgnoreQueryFilters().AnyAsync(ct))
+        {
+            (string Name, string Code, int Max, bool IsExam)[] types =
+            [
+                ("First CA",      "CA1",  20, false),
+                ("Second CA",     "CA2",  20, false),
+                ("Mid-Term Test", "MID",  20, false),
+                ("Assignment",    "ASN",  10, false),
+                ("Project",       "PRJ",  10, false),
+                ("Examination",   "EXAM", 60, true),
+            ];
+            for (var i = 0; i < types.Length; i++)
+            {
+                var t = types[i];
+                db.AssessmentTypes.Add(new AssessmentType
+                {
+                    Name = t.Name,
+                    Code = t.Code,
+                    DefaultMaxScore = t.Max,
+                    IsExam = t.IsExam,
+                    DisplayOrder = i + 1,
+                });
+            }
+        }
+
+        if (!await db.GradeBands.IgnoreQueryFilters().AnyAsync(ct))
+        {
+            (string Name, decimal Lo, decimal Hi, string Desc, string Remark)[] bands =
+            [
+                ("A", 80m, 100m, "Excellent",  "Outstanding performance — keep it up."),
+                ("B", 70m, 79.99m,  "Very Good",  "Very good — aim higher."),
+                ("C", 60m, 69.99m,  "Good",       "Good — apply more effort."),
+                ("D", 50m, 59.99m,  "Pass",       "Fair — work harder."),
+                ("E", 40m, 49.99m,  "Weak Pass",  "Below average — needs improvement."),
+                ("F",  0m, 39.99m,  "Fail",       "Poor — extra support required."),
+            ];
+            for (var i = 0; i < bands.Length; i++)
+            {
+                var g = bands[i];
+                db.GradeBands.Add(new GradeBand
+                {
+                    Name = g.Name,
+                    LowerBound = g.Lo,
+                    UpperBound = g.Hi,
+                    Description = g.Desc,
+                    Remark = g.Remark,
+                    DisplayOrder = i + 1,
+                });
+            }
+        }
+
+        if (!await db.AffectiveTraits.IgnoreQueryFilters().AnyAsync(ct))
+        {
+            string[] traits =
+            [
+                "Punctuality",
+                "Attentiveness",
+                "Honesty",
+                "Neatness",
+                "Politeness",
+                "Cooperation",
+                "Class Participation",
+                "Self-control",
+            ];
+            for (var i = 0; i < traits.Length; i++)
+            {
+                db.AffectiveTraits.Add(new AffectiveTrait { Name = traits[i], DisplayOrder = i + 1 });
+            }
+        }
+
+        if (!await db.PsychomotorSkills.IgnoreQueryFilters().AnyAsync(ct))
+        {
+            string[] skills =
+            [
+                "Handwriting",
+                "Drawing & Painting",
+                "Music",
+                "Sports & Games",
+                "Public Speaking",
+                "Crafts",
+                "Verbal Fluency",
+            ];
+            for (var i = 0; i < skills.Length; i++)
+            {
+                db.PsychomotorSkills.Add(new PsychomotorSkill { Name = skills[i], DisplayOrder = i + 1 });
+            }
+        }
+
+        if (!await db.TraitRatings.IgnoreQueryFilters().AnyAsync(ct))
+        {
+            (string Name, int Value)[] ratings =
+            [
+                ("Excellent", 5),
+                ("Very Good", 4),
+                ("Good",      3),
+                ("Fair",      2),
+                ("Poor",      1),
+            ];
+            for (var i = 0; i < ratings.Length; i++)
+            {
+                db.TraitRatings.Add(new TraitRating
+                {
+                    Name = ratings[i].Name,
+                    Value = ratings[i].Value,
+                    DisplayOrder = i + 1,
+                });
+            }
+        }
+
+        await db.SaveChangesAsync(ct);
     }
 
     private static async Task SeedAttendanceLookupsAsync(ApplicationDbContext db, CancellationToken ct)

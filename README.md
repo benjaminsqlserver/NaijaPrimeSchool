@@ -2,14 +2,15 @@
 
 A modern school management system for Nigerian primary schools, built with **.NET 10**, **Blazor Auto**, **Clean Architecture**, **SQL Server**, and **Radzen Blazor Components**.
 
-Four sprints have shipped. **Sprint 1** delivered the authentication & authorization foundation: user accounts, role-based access control, login/logout, activation/deactivation, and the SuperAdmin user-management screens. **Sprint 2** built the academic domain on top of that foundation: sessions, terms, class arms, subjects, timetable periods, and a click-to-edit weekly timetable grid. **Sprint 3** plugged students and parents into that academic structure: pupil profiles, parent/guardian directory, parent-to-pupil linkage with relationship + primary-contact + pickup flags, and per-session enrolment with a withdrawal lifecycle. **Sprint 4** lands attendance: a daily class register, per-subject session attendance off the timetable, the AttendanceStatus lookup, a submit/reopen lifecycle, and a per-class percentage summary.
+Five sprints have shipped. **Sprint 1** delivered the authentication & authorization foundation: user accounts, role-based access control, login/logout, activation/deactivation, and the SuperAdmin user-management screens. **Sprint 2** built the academic domain on top of that foundation: sessions, terms, class arms, subjects, timetable periods, and a click-to-edit weekly timetable grid. **Sprint 3** plugged students and parents into that academic structure: pupil profiles, parent/guardian directory, parent-to-pupil linkage with relationship + primary-contact + pickup flags, and per-session enrolment with a withdrawal lifecycle. **Sprint 4** lands attendance: a daily class register, per-subject session attendance off the timetable, the AttendanceStatus lookup, a submit/reopen lifecycle, and a per-class percentage summary. **Sprint 5** closes the academic loop: a per-(term, class, subject) gradebook of TermAssessments and AssessmentScores, a result computation pipeline that produces SubjectResults with grade bands and class positions, and per-(pupil, term) ReportCards with affective and psychomotor ratings, attendance roll-up, and a publish/unpublish lifecycle.
 
 Implementation walk-throughs for each sprint live at the repo root:
 
 - `Sprint 1 - Implementation Guide.pdf`
 - `Sprint 2 - Implementation Guide.pdf`
 - `Sprint 3 - Implementation Guide.pdf`
-- `Sprint 4 - Implementation Guide.pdf` 
+- `Sprint 4 - Implementation Guide.pdf`
+- `Sprint 5 - Implementation Guide.docx`
 
 ---
 
@@ -87,6 +88,27 @@ Implementation walk-throughs for each sprint live at the repo root:
   - Per-class summary view across a term: days counted, days present/late/absent/excused, plus a colour-coded percentage badge (≥ 90% green, ≥ 75% amber, otherwise red)
 - **Pages added** (`/attendance/daily`, `/attendance/subject`, `/attendance/summary`), gated to **SuperAdmin** + **HeadTeacher** + **Teacher** (teachers genuinely take registers, so they have write access)
 
+## Sprint 5 — Assessments, results & report cards ✅
+
+- **Gradebook**
+  - **TermAssessment** keyed by (Term × SchoolClass × Subject) with `AssessmentType` (CA1, CA2, Mid-Term, Assignment, Project, Examination), max score, multiplier weight, and an assessment date
+  - **AssessmentScore** per (assessment, pupil) with absent flag, decimal score, and free-text remarks
+  - Score-sheet page pre-loads every actively-enrolled pupil for the class so a class teacher can fill in scores in one pass
+  - Publish / unpublish lifecycle on each assessment — published assessments are read-only; unpublishing is needed before edit or delete
+- **Result computation**
+  - **SubjectResult** per (pupil, term, subject) carrying weighted total, percentage, `GradeBand`, dense-ranked position in class, and a `IsFinalised` flag
+  - One-click recompute (idempotent) and Compute & finalise (locks the rows) on the results page
+  - Service-level guards: cannot delete a finalised result, cannot recompute over finalised rows without an explicit reopen
+- **Report cards**
+  - **ReportCard** per (pupil, term) carrying subjects-taken, total score, average percentage, position, attendance roll-up (days present/absent/late, total school days), and the next-term-begins date
+  - Affective traits and psychomotor skills sections — each rated on the seeded 5-point `TraitRating` ladder (Excellent, Very Good, Good, Fair, Poor)
+  - Class teacher's comment + head teacher's comment as free text
+  - Generate / refresh batch action that pulls together every SubjectResult, joins to the sprint-4 attendance summary, and ranks pupils by average percentage
+  - Publish / unpublish flow — published cards are read-only and never overwritten by subsequent regenerations
+- **Lookup tables (no enums)**
+  - `AssessmentTypes` (with `IsExam` flag), `GradeBands` (with `LowerBound`/`UpperBound` and `Remark`), `AffectiveTraits`, `PsychomotorSkills`, `TraitRatings` — every domain concept that would normally be a C# enum is a first-class table, seeded on startup
+- **Pages added** (`/assessments`, `/assessments/{id}/scores`, `/results`, `/reports`, `/reports/{id}`) — gradebook pages gated to **SuperAdmin** + **HeadTeacher** + **Teacher**; results and report-card pages gated to **SuperAdmin** + **HeadTeacher**
+
 ## Cross-cutting (every sprint)
 
 - **Beautiful, inviting UI**
@@ -94,7 +116,7 @@ Implementation walk-throughs for each sprint live at the repo root:
   - Radzen Blazor components (DataGrid, Dialog, Notification, Layout, Sidebar, Forms)
   - Responsive layout
 - **Data integrity**
-  - No enums; every lookup (roles, titles, genders, term types, class levels, week days, relationships, enrolment statuses, blood groups, marital statuses, attendance statuses, …) is a first-class table
+  - No enums; every lookup (roles, titles, genders, term types, class levels, week days, relationships, enrolment statuses, blood groups, marital statuses, attendance statuses, assessment types, grade bands, affective traits, psychomotor skills, trait ratings, …) is a first-class table
   - Soft delete for all entities, enforced globally via EF Core query filters
   - Auditing (CreatedOn/By, ModifiedOn/By, DeletedOn/By) applied automatically in `SaveChanges`
 
@@ -122,20 +144,23 @@ NaijaPrimeSchool/
 │   │   ├── Identity/                            # ApplicationUser, ApplicationRole, Title, Gender, Roles (sprint 1)
 │   │   ├── Academics/                           # Session, Term, SchoolClass, Subject, Timetable* (sprint 2)
 │   │   ├── Family/                              # Student, Parent, StudentParent, Enrolment + lookups (sprint 3)
-│   │   └── Attendance/                          # Daily/Subject registers + AttendanceStatus lookup (sprint 4)
+│   │   ├── Attendance/                          # Daily/Subject registers + AttendanceStatus lookup (sprint 4)
+│   │   └── Results/                             # TermAssessment, SubjectResult, ReportCard + lookups (sprint 5)
 │   ├── NaijaPrimeSchool.Application/            # DTOs, service contracts, shared abstractions
 │   │   ├── Common/                              # ICurrentUser, OperationResult
 │   │   ├── Users/                               # IUserService, ILookupService, DTOs (sprint 1)
 │   │   ├── Academics/                           # I*Service interfaces and DTOs (sprint 2)
 │   │   ├── Family/                              # IStudentService, IParentService, IEnrolmentService, DTOs (sprint 3)
-│   │   └── Attendance/                          # IDailyAttendanceService, ISubjectAttendanceService, DTOs (sprint 4)
+│   │   ├── Attendance/                          # IDailyAttendanceService, ISubjectAttendanceService, DTOs (sprint 4)
+│   │   └── Results/                             # IAssessmentService, IResultService, IReportCardService, DTOs (sprint 5)
 │   ├── NaijaPrimeSchool.Infrastructure/         # EF Core DbContext, Identity stores, service impls, seed, migrations
 │   ├── NaijaPrimeSchool.Web/                    # Blazor server host (auth endpoints, layout, pages, Program.cs)
 │   │   └── Components/Pages/
 │   │       ├── Users/                           # User management pages (sprint 1)
 │   │       ├── Academics/                       # Sessions, Terms, Classes, Subjects, Periods, Timetable (sprint 2)
 │   │       ├── Family/                          # Students, Parents, Enrolments (sprint 3)
-│   │       └── Attendance/                      # Daily, Subject and Summary attendance pages (sprint 4)
+│   │       ├── Attendance/                      # Daily, Subject and Summary attendance pages (sprint 4)
+│   │       └── Results/                         # Assessments, Score sheet, Results, Report cards (sprint 5)
 │   └── NaijaPrimeSchool.Web.Client/             # Blazor WebAssembly client (Auto interactivity)
 ├── tools/                                       # Scripts (e.g. sprint guide generators)
 └── NaijaPrimeSchool.slnx
@@ -299,9 +324,16 @@ User management screens are gated behind the `ManageUsers` policy, which require
 | `src/NaijaPrimeSchool.Infrastructure/Services/DailyAttendanceService.cs` | Daily register CRUD + class/student summaries |
 | `src/NaijaPrimeSchool.Infrastructure/Services/SubjectAttendanceService.cs` | Per-lesson register CRUD |
 | `src/NaijaPrimeSchool.Web/Components/Pages/Attendance/` | Daily, Subject, and Summary attendance pages |
+| `src/NaijaPrimeSchool.Domain/Results/` | TermAssessment, AssessmentScore, SubjectResult, ReportCard + lookups (sprint 5) |
+| `src/NaijaPrimeSchool.Application/Results/` | I*Service contracts and DTOs for assessments / results / report cards |
+| `src/NaijaPrimeSchool.Infrastructure/Services/AssessmentService.cs` | Gradebook CRUD + score-sheet bulk save |
+| `src/NaijaPrimeSchool.Infrastructure/Services/ResultService.cs` | Compute weighted percentages, grade bands, positions |
+| `src/NaijaPrimeSchool.Infrastructure/Services/ReportCardService.cs` | Generate cards, edit comments + ratings, publish |
+| `src/NaijaPrimeSchool.Web/Components/Pages/Results/` | Assessments, score sheet, results, report cards |
 | `tools/generate_sprint2_guide.py` | Generator for `Sprint 2 - Implementation Guide.docx` |
 | `tools/generate_sprint3_guide.py` | Generator for `Sprint 3 - Implementation Guide.docx` |
 | `tools/generate_sprint4_guide.py` | Generator for `Sprint 4 - Implementation Guide.docx` |
+| `tools/generate_sprint5_guide.py` | Generator for `Sprint 5 - Implementation Guide.docx` |
 
 ---
 
@@ -313,10 +345,10 @@ Delivered:
 - ✅ **Sprint 2** — Academic domain (sessions, terms, classes, subjects, periods, timetable grid)
 - ✅ **Sprint 3** — Students & parents (pupil profiles, parent directory, linkage, enrolment)
 - ✅ **Sprint 4** — Attendance (daily + per-subject registers, submit/reopen lifecycle, summary)
+- ✅ **Sprint 5** — Assessments, results & report cards (gradebook, weighted compute, grade bands, term cards)
 
 Planned for upcoming sprints:
 
-- Sprint 5 — Assessments, exams, result computation, report cards
 - Sprint 6 — Fees, invoices, receipts, bursar workflows
 - Sprint 7 — Store & inventory management for the storekeeper
 - Sprint 8 — Parent and student portals

@@ -503,3 +503,33 @@ h1:focus {
     color: #b8860b;
     font-style: italic;
 }
+
+/* ===================== Score & trait grids (sprint 5) ===================== */
+.nps-score-grid,
+.nps-trait-grid {
+    width: 100%;
+    border-collapse: collapse;
+    background: #fff;
+}
+
+.nps-score-grid th,
+.nps-score-grid td,
+.nps-trait-grid th,
+.nps-trait-grid td {
+    border: 1px solid #e5e7eb;
+    padding: 0.5rem 0.75rem;
+    vertical-align: middle;
+    text-align: left;
+}
+
+.nps-score-grid thead th,
+.nps-trait-grid thead th {
+    background: #f0fdf4;
+    color: #05613c;
+    font-weight: 600;
+}
+
+.nps-score-grid tbody tr:hover,
+.nps-trait-grid tbody tr:hover {
+    background: #f8faf9;
+}

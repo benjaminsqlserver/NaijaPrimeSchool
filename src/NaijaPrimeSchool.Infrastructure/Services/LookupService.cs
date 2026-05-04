@@ -165,4 +165,34 @@ public class LookupService(
             .OrderBy(s => s.DisplayOrder)
             .Select(s => new LookupDto { Id = s.Id, Name = s.Name, Code = s.Code })
             .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<LookupDto>> GetAssessmentTypesAsync(CancellationToken ct = default) =>
+        await db.AssessmentTypes
+            .OrderBy(t => t.DisplayOrder)
+            .Select(t => new LookupDto { Id = t.Id, Name = t.Name, Code = t.Code })
+            .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<LookupDto>> GetGradeBandsAsync(CancellationToken ct = default) =>
+        await db.GradeBands
+            .OrderBy(g => g.DisplayOrder)
+            .Select(g => new LookupDto { Id = g.Id, Name = g.Name, Code = g.Description })
+            .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<LookupDto>> GetAffectiveTraitsAsync(CancellationToken ct = default) =>
+        await db.AffectiveTraits
+            .OrderBy(t => t.DisplayOrder)
+            .Select(t => new LookupDto { Id = t.Id, Name = t.Name })
+            .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<LookupDto>> GetPsychomotorSkillsAsync(CancellationToken ct = default) =>
+        await db.PsychomotorSkills
+            .OrderBy(s => s.DisplayOrder)
+            .Select(s => new LookupDto { Id = s.Id, Name = s.Name })
+            .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<LookupDto>> GetTraitRatingsAsync(CancellationToken ct = default) =>
+        await db.TraitRatings
+            .OrderBy(r => r.DisplayOrder)
+            .Select(r => new LookupDto { Id = r.Id, Name = r.Name, Code = r.Value.ToString() })
+            .ToListAsync(ct);
 }
