@@ -22,4 +22,10 @@ public interface ILookupService
     Task<IReadOnlyList<LookupDto>> GetParentsAsync(string? searchTerm = null, CancellationToken ct = default);
 
     Task<IReadOnlyList<LookupDto>> GetAttendanceStatusesAsync(CancellationToken ct = default);
+
+    Task<IReadOnlyList<LookupDto>> GetAssessmentTypesAsync(CancellationToken ct = default);
+    Task<IReadOnlyList<LookupDto>> GetGradeBandsAsync(CancellationToken ct = default);
+    Task<IReadOnlyList<LookupDto>> GetAffectiveTraitsAsync(CancellationToken ct = default);
+    Task<IReadOnlyList<LookupDto>> GetPsychomotorSkillsAsync(CancellationToken ct = default);
+    Task<IReadOnlyList<LookupDto>> GetTraitRatingsAsync(CancellationToken ct = default);
 }

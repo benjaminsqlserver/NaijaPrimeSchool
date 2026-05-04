@@ -1,0 +1,303 @@
+@page "/reports"
+@attribute [Authorize(Roles = $"{Roles.SuperAdmin},{Roles.HeadTeacher}")]
+@rendermode InteractiveServer
+
+@inject IReportCardService ReportCardService
+@inject ITermService TermService
+@inject ILookupService LookupService
+@inject NavigationManager Nav
+@inject DialogService Dialog
+@inject NotificationService Notification
+
+<PageTitle>Report cards · Naija Prime School</PageTitle>
+
+<div class="nps-page-header">
+    <div>
+        <h1>Report cards</h1>
+        <p>Generate, edit, and publish per-pupil end-of-term reports.</p>
+    </div>
+    <div class="nps-page-actions">
+        <RadzenButton Text="Generate / refresh" Icon="auto_awesome" ButtonStyle="ButtonStyle.Primary"
+                      Click="@OpenGenerateDialog" Disabled="@(!CanGenerate)" />
+    </div>
+</div>
+
+<RadzenCard class="nps-card" Style="margin-bottom: 1rem;">
+    <div class="nps-filter-bar">
+        <div class="nps-field">
+            <label>Term</label>
+            <RadzenDropDown TValue="Guid?" Data="@terms" @bind-Value="termId"
+                            AllowClear="true" Placeholder="All terms"
+                            Change="@(_ => LoadAsync())" Style="min-width: 220px;">
+                <Template Context="t">
+                    @{ var dto = (TermDto)t; }
+                    @dto.TermTypeName — @dto.SessionName
+                </Template>
+            </RadzenDropDown>
+        </div>
+        <div class="nps-field">
+            <label>Class</label>
+            <RadzenDropDown TValue="Guid?" Data="@classes" TextProperty="Name" ValueProperty="Id"
+                            @bind-Value="classId" AllowClear="true" Placeholder="All classes"
+                            Change="@(_ => LoadAsync())" Style="min-width: 240px;" />
+        </div>
+        <div class="nps-field">
+            <label>Status</label>
+            <RadzenDropDown TValue="bool?" Data="@statusOptions" TextProperty="Text" ValueProperty="Value"
+                            @bind-Value="isPublished" AllowClear="true" Placeholder="All"
+                            Change="@(_ => LoadAsync())" Style="min-width: 180px;" />
+        </div>
+    </div>
+</RadzenCard>
+
+<RadzenCard class="nps-card">
+    <RadzenDataGrid TItem="ReportCardDto" Data="@cards" IsLoading="@loading"
+                    AllowPaging="true" PageSize="50" EmptyText="No report cards yet — generate them above.">
+        <Columns>
+            <RadzenDataGridColumn TItem="ReportCardDto" Title="Pupil">
+                <Template Context="c">
+                    <strong>@c.StudentName</strong>
+                    <br />
+                    <small style="color: var(--nps-ink-500);">@c.StudentAdmissionNumber</small>
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="ReportCardDto" Title="Term & class">
+                <Template Context="c">
+                    <strong>@c.SchoolClassName</strong>
+                    <br />
+                    <small style="color: var(--nps-ink-500);">@c.TermName</small>
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="ReportCardDto" Title="Subjects" Property="SubjectsTaken" Width="100px" />
+            <RadzenDataGridColumn TItem="ReportCardDto" Title="Average" Width="120px">
+                <Template Context="c">
+                    <strong>@c.AveragePercentage.ToString("F2")%</strong>
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="ReportCardDto" Title="Position" Width="120px">
+                <Template Context="c">
+                    @(c.Position.HasValue ? $"{c.Position} of {c.StudentsInClass}" : "—")
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="ReportCardDto" Title="Attendance" Width="160px">
+                <Template Context="c">
+                    @c.DaysPresent / @c.TotalSchoolDays days
+                    <br />
+                    <small style="color: var(--nps-ink-500);">@c.DaysAbsent absent · @c.DaysLate late</small>
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="ReportCardDto" Title="Status" Width="120px">
+                <Template Context="c">
+                    @if (c.IsPublished)
+                    {
+                        <RadzenBadge Text="Published" BadgeStyle="BadgeStyle.Success" Variant="Variant.Flat" />
+                    }
+                    else
+                    {
+                        <RadzenBadge Text="Draft" BadgeStyle="BadgeStyle.Secondary" Variant="Variant.Flat" />
+                    }
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="ReportCardDto" Title="Actions" Sortable="false"
+                                  Width="200px" TextAlign="TextAlign.Right">
+                <Template Context="c">
+                    <div class="nps-inline-actions">
+                        <RadzenButton Icon="visibility" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                      ButtonStyle="ButtonStyle.Primary" title="Open"
+                                      Click="@(() => Nav.NavigateTo($"/reports/{c.Id}"))" />
+                        @if (c.IsPublished)
+                        {
+                            <RadzenButton Icon="lock_open" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                          ButtonStyle="ButtonStyle.Warning" title="Unpublish"
+                                          Click="@(() => UnpublishAsync(c))" />
+                        }
+                        else
+                        {
+                            <RadzenButton Icon="lock" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                          ButtonStyle="ButtonStyle.Success" title="Publish"
+                                          Click="@(() => PublishAsync(c))" />
+                        }
+                        <RadzenButton Icon="delete" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                      ButtonStyle="ButtonStyle.Danger" title="Delete"
+                                      Click="@(() => DeleteAsync(c))" />
+                    </div>
+                </Template>
+            </RadzenDataGridColumn>
+        </Columns>
+    </RadzenDataGrid>
+</RadzenCard>
+
+@if (showGenerate)
+{
+    <RadzenCard class="nps-card" Style="margin-top:1rem;">
+        <h3 style="margin: 0 0 1rem;">Generate / refresh report cards</h3>
+        <p style="color: var(--nps-ink-500);">
+            Pulls together the subject results, attendance counts, and class positions for every pupil in
+            the selected (term, class). Existing draft cards are refreshed; published cards are left alone.
+        </p>
+        <div class="nps-form-grid">
+            <div class="nps-field">
+                <label>Term *</label>
+                <RadzenDropDown TValue="Guid?" Data="@terms" @bind-Value="genTermId"
+                                Placeholder="Pick a term">
+                    <Template Context="t">
+                        @{ var dto = (TermDto)t; }
+                        @dto.TermTypeName — @dto.SessionName
+                    </Template>
+                </RadzenDropDown>
+            </div>
+            <div class="nps-field">
+                <label>Class *</label>
+                <RadzenDropDown TValue="Guid?" Data="@classes" TextProperty="Name" ValueProperty="Id"
+                                @bind-Value="genClassId" Placeholder="Pick a class" />
+            </div>
+            <div class="nps-field nps-span-2">
+                <label>Next term begins (optional)</label>
+                <RadzenDatePicker TValue="DateTime?" @bind-Value="genNextTerm"
+                                  DateFormat="d MMM yyyy" ShowTime="false" />
+            </div>
+        </div>
+        <div class="nps-form-actions">
+            <RadzenButton Text="Cancel" ButtonType="ButtonType.Button"
+                          ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat"
+                          Click="@(() => showGenerate = false)" />
+            <RadzenButton Text="@(generating ? "Generating..." : "Generate")"
+                          Icon="auto_awesome" ButtonStyle="ButtonStyle.Primary"
+                          Disabled="@generating" Click="@GenerateAsync" />
+        </div>
+    </RadzenCard>
+}
+
+@code {
+    private List<ReportCardDto> cards = [];
+    private List<TermDto> terms = [];
+    private IReadOnlyList<LookupDto> classes = [];
+
+    private bool loading;
+    private Guid? termId;
+    private Guid? classId;
+    private bool? isPublished;
+
+    private record StatusOption(string Text, bool? Value);
+    private readonly List<StatusOption> statusOptions =
+    [
+        new StatusOption("Draft", false),
+        new StatusOption("Published", true),
+    ];
+
+    private bool showGenerate;
+    private bool generating;
+    private Guid? genTermId;
+    private Guid? genClassId;
+    private DateTime? genNextTerm;
+
+    private bool CanGenerate => terms.Count > 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        terms = (await TermService.ListAsync()).ToList();
+        termId = terms.FirstOrDefault(t => t.IsCurrent)?.Id;
+        classes = await LookupService.GetClassesForSessionAsync();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        try
+        {
+            cards = (await ReportCardService.ListAsync(new ReportCardFilter
+            {
+                TermId = termId,
+                SchoolClassId = classId,
+                IsPublished = isPublished,
+            })).ToList();
+        }
+        finally
+        {
+            loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void OpenGenerateDialog()
+    {
+        genTermId = termId ?? terms.FirstOrDefault(t => t.IsCurrent)?.Id;
+        genClassId = classId;
+        genNextTerm = null;
+        showGenerate = true;
+    }
+
+    private async Task GenerateAsync()
+    {
+        if (genTermId is null || genClassId is null)
+        {
+            Notification.Notify(NotificationSeverity.Warning, "Missing fields", "Pick a term and a class.");
+            return;
+        }
+
+        generating = true;
+        try
+        {
+            var op = await ReportCardService.GenerateAsync(new GenerateReportCardsRequest
+            {
+                TermId = genTermId.Value,
+                SchoolClassId = genClassId.Value,
+                NextTermBegins = genNextTerm.HasValue ? DateOnly.FromDateTime(genNextTerm.Value) : null,
+            });
+
+            if (op.Succeeded && op.Data is not null)
+            {
+                Notification.Notify(NotificationSeverity.Success, "Generated",
+                    $"{op.Data.CardsGenerated} new, {op.Data.CardsUpdated} refreshed.");
+                showGenerate = false;
+                termId = genTermId;
+                classId = genClassId;
+                await LoadAsync();
+            }
+            else
+            {
+                Notification.Notify(NotificationSeverity.Error, "Failed", string.Join("; ", op.Errors));
+            }
+        }
+        finally
+        {
+            generating = false;
+        }
+    }
+
+    private async Task PublishAsync(ReportCardDto c)
+    {
+        var result = await ReportCardService.PublishAsync(c.Id);
+        ShowResult(result, $"Report card for {c.StudentName} published.");
+        await LoadAsync();
+    }
+
+    private async Task UnpublishAsync(ReportCardDto c)
+    {
+        var result = await ReportCardService.UnpublishAsync(c.Id);
+        ShowResult(result, $"Report card for {c.StudentName} unpublished.");
+        await LoadAsync();
+    }
+
+    private async Task DeleteAsync(ReportCardDto c)
+    {
+        var confirm = await Dialog.Confirm(
+            $"Delete the report card for {c.StudentName}?",
+            "Delete report card",
+            new ConfirmOptions { OkButtonText = "Delete", CancelButtonText = "Cancel" });
+        if (confirm != true) return;
+
+        var result = await ReportCardService.SoftDeleteAsync(c.Id);
+        ShowResult(result, "Report card deleted.");
+        await LoadAsync();
+    }
+
+    private void ShowResult(OperationResult result, string success)
+    {
+        if (result.Succeeded)
+            Notification.Notify(NotificationSeverity.Success, "Done", success);
+        else
+            Notification.Notify(NotificationSeverity.Error, "Failed", string.Join("; ", result.Errors));
+    }
+}

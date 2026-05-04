@@ -1,0 +1,259 @@
+@page "/results"
+@attribute [Authorize(Roles = $"{Roles.SuperAdmin},{Roles.HeadTeacher}")]
+@rendermode InteractiveServer
+
+@inject IResultService ResultService
+@inject ISessionService SessionService
+@inject ITermService TermService
+@inject ISubjectService SubjectService
+@inject ILookupService LookupService
+@inject DialogService Dialog
+@inject NotificationService Notification
+
+<PageTitle>Results · Naija Prime School</PageTitle>
+
+<div class="nps-page-header">
+    <div>
+        <h1>Subject results</h1>
+        <p>Computed from the assessments. Recompute as scores change, finalise when ready.</p>
+    </div>
+    <div class="nps-page-actions">
+        <RadzenButton Text="Recompute" Icon="calculate" ButtonStyle="ButtonStyle.Info"
+                      Click="@(() => ComputeAsync(false))" Disabled="@(!CanCompute)" />
+        <RadzenButton Text="Compute & finalise" Icon="lock" ButtonStyle="ButtonStyle.Primary"
+                      Click="@(() => ComputeAsync(true))" Disabled="@(!CanCompute)" />
+    </div>
+</div>
+
+<RadzenCard class="nps-card" Style="margin-bottom: 1rem;">
+    <div class="nps-filter-bar">
+        <div class="nps-field">
+            <label>Term *</label>
+            <RadzenDropDown TValue="Guid?" Data="@terms" @bind-Value="termId"
+                            AllowClear="true" Placeholder="Pick a term"
+                            Change="@(_ => LoadAsync())" Style="min-width: 220px;">
+                <Template Context="t">
+                    @{ var dto = (TermDto)t; }
+                    @dto.TermTypeName — @dto.SessionName
+                </Template>
+            </RadzenDropDown>
+        </div>
+        <div class="nps-field">
+            <label>Class *</label>
+            <RadzenDropDown TValue="Guid?" Data="@classes" TextProperty="Name" ValueProperty="Id"
+                            @bind-Value="classId" AllowClear="true" Placeholder="Pick a class"
+                            Change="@(_ => LoadAsync())" Style="min-width: 240px;" />
+        </div>
+        <div class="nps-field">
+            <label>Subject (optional)</label>
+            <RadzenDropDown TValue="Guid?" Data="@subjects" TextProperty="Name" ValueProperty="Id"
+                            @bind-Value="subjectId" AllowClear="true" Placeholder="All subjects"
+                            Change="@(_ => LoadAsync())" Style="min-width: 200px;" />
+        </div>
+    </div>
+</RadzenCard>
+
+<RadzenCard class="nps-card">
+    @if (results.Count == 0)
+    {
+        <p style="color: var(--nps-ink-500);">
+            No computed results yet. Pick a term and class above, then click <strong>Recompute</strong>.
+        </p>
+    }
+    else
+    {
+        <RadzenDataGrid TItem="SubjectResultDto" Data="@results" IsLoading="@loading"
+                        AllowPaging="true" PageSize="50" AllowSorting="true">
+            <Columns>
+                <RadzenDataGridColumn TItem="SubjectResultDto" Title="Pupil">
+                    <Template Context="r">
+                        <strong>@r.StudentName</strong>
+                        <br />
+                        <small style="color: var(--nps-ink-500);">@r.StudentAdmissionNumber</small>
+                    </Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="SubjectResultDto" Title="Subject" Property="SubjectName" />
+                <RadzenDataGridColumn TItem="SubjectResultDto" Title="Total" Property="TotalScore" Width="100px"
+                                      FormatString="{0:F2}" />
+                <RadzenDataGridColumn TItem="SubjectResultDto" Title="%" Property="Percentage" Width="100px">
+                    <Template Context="r">
+                        <strong>@r.Percentage.ToString("F2")%</strong>
+                    </Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="SubjectResultDto" Title="Grade" Width="120px">
+                    <Template Context="r">
+                        @if (!string.IsNullOrEmpty(r.GradeBandName))
+                        {
+                            <RadzenBadge Text="@r.GradeBandName"
+                                         BadgeStyle="@GradeStyle(r.GradeBandName)"
+                                         Variant="Variant.Flat" />
+                        }
+                    </Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="SubjectResultDto" Title="Position" Width="100px">
+                    <Template Context="r">
+                        @(r.Position.HasValue ? $"{r.Position} of {r.StudentsInClass}" : "—")
+                    </Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="SubjectResultDto" Title="Status" Width="120px">
+                    <Template Context="r">
+                        @if (r.IsFinalised)
+                        {
+                            <RadzenBadge Text="Finalised" BadgeStyle="BadgeStyle.Success" Variant="Variant.Flat" />
+                        }
+                        else
+                        {
+                            <RadzenBadge Text="Draft" BadgeStyle="BadgeStyle.Secondary" Variant="Variant.Flat" />
+                        }
+                    </Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="SubjectResultDto" Title="Actions" Sortable="false"
+                                      Width="180px" TextAlign="TextAlign.Right">
+                    <Template Context="r">
+                        <div class="nps-inline-actions">
+                            @if (r.IsFinalised)
+                            {
+                                <RadzenButton Icon="lock_open" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                              ButtonStyle="ButtonStyle.Warning" title="Reopen"
+                                              Click="@(() => ReopenAsync(r))" />
+                            }
+                            else
+                            {
+                                <RadzenButton Icon="lock" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                              ButtonStyle="ButtonStyle.Success" title="Finalise"
+                                              Click="@(() => FinaliseAsync(r))" />
+                            }
+                            <RadzenButton Icon="delete" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                          ButtonStyle="ButtonStyle.Danger" title="Delete"
+                                          Click="@(() => DeleteAsync(r))" />
+                        </div>
+                    </Template>
+                </RadzenDataGridColumn>
+            </Columns>
+        </RadzenDataGrid>
+    }
+</RadzenCard>
+
+@code {
+    private List<SubjectResultDto> results = [];
+    private List<TermDto> terms = [];
+    private IReadOnlyList<LookupDto> classes = [];
+    private IReadOnlyList<SubjectDto> subjects = [];
+
+    private bool loading;
+    private Guid? termId;
+    private Guid? classId;
+    private Guid? subjectId;
+
+    private bool CanCompute => termId.HasValue && classId.HasValue;
+
+    protected override async Task OnInitializedAsync()
+    {
+        terms = (await TermService.ListAsync()).ToList();
+        termId = terms.FirstOrDefault(t => t.IsCurrent)?.Id;
+        var sessionId = terms.FirstOrDefault(t => t.Id == termId)?.SessionId;
+        classes = await LookupService.GetClassesForSessionAsync(sessionId);
+        subjects = await SubjectService.ListAsync();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        try
+        {
+            results = (await ResultService.ListAsync(new SubjectResultFilter
+            {
+                TermId = termId,
+                SchoolClassId = classId,
+                SubjectId = subjectId,
+            })).ToList();
+        }
+        finally
+        {
+            loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ComputeAsync(bool finalise)
+    {
+        if (!CanCompute) return;
+
+        if (finalise)
+        {
+            var confirm = await Dialog.Confirm(
+                "Compute and finalise the results? Once finalised, scores cannot be edited until you reopen each result.",
+                "Finalise results",
+                new ConfirmOptions { OkButtonText = "Finalise", CancelButtonText = "Cancel" });
+            if (confirm != true) return;
+        }
+
+        var op = await ResultService.ComputeAsync(new ComputeResultsRequest
+        {
+            TermId = termId!.Value,
+            SchoolClassId = classId!.Value,
+            SubjectId = subjectId,
+            Finalise = finalise,
+        });
+
+        if (op.Succeeded && op.Data is not null)
+        {
+            var msg = $"{op.Data.RowsComputed} row(s) computed";
+            if (finalise) msg += $", {op.Data.RowsFinalised} finalised";
+            if (op.Data.Warnings.Count > 0) msg += $" ({op.Data.Warnings.Count} warning(s))";
+            Notification.Notify(NotificationSeverity.Success, "Computed", msg);
+            await LoadAsync();
+        }
+        else
+        {
+            Notification.Notify(NotificationSeverity.Error, "Failed", string.Join("; ", op.Errors));
+        }
+    }
+
+    private async Task FinaliseAsync(SubjectResultDto r)
+    {
+        var result = await ResultService.FinaliseAsync(r.Id);
+        ShowResult(result, "Result finalised.");
+        await LoadAsync();
+    }
+
+    private async Task ReopenAsync(SubjectResultDto r)
+    {
+        var result = await ResultService.ReopenAsync(r.Id);
+        ShowResult(result, "Result reopened.");
+        await LoadAsync();
+    }
+
+    private async Task DeleteAsync(SubjectResultDto r)
+    {
+        var confirm = await Dialog.Confirm(
+            $"Delete the result for {r.StudentName} in {r.SubjectName}?",
+            "Delete result",
+            new ConfirmOptions { OkButtonText = "Delete", CancelButtonText = "Cancel" });
+        if (confirm != true) return;
+
+        var result = await ResultService.SoftDeleteAsync(r.Id);
+        ShowResult(result, "Result deleted.");
+        await LoadAsync();
+    }
+
+    private void ShowResult(OperationResult result, string success)
+    {
+        if (result.Succeeded)
+            Notification.Notify(NotificationSeverity.Success, "Done", success);
+        else
+            Notification.Notify(NotificationSeverity.Error, "Failed", string.Join("; ", result.Errors));
+    }
+
+    private static BadgeStyle GradeStyle(string? grade) => grade switch
+    {
+        "A" => BadgeStyle.Success,
+        "B" => BadgeStyle.Info,
+        "C" => BadgeStyle.Primary,
+        "D" => BadgeStyle.Warning,
+        "E" => BadgeStyle.Warning,
+        "F" => BadgeStyle.Danger,
+        _ => BadgeStyle.Secondary,
+    };
+}

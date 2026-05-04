@@ -1,0 +1,431 @@
+@page "/assessments"
+@attribute [Authorize(Roles = $"{Roles.SuperAdmin},{Roles.HeadTeacher},{Roles.Teacher}")]
+@rendermode InteractiveServer
+
+@inject IAssessmentService AssessmentService
+@inject ISessionService SessionService
+@inject ITermService TermService
+@inject ISubjectService SubjectService
+@inject ILookupService LookupService
+@inject NavigationManager Nav
+@inject DialogService Dialog
+@inject NotificationService Notification
+
+<PageTitle>Assessments · Naija Prime School</PageTitle>
+
+<div class="nps-page-header">
+    <div>
+        <h1>Assessments</h1>
+        <p>Continuous assessments, mid-term tests, projects and exams. Set up the gradebook here, then enter scores from each row.</p>
+    </div>
+    <div class="nps-page-actions">
+        <RadzenButton Text="New assessment" Icon="add" ButtonStyle="ButtonStyle.Primary"
+                      Click="@(() => OpenForm(null))" />
+    </div>
+</div>
+
+<RadzenCard class="nps-card" Style="margin-bottom: 1rem;">
+    <div class="nps-filter-bar">
+        <div class="nps-field">
+            <label>Session</label>
+            <RadzenDropDown TValue="Guid?" Data="@sessions" TextProperty="Name" ValueProperty="Id"
+                            @bind-Value="sessionId" AllowClear="true" Placeholder="All sessions"
+                            Change="@(_ => SessionChangedAsync())" Style="min-width: 200px;" />
+        </div>
+        <div class="nps-field">
+            <label>Term</label>
+            <RadzenDropDown TValue="Guid?" Data="@terms" @bind-Value="termId"
+                            AllowClear="true" Placeholder="All terms"
+                            Change="@(_ => LoadAsync())" Style="min-width: 200px;">
+                <Template Context="t">
+                    @{ var dto = (TermDto)t; }
+                    @dto.TermTypeName — @dto.SessionName
+                </Template>
+            </RadzenDropDown>
+        </div>
+        <div class="nps-field">
+            <label>Class</label>
+            <RadzenDropDown TValue="Guid?" Data="@classes" TextProperty="Name" ValueProperty="Id"
+                            @bind-Value="classId" AllowClear="true" Placeholder="All classes"
+                            Change="@(_ => LoadAsync())" Style="min-width: 240px;" />
+        </div>
+        <div class="nps-field">
+            <label>Subject</label>
+            <RadzenDropDown TValue="Guid?" Data="@subjects" TextProperty="Name" ValueProperty="Id"
+                            @bind-Value="subjectId" AllowClear="true" Placeholder="All subjects"
+                            Change="@(_ => LoadAsync())" Style="min-width: 200px;" />
+        </div>
+        <RadzenButton Text="Refresh" Icon="refresh" Variant="Variant.Flat"
+                      ButtonStyle="ButtonStyle.Light" Click="@LoadAsync" />
+    </div>
+</RadzenCard>
+
+<RadzenCard class="nps-card">
+    <RadzenDataGrid TItem="TermAssessmentDto" Data="@assessments" IsLoading="@loading"
+                    AllowPaging="true" PageSize="25" EmptyText="No assessments match your filters.">
+        <Columns>
+            <RadzenDataGridColumn TItem="TermAssessmentDto" Title="Title" Property="Title">
+                <Template Context="a">
+                    <strong>@a.Title</strong>
+                    <br />
+                    <small style="color: var(--nps-ink-500);">
+                        @a.AssessmentTypeName · max @a.MaxScore · weight @a.Weight
+                    </small>
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="TermAssessmentDto" Title="Class & subject">
+                <Template Context="a">
+                    <strong>@a.SchoolClassName</strong>
+                    <br />
+                    <small style="color: var(--nps-ink-500);">@a.SubjectName (@a.SubjectCode)</small>
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="TermAssessmentDto" Title="Term" Property="TermName" Width="200px" />
+            <RadzenDataGridColumn TItem="TermAssessmentDto" Title="Date" Property="AssessmentDate"
+                                  FormatString="{0:d MMM yyyy}" Width="140px">
+                <Template Context="a">
+                    @(a.AssessmentDate.HasValue ? a.AssessmentDate.Value.ToString("d MMM yyyy") : "—")
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="TermAssessmentDto" Title="Scored" Width="100px">
+                <Template Context="a">
+                    <span>@a.ScoredCount / @a.ExpectedCount</span>
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="TermAssessmentDto" Title="Status" Width="120px">
+                <Template Context="a">
+                    @if (a.IsPublished)
+                    {
+                        <RadzenBadge Text="Published" BadgeStyle="BadgeStyle.Success" Variant="Variant.Flat" />
+                    }
+                    else
+                    {
+                        <RadzenBadge Text="Draft" BadgeStyle="BadgeStyle.Secondary" Variant="Variant.Flat" />
+                    }
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="TermAssessmentDto" Title="Actions" Sortable="false"
+                                  Width="220px" TextAlign="TextAlign.Right">
+                <Template Context="a">
+                    <div class="nps-inline-actions">
+                        <RadzenButton Icon="edit_note" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                      ButtonStyle="ButtonStyle.Primary" title="Enter scores"
+                                      Click="@(() => Nav.NavigateTo($"/assessments/{a.Id}/scores"))" />
+                        <RadzenButton Icon="edit" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                      ButtonStyle="ButtonStyle.Light" title="Edit"
+                                      Click="@(() => OpenForm(a))" />
+                        @if (a.IsPublished)
+                        {
+                            <RadzenButton Icon="lock_open" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                          ButtonStyle="ButtonStyle.Warning" title="Unpublish"
+                                          Click="@(() => UnpublishAsync(a))" />
+                        }
+                        else
+                        {
+                            <RadzenButton Icon="lock" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                          ButtonStyle="ButtonStyle.Success" title="Publish"
+                                          Click="@(() => PublishAsync(a))" />
+                        }
+                        <RadzenButton Icon="delete" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                      ButtonStyle="ButtonStyle.Danger" title="Delete"
+                                      Click="@(() => DeleteAsync(a))" />
+                    </div>
+                </Template>
+            </RadzenDataGridColumn>
+        </Columns>
+    </RadzenDataGrid>
+</RadzenCard>
+
+@if (showForm)
+{
+    <RadzenCard class="nps-card" Style="margin-top:1rem;">
+        <h3 style="margin:0 0 1rem;">@(editingId.HasValue ? "Edit assessment" : "New assessment")</h3>
+        <RadzenTemplateForm TItem="AssessmentFormModel" Data="@form" Submit="@SaveAsync">
+            <DataAnnotationsValidator />
+            <div class="nps-form-grid">
+                <div class="nps-field">
+                    <label>Term *</label>
+                    <RadzenDropDown TValue="Guid?" Data="@termsForForm" @bind-Value="form.TermId"
+                                    Placeholder="Pick a term" Disabled="@editingId.HasValue">
+                        <Template Context="t">
+                            @{ var dto = (TermDto)t; }
+                            @dto.TermTypeName — @dto.SessionName
+                        </Template>
+                    </RadzenDropDown>
+                </div>
+                <div class="nps-field">
+                    <label>Class *</label>
+                    <RadzenDropDown TValue="Guid?" Data="@classesForForm" TextProperty="Name" ValueProperty="Id"
+                                    @bind-Value="form.SchoolClassId" Placeholder="Pick a class"
+                                    Disabled="@editingId.HasValue" />
+                </div>
+                <div class="nps-field">
+                    <label>Subject *</label>
+                    <RadzenDropDown TValue="Guid?" Data="@subjects" TextProperty="Name" ValueProperty="Id"
+                                    @bind-Value="form.SubjectId" Placeholder="Pick a subject"
+                                    Disabled="@editingId.HasValue" />
+                </div>
+                <div class="nps-field">
+                    <label>Type *</label>
+                    <RadzenDropDown TValue="Guid?" Data="@assessmentTypes" TextProperty="Name" ValueProperty="Id"
+                                    @bind-Value="form.AssessmentTypeId" Placeholder="Pick a type" />
+                </div>
+                <div class="nps-field nps-span-2">
+                    <label>Title *</label>
+                    <RadzenTextBox @bind-Value="form.Title" Placeholder="e.g. Week 6 test on fractions" />
+                    <ValidationMessage For="() => form.Title" />
+                </div>
+                <div class="nps-field">
+                    <label>Maximum score *</label>
+                    <RadzenNumeric TValue="int" @bind-Value="form.MaxScore" Min="1" Max="1000" />
+                </div>
+                <div class="nps-field">
+                    <label>Weight</label>
+                    <RadzenNumeric TValue="decimal" @bind-Value="form.Weight" Min="0" Step="0.1" />
+                    <small style="color: var(--nps-ink-500);">Multiplier when computing the term's subject total.</small>
+                </div>
+                <div class="nps-field">
+                    <label>Date</label>
+                    <RadzenDatePicker TValue="DateTime?" @bind-Value="form.AssessmentDate"
+                                      DateFormat="d MMM yyyy" ShowTime="false" />
+                </div>
+                <div class="nps-field nps-span-2">
+                    <label>Notes</label>
+                    <RadzenTextArea @bind-Value="form.Notes" Rows="2" />
+                </div>
+            </div>
+            <div class="nps-form-actions">
+                <RadzenButton Text="Cancel" ButtonType="ButtonType.Button"
+                              ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat"
+                              Click="@(() => showForm = false)" />
+                <RadzenButton Text="@(saving ? "Saving..." : "Save")"
+                              Icon="save" ButtonType="ButtonType.Submit"
+                              ButtonStyle="ButtonStyle.Primary" Disabled="@saving" />
+            </div>
+        </RadzenTemplateForm>
+    </RadzenCard>
+}
+
+@code {
+    private IReadOnlyList<TermAssessmentDto> assessments = [];
+    private IReadOnlyList<SessionDto> sessions = [];
+    private List<TermDto> terms = [];
+    private List<TermDto> termsForForm = [];
+    private IReadOnlyList<LookupDto> classes = [];
+    private IReadOnlyList<LookupDto> classesForForm = [];
+    private IReadOnlyList<SubjectDto> subjects = [];
+    private IReadOnlyList<LookupDto> assessmentTypes = [];
+
+    private bool loading;
+    private bool saving;
+    private bool showForm;
+    private Guid? editingId;
+
+    private Guid? sessionId;
+    private Guid? termId;
+    private Guid? classId;
+    private Guid? subjectId;
+
+    private AssessmentFormModel form = new();
+
+    private class AssessmentFormModel
+    {
+        public Guid? TermId { get; set; }
+        public Guid? SchoolClassId { get; set; }
+        public Guid? SubjectId { get; set; }
+        public Guid? AssessmentTypeId { get; set; }
+
+        [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(120)]
+        public string Title { get; set; } = string.Empty;
+
+        public int MaxScore { get; set; } = 100;
+        public decimal Weight { get; set; } = 1m;
+        public DateTime? AssessmentDate { get; set; }
+
+        [System.ComponentModel.DataAnnotations.StringLength(500)]
+        public string? Notes { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        sessions = await SessionService.ListAsync();
+        sessionId = sessions.FirstOrDefault(s => s.IsCurrent)?.Id;
+        await ReloadTermsAsync();
+        termId = terms.FirstOrDefault(t => t.IsCurrent)?.Id ?? terms.FirstOrDefault()?.Id;
+        classes = await LookupService.GetClassesForSessionAsync(sessionId);
+        classesForForm = await LookupService.GetClassesForSessionAsync(sessionId);
+        subjects = await SubjectService.ListAsync();
+        assessmentTypes = await LookupService.GetAssessmentTypesAsync();
+        await LoadAsync();
+    }
+
+    private async Task ReloadTermsAsync()
+    {
+        var allTerms = await TermService.ListAsync();
+        terms = allTerms
+            .Where(t => !sessionId.HasValue || t.SessionId == sessionId.Value)
+            .ToList();
+        termsForForm = allTerms.ToList();
+    }
+
+    private async Task SessionChangedAsync()
+    {
+        termId = null;
+        classId = null;
+        await ReloadTermsAsync();
+        classes = await LookupService.GetClassesForSessionAsync(sessionId);
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        try
+        {
+            assessments = await AssessmentService.ListAsync(new TermAssessmentFilter
+            {
+                TermId = termId,
+                SchoolClassId = classId,
+                SubjectId = subjectId,
+            });
+        }
+        finally
+        {
+            loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task OpenForm(TermAssessmentDto? a)
+    {
+        editingId = a?.Id;
+        if (a is null)
+        {
+            // Default the form to the current filters when starting a new assessment.
+            var defaultType = assessmentTypes.FirstOrDefault();
+            form = new AssessmentFormModel
+            {
+                TermId = termId ?? terms.FirstOrDefault()?.Id,
+                SchoolClassId = classId,
+                SubjectId = subjectId,
+                AssessmentTypeId = defaultType?.Id,
+                Title = string.Empty,
+                MaxScore = 20,
+                Weight = 1m,
+                AssessmentDate = DateTime.Today,
+            };
+        }
+        else
+        {
+            form = new AssessmentFormModel
+            {
+                TermId = a.TermId,
+                SchoolClassId = a.SchoolClassId,
+                SubjectId = a.SubjectId,
+                AssessmentTypeId = a.AssessmentTypeId,
+                Title = a.Title,
+                MaxScore = a.MaxScore,
+                Weight = a.Weight,
+                AssessmentDate = a.AssessmentDate?.ToDateTime(TimeOnly.MinValue),
+                Notes = a.Notes,
+            };
+        }
+        showForm = true;
+        await Task.CompletedTask;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (form.TermId is null || form.SchoolClassId is null
+            || form.SubjectId is null || form.AssessmentTypeId is null)
+        {
+            Notification.Notify(NotificationSeverity.Warning, "Missing fields",
+                "Pick a term, class, subject and assessment type.");
+            return;
+        }
+
+        saving = true;
+        try
+        {
+            OperationResult result = editingId.HasValue
+                ? await AssessmentService.UpdateAsync(new UpdateTermAssessmentRequest
+                {
+                    Id = editingId.Value,
+                    AssessmentTypeId = form.AssessmentTypeId.Value,
+                    Title = form.Title,
+                    MaxScore = form.MaxScore,
+                    Weight = form.Weight,
+                    AssessmentDate = form.AssessmentDate.HasValue
+                        ? DateOnly.FromDateTime(form.AssessmentDate.Value) : null,
+                    Notes = form.Notes,
+                })
+                : await AssessmentService.CreateAsync(new CreateTermAssessmentRequest
+                {
+                    TermId = form.TermId.Value,
+                    SchoolClassId = form.SchoolClassId.Value,
+                    SubjectId = form.SubjectId.Value,
+                    AssessmentTypeId = form.AssessmentTypeId.Value,
+                    Title = form.Title,
+                    MaxScore = form.MaxScore,
+                    Weight = form.Weight,
+                    AssessmentDate = form.AssessmentDate.HasValue
+                        ? DateOnly.FromDateTime(form.AssessmentDate.Value) : null,
+                    Notes = form.Notes,
+                });
+
+            if (result.Succeeded)
+            {
+                Notification.Notify(NotificationSeverity.Success, "Saved", $"Assessment '{form.Title}' saved.");
+                showForm = false;
+                await LoadAsync();
+            }
+            else
+            {
+                Notification.Notify(NotificationSeverity.Error, "Failed", string.Join("; ", result.Errors));
+            }
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private async Task PublishAsync(TermAssessmentDto a)
+    {
+        var result = await AssessmentService.PublishAsync(a.Id);
+        ShowResult(result, $"'{a.Title}' published.");
+        await LoadAsync();
+    }
+
+    private async Task UnpublishAsync(TermAssessmentDto a)
+    {
+        var result = await AssessmentService.UnpublishAsync(a.Id);
+        ShowResult(result, $"'{a.Title}' unpublished.");
+        await LoadAsync();
+    }
+
+    private async Task DeleteAsync(TermAssessmentDto a)
+    {
+        var confirm = await Dialog.Confirm(
+            $"Delete assessment '{a.Title}'?",
+            "Delete assessment",
+            new ConfirmOptions { OkButtonText = "Delete", CancelButtonText = "Cancel" });
+        if (confirm != true) return;
+
+        var result = await AssessmentService.SoftDeleteAsync(a.Id);
+        ShowResult(result, $"'{a.Title}' deleted.");
+        await LoadAsync();
+    }
+
+    private void ShowResult(OperationResult result, string success)
+    {
+        if (result.Succeeded)
+        {
+            Notification.Notify(NotificationSeverity.Success, "Done", success);
+        }
+        else
+        {
+            Notification.Notify(NotificationSeverity.Error, "Failed", string.Join("; ", result.Errors));
+        }
+    }
+}

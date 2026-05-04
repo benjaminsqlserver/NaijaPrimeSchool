@@ -48,6 +48,16 @@
         </Authorized>
     </AuthorizeView>
 
+    <AuthorizeView Roles="@($"{Roles.SuperAdmin},{Roles.HeadTeacher},{Roles.Teacher}")">
+        <Authorized>
+            <RadzenPanelMenuItem Text="Results & Reports" Icon="assignment" Expanded="true">
+                <RadzenPanelMenuItem Text="Assessments" Icon="grading" Path="/assessments" />
+                <RadzenPanelMenuItem Text="Subject results" Icon="leaderboard" Path="/results" />
+                <RadzenPanelMenuItem Text="Report cards" Icon="description" Path="/reports" />
+            </RadzenPanelMenuItem>
+        </Authorized>
+    </AuthorizeView>
+
     <AuthorizeView Roles="@($"{Roles.SuperAdmin},{Roles.SchoolBursar}")">
         <Authorized>
             <RadzenPanelMenuItem Text="Finance" Icon="payments" Disabled="true" />

@@ -1,6 +1,7 @@
 using NaijaPrimeSchool.Domain.Attendance;
 using NaijaPrimeSchool.Domain.Common;
 using NaijaPrimeSchool.Domain.Identity;
+using NaijaPrimeSchool.Domain.Results;
 
 namespace NaijaPrimeSchool.Domain.Family;
 
@@ -36,6 +37,9 @@ public class Student : BaseEntity
     public ICollection<StudentParent> ParentLinks { get; set; } = [];
     public ICollection<DailyAttendanceEntry> DailyAttendanceEntries { get; set; } = [];
     public ICollection<SubjectAttendanceEntry> SubjectAttendanceEntries { get; set; } = [];
+    public ICollection<AssessmentScore> AssessmentScores { get; set; } = [];
+    public ICollection<SubjectResult> SubjectResults { get; set; } = [];
+    public ICollection<ReportCard> ReportCards { get; set; } = [];
 
     public string FullName =>
         string.IsNullOrWhiteSpace(MiddleName)

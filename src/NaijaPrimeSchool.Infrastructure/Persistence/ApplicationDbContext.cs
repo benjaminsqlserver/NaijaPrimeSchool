@@ -9,6 +9,7 @@ using NaijaPrimeSchool.Domain.Attendance;
 using NaijaPrimeSchool.Domain.Common;
 using NaijaPrimeSchool.Domain.Family;
 using NaijaPrimeSchool.Domain.Identity;
+using NaijaPrimeSchool.Domain.Results;
 
 namespace NaijaPrimeSchool.Infrastructure.Persistence;
 
@@ -52,6 +53,18 @@ public class ApplicationDbContext(
     public DbSet<DailyAttendanceEntry> DailyAttendanceEntries => Set<DailyAttendanceEntry>();
     public DbSet<SubjectAttendanceSession> SubjectAttendanceSessions => Set<SubjectAttendanceSession>();
     public DbSet<SubjectAttendanceEntry> SubjectAttendanceEntries => Set<SubjectAttendanceEntry>();
+
+    public DbSet<AssessmentType> AssessmentTypes => Set<AssessmentType>();
+    public DbSet<GradeBand> GradeBands => Set<GradeBand>();
+    public DbSet<AffectiveTrait> AffectiveTraits => Set<AffectiveTrait>();
+    public DbSet<PsychomotorSkill> PsychomotorSkills => Set<PsychomotorSkill>();
+    public DbSet<TraitRating> TraitRatings => Set<TraitRating>();
+    public DbSet<TermAssessment> TermAssessments => Set<TermAssessment>();
+    public DbSet<AssessmentScore> AssessmentScores => Set<AssessmentScore>();
+    public DbSet<SubjectResult> SubjectResults => Set<SubjectResult>();
+    public DbSet<ReportCard> ReportCards => Set<ReportCard>();
+    public DbSet<AffectiveRating> AffectiveRatings => Set<AffectiveRating>();
+    public DbSet<PsychomotorRating> PsychomotorRatings => Set<PsychomotorRating>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -134,6 +147,7 @@ public class ApplicationDbContext(
         ConfigureAcademics(builder);
         ConfigureFamily(builder);
         ConfigureAttendance(builder);
+        ConfigureResults(builder);
     }
 
     private static void ConfigureAcademics(ModelBuilder builder)
@@ -563,6 +577,223 @@ public class ApplicationDbContext(
             b.HasIndex(e => new { e.SessionId, e.StudentId }).IsUnique();
             b.HasIndex(e => e.IsDeleted);
             b.HasQueryFilter(e => !e.IsDeleted);
+        });
+    }
+
+    private static void ConfigureResults(ModelBuilder builder)
+    {
+        ConfigureLookup<AssessmentType>(builder, "AssessmentTypes", extra: b =>
+        {
+            b.Property(t => t.Name).HasMaxLength(50).IsRequired();
+            b.Property(t => t.Code).HasMaxLength(10).IsRequired();
+            b.HasIndex(t => t.Name).IsUnique();
+            b.HasIndex(t => t.Code).IsUnique();
+        });
+
+        ConfigureLookup<GradeBand>(builder, "GradeBands", extra: b =>
+        {
+            b.Property(g => g.Name).HasMaxLength(20).IsRequired();
+            b.Property(g => g.Description).HasMaxLength(80).IsRequired();
+            b.Property(g => g.Remark).HasMaxLength(120);
+            b.Property(g => g.LowerBound).HasPrecision(5, 2);
+            b.Property(g => g.UpperBound).HasPrecision(5, 2);
+            b.HasIndex(g => g.Name).IsUnique();
+        });
+
+        ConfigureLookup<AffectiveTrait>(builder, "AffectiveTraits", extra: b =>
+        {
+            b.Property(t => t.Name).HasMaxLength(60).IsRequired();
+            b.HasIndex(t => t.Name).IsUnique();
+        });
+
+        ConfigureLookup<PsychomotorSkill>(builder, "PsychomotorSkills", extra: b =>
+        {
+            b.Property(s => s.Name).HasMaxLength(60).IsRequired();
+            b.HasIndex(s => s.Name).IsUnique();
+        });
+
+        ConfigureLookup<TraitRating>(builder, "TraitRatings", extra: b =>
+        {
+            b.Property(r => r.Name).HasMaxLength(40).IsRequired();
+            b.HasIndex(r => r.Name).IsUnique();
+            b.HasIndex(r => r.Value).IsUnique();
+        });
+
+        builder.Entity<TermAssessment>(b =>
+        {
+            b.ToTable("TermAssessments");
+            b.HasKey(a => a.Id);
+            b.Property(a => a.Title).HasMaxLength(120).IsRequired();
+            b.Property(a => a.Notes).HasMaxLength(500);
+            b.Property(a => a.Weight).HasPrecision(5, 2);
+            b.Property(a => a.CreatedBy).HasMaxLength(100);
+            b.Property(a => a.ModifiedBy).HasMaxLength(100);
+            b.Property(a => a.DeletedBy).HasMaxLength(100);
+
+            b.HasOne(a => a.Term).WithMany(t => t.TermAssessments)
+                .HasForeignKey(a => a.TermId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasOne(a => a.SchoolClass).WithMany(c => c.TermAssessments)
+                .HasForeignKey(a => a.SchoolClassId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasOne(a => a.Subject).WithMany(s => s.TermAssessments)
+                .HasForeignKey(a => a.SubjectId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasOne(a => a.AssessmentType).WithMany(t => t.TermAssessments)
+                .HasForeignKey(a => a.AssessmentTypeId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasIndex(a => new { a.TermId, a.SchoolClassId, a.SubjectId });
+            b.HasIndex(a => a.IsDeleted);
+            b.HasQueryFilter(a => !a.IsDeleted);
+        });
+
+        builder.Entity<AssessmentScore>(b =>
+        {
+            b.ToTable("AssessmentScores");
+            b.HasKey(s => s.Id);
+            b.Property(s => s.Score).HasPrecision(7, 2);
+            b.Property(s => s.Remarks).HasMaxLength(300);
+            b.Property(s => s.CreatedBy).HasMaxLength(100);
+            b.Property(s => s.ModifiedBy).HasMaxLength(100);
+            b.Property(s => s.DeletedBy).HasMaxLength(100);
+
+            b.HasOne(s => s.TermAssessment).WithMany(a => a.Scores)
+                .HasForeignKey(s => s.TermAssessmentId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            b.HasOne(s => s.Student).WithMany(st => st.AssessmentScores)
+                .HasForeignKey(s => s.StudentId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // One score per (assessment, student).
+            b.HasIndex(s => new { s.TermAssessmentId, s.StudentId }).IsUnique();
+            b.HasIndex(s => s.IsDeleted);
+            b.HasQueryFilter(s => !s.IsDeleted);
+        });
+
+        builder.Entity<SubjectResult>(b =>
+        {
+            b.ToTable("SubjectResults");
+            b.HasKey(r => r.Id);
+            b.Property(r => r.TotalScore).HasPrecision(7, 2);
+            b.Property(r => r.Percentage).HasPrecision(5, 2);
+            b.Property(r => r.TeacherComment).HasMaxLength(500);
+            b.Property(r => r.CreatedBy).HasMaxLength(100);
+            b.Property(r => r.ModifiedBy).HasMaxLength(100);
+            b.Property(r => r.DeletedBy).HasMaxLength(100);
+
+            b.HasOne(r => r.Student).WithMany(s => s.SubjectResults)
+                .HasForeignKey(r => r.StudentId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasOne(r => r.Term).WithMany(t => t.SubjectResults)
+                .HasForeignKey(r => r.TermId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasOne(r => r.Subject).WithMany(s => s.SubjectResults)
+                .HasForeignKey(r => r.SubjectId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasOne(r => r.SchoolClass).WithMany(c => c.SubjectResults)
+                .HasForeignKey(r => r.SchoolClassId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasOne(r => r.GradeBand).WithMany(g => g.SubjectResults)
+                .HasForeignKey(r => r.GradeBandId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            // One result per (student, term, subject).
+            b.HasIndex(r => new { r.StudentId, r.TermId, r.SubjectId }).IsUnique();
+            b.HasIndex(r => new { r.SchoolClassId, r.TermId, r.SubjectId });
+            b.HasIndex(r => r.IsDeleted);
+            b.HasQueryFilter(r => !r.IsDeleted);
+        });
+
+        builder.Entity<ReportCard>(b =>
+        {
+            b.ToTable("ReportCards");
+            b.HasKey(c => c.Id);
+            b.Property(c => c.TotalScore).HasPrecision(7, 2);
+            b.Property(c => c.AveragePercentage).HasPrecision(5, 2);
+            b.Property(c => c.ClassTeacherComment).HasMaxLength(1000);
+            b.Property(c => c.HeadTeacherComment).HasMaxLength(1000);
+            b.Property(c => c.CreatedBy).HasMaxLength(100);
+            b.Property(c => c.ModifiedBy).HasMaxLength(100);
+            b.Property(c => c.DeletedBy).HasMaxLength(100);
+
+            b.HasOne(c => c.Student).WithMany(s => s.ReportCards)
+                .HasForeignKey(c => c.StudentId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasOne(c => c.Term).WithMany(t => t.ReportCards)
+                .HasForeignKey(c => c.TermId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasOne(c => c.SchoolClass).WithMany(sc => sc.ReportCards)
+                .HasForeignKey(c => c.SchoolClassId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // One report card per (student, term).
+            b.HasIndex(c => new { c.StudentId, c.TermId }).IsUnique();
+            b.HasIndex(c => new { c.SchoolClassId, c.TermId });
+            b.HasIndex(c => c.IsDeleted);
+            b.HasQueryFilter(c => !c.IsDeleted);
+        });
+
+        builder.Entity<AffectiveRating>(b =>
+        {
+            b.ToTable("AffectiveRatings");
+            b.HasKey(r => r.Id);
+            b.Property(r => r.CreatedBy).HasMaxLength(100);
+            b.Property(r => r.ModifiedBy).HasMaxLength(100);
+            b.Property(r => r.DeletedBy).HasMaxLength(100);
+
+            b.HasOne(r => r.ReportCard).WithMany(c => c.AffectiveRatings)
+                .HasForeignKey(r => r.ReportCardId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            b.HasOne(r => r.AffectiveTrait).WithMany(t => t.Ratings)
+                .HasForeignKey(r => r.AffectiveTraitId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasOne(r => r.TraitRating).WithMany(tr => tr.AffectiveRatings)
+                .HasForeignKey(r => r.TraitRatingId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // One rating per (report card, trait).
+            b.HasIndex(r => new { r.ReportCardId, r.AffectiveTraitId }).IsUnique();
+            b.HasIndex(r => r.IsDeleted);
+            b.HasQueryFilter(r => !r.IsDeleted);
+        });
+
+        builder.Entity<PsychomotorRating>(b =>
+        {
+            b.ToTable("PsychomotorRatings");
+            b.HasKey(r => r.Id);
+            b.Property(r => r.CreatedBy).HasMaxLength(100);
+            b.Property(r => r.ModifiedBy).HasMaxLength(100);
+            b.Property(r => r.DeletedBy).HasMaxLength(100);
+
+            b.HasOne(r => r.ReportCard).WithMany(c => c.PsychomotorRatings)
+                .HasForeignKey(r => r.ReportCardId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            b.HasOne(r => r.PsychomotorSkill).WithMany(s => s.Ratings)
+                .HasForeignKey(r => r.PsychomotorSkillId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasOne(r => r.TraitRating).WithMany(tr => tr.PsychomotorRatings)
+                .HasForeignKey(r => r.TraitRatingId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // One rating per (report card, skill).
+            b.HasIndex(r => new { r.ReportCardId, r.PsychomotorSkillId }).IsUnique();
+            b.HasIndex(r => r.IsDeleted);
+            b.HasQueryFilter(r => !r.IsDeleted);
         });
     }
 
