@@ -194,6 +194,7 @@ def title_page(doc):
     meta.add_run("\nStack: .NET 10, Blazor Web App (Auto), EF Core 10, SQL Server, Radzen Blazor")
     meta.add_run("\nEditor: Visual Studio Code with the C# Dev Kit")
     meta.add_run("\nRepository: https://github.com/benjaminsqlserver/NaijaPrimeSchool")
+    meta.add_run("\nLicence: MIT — see LICENSE at the repo root")
 
     add_page_break(doc)
 
@@ -371,6 +372,10 @@ def chapter1_overview(doc):
         "4 Razor pages under src/NaijaPrimeSchool.Web/Components/Pages/Results/.",
         "1 navigation menu addition (Results & Reports panel) and 1 set "
         "of CSS additions (.nps-score-grid, .nps-trait-grid).",
+        "1 LICENSE file at the repo root — Naija Prime School is "
+        "released under the MIT Licence as part of this sprint. The "
+        "README's License section is updated to point at it; chapter "
+        "15 of this guide carries the rationale and the full text.",
     ])
     add_para(doc,
         "Everything compiles with zero warnings on .NET 10 (the team-wide "
@@ -1414,8 +1419,52 @@ def chapter14_forward(doc):
     add_page_break(doc)
 
 
-def chapter15_appendix(doc):
-    add_heading(doc, "15. Appendix — files added or changed in sprint 5", 1)
+def chapter15_license(doc):
+    add_heading(doc, "15. Licence", 1)
+    add_para(doc,
+        "Naija Prime School is released under the MIT Licence. The full "
+        "text lives in the LICENSE file at the repository root and is "
+        "embedded below for completeness so the guide stays a single "
+        "self-contained document.")
+    add_para(doc,
+        "In short: anyone who obtains a copy of the software may use, "
+        "copy, modify, merge, publish, distribute, sublicense, or sell "
+        "it, on the single condition that the copyright notice and the "
+        "permission notice are preserved. The software is provided "
+        "\"as is\", without warranty of any kind. The licence is a "
+        "deliberate signal that this codebase is meant to be reused — "
+        "by another Nigerian primary school, by a teacher who wants a "
+        "weekend project, by a student who wants a portfolio piece — "
+        "and it lifts the legal friction of doing so.")
+    add_heading(doc, "15.1 Why MIT", 2)
+    add_bullets(doc, [
+        "Compatibility. MIT is permissive and compatible with virtually "
+        "every other licence used by the .NET ecosystem libraries this "
+        "project depends on (Radzen Blazor, EF Core, ASP.NET Core "
+        "Identity, etc.).",
+        "Familiarity. Most Nigerian developers and many international "
+        "OSS contributors recognise MIT immediately; a permissive "
+        "licence reduces hesitation to fork or contribute.",
+        "Brevity. The text fits on a single page, so future maintainers "
+        "do not have to read a long policy document to understand what "
+        "they can and cannot do.",
+        "No copyleft. Schools that decide to extend the platform with "
+        "in-house features are not forced to publish those changes. "
+        "This matches the realities of school IT teams.",
+    ])
+    add_heading(doc, "15.2 Full text of the LICENSE file", 2)
+    add_file(doc, "LICENSE", caption="LICENSE")
+    add_para(doc,
+        "The README at the repository root carries a short License "
+        "section that points back at this file; the solution file "
+        "(NaijaPrimeSchool.slnx) lists LICENSE alongside README.md and "
+        "the per-sprint guides under Solution Items so it is visible in "
+        "Visual Studio's Solution Explorer.")
+    add_page_break(doc)
+
+
+def chapter16_appendix(doc):
+    add_heading(doc, "16. Appendix — files added or changed in sprint 5", 1)
     entries = [
         ("Domain layer (new)", "—"),
         ("src/NaijaPrimeSchool.Domain/Results/AssessmentType.cs",     "Lookup."),
@@ -1466,6 +1515,10 @@ def chapter15_appendix(doc):
         ("src/NaijaPrimeSchool.Web/wwwroot/app.css",                                    "Added .nps-score-grid and .nps-trait-grid styles."),
         ("Tooling (new)", "—"),
         ("tools/generate_sprint5_guide.py",                                             "This document's generator."),
+        ("Project root (modified)", "—"),
+        ("LICENSE",                                                                     "MIT licence — added to formalise the open-source release."),
+        ("README.md",                                                                   "License section now points at the MIT LICENSE file."),
+        ("NaijaPrimeSchool.slnx",                                                       "LICENSE registered under Solution Items so it is visible in Solution Explorer."),
     ]
 
     table = doc.add_table(rows=len(entries), cols=2)
@@ -1508,7 +1561,8 @@ def main():
     chapter12_smoketest(doc)
     chapter13_troubleshooting(doc)
     chapter14_forward(doc)
-    chapter15_appendix(doc)
+    chapter15_license(doc)
+    chapter16_appendix(doc)
     doc.save(OUTPUT)
     print(f"Wrote {OUTPUT}")
 

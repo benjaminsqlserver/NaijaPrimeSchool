@@ -360,4 +360,4 @@ Planned for upcoming sprints:
 
 ## License
 
-This project is provided as-is for educational and evaluation purposes. Add the license of your choice before publishing.
+Released under the [MIT License](LICENSE) — see the `LICENSE` file at the repo root for the full text. In short: free to use, copy, modify, merge, publish, distribute, sublicense, or sell copies of the software, provided the copyright notice and the permission notice are preserved. The software is provided "as is", without warranty of any kind.
