@@ -77,19 +77,19 @@ else
                                 <small style="color: var(--nps-ink-500);">@row.StudentAdmissionNumber</small>
                             </td>
                             <td>
-                                <RadzenNumeric TValue="decimal?" Value="row.Score"
+                                <RadzenNumeric TValue="decimal?" Value="@row.Score"
                                                Min="0" Max="@((decimal)sheet.Assessment.MaxScore)"
                                                Step="0.5"
                                                Disabled="@(sheet.Assessment.IsPublished || row.IsAbsent)"
                                                Change="@((decimal? v) => UpdateScore(idx, v))" />
                             </td>
                             <td style="text-align: center;">
-                                <RadzenCheckBox TValue="bool" Value="row.IsAbsent"
+                                <RadzenCheckBox TValue="bool" Value="@row.IsAbsent"
                                                 Disabled="@sheet.Assessment.IsPublished"
                                                 Change="@((bool v) => UpdateAbsent(idx, v))" />
                             </td>
                             <td>
-                                <RadzenTextBox Value="row.Remarks ?? string.Empty"
+                                <RadzenTextBox Value="@(row.Remarks ?? string.Empty)"
                                                Disabled="@sheet.Assessment.IsPublished"
                                                Change="@((string v) => UpdateRemarks(idx, v))"
                                                Style="width: 100%;" />
