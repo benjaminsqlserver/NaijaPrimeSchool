@@ -27,6 +27,7 @@
         <div class="nps-field">
             <label>Term</label>
             <RadzenDropDown TValue="Guid?" Data="@terms" @bind-Value="termId"
+                            ValueProperty="Id" TextProperty="TermTypeName"
                             AllowClear="true" Placeholder="All terms"
                             Change="@(_ => LoadAsync())" Style="min-width: 220px;">
                 <Template Context="t">
@@ -139,6 +140,7 @@
             <div class="nps-field">
                 <label>Term *</label>
                 <RadzenDropDown TValue="Guid?" Data="@terms" @bind-Value="genTermId"
+                                ValueProperty="Id" TextProperty="TermTypeName"
                                 Placeholder="Pick a term">
                     <Template Context="t">
                         @{ var dto = (TermDto)t; }

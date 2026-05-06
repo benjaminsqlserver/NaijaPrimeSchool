@@ -30,6 +30,7 @@
         <div class="nps-field">
             <label>Term *</label>
             <RadzenDropDown TValue="Guid?" Data="@terms" @bind-Value="termId"
+                            ValueProperty="Id" TextProperty="TermTypeName"
                             AllowClear="true" Placeholder="Pick a term"
                             Change="@(_ => LoadAsync())" Style="min-width: 220px;">
                 <Template Context="t">
