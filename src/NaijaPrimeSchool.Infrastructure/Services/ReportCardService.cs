@@ -163,19 +163,31 @@ public class ReportCardService(ApplicationDbContext db) : IReportCardService
                 "No subject results exist for this term/class. Compute results first.");
 
         // Per-student attendance summary across this term, restricted to this class.
-        var attendance = await db.DailyAttendanceEntries
+        // Materialise the flattened rows first, then aggregate in memory — this
+        // avoids EF Core translation surprises with multiple conditional Counts
+        // inside a single GroupBy projection.
+        var entryRows = await db.DailyAttendanceEntries
             .Where(e => e.Register!.TermId == request.TermId
                 && e.Register!.SchoolClassId == request.SchoolClassId)
+            .Select(e => new
+            {
+                e.StudentId,
+                Code = e.AttendanceStatus!.Code,
+                CountsAsPresent = e.AttendanceStatus!.CountsAsPresent,
+            })
+            .ToListAsync(ct);
+
+        var attendance = entryRows
             .GroupBy(e => e.StudentId)
             .Select(g => new
             {
                 StudentId = g.Key,
                 Total = g.Count(),
-                Present = g.Count(x => x.AttendanceStatus!.CountsAsPresent && x.AttendanceStatus!.Code != "L"),
-                Late = g.Count(x => x.AttendanceStatus!.Code == "L"),
-                Absent = g.Count(x => !x.AttendanceStatus!.CountsAsPresent),
+                Present = g.Count(x => x.CountsAsPresent && x.Code != "L"),
+                Late = g.Count(x => x.Code == "L"),
+                Absent = g.Count(x => !x.CountsAsPresent),
             })
-            .ToListAsync(ct);
+            .ToList();
 
         var totalSchoolDays = await db.DailyAttendanceRegisters
             .Where(r => r.TermId == request.TermId && r.SchoolClassId == request.SchoolClassId)
