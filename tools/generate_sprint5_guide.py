@@ -1367,6 +1367,43 @@ def chapter13_troubleshooting(doc):
         "IdentityUserRole's required end is harmless at runtime and "
         "predates sprint 5. The build is still green.")
 
+    add_heading(doc, "13.8 Report card shows 0 / 0 attendance after generating", 2)
+    add_para(doc,
+        "The Generate / refresh action only refreshes report cards that "
+        "are still in draft. Cards that were already published are "
+        "deliberately left alone — the publish lifecycle exists "
+        "precisely to freeze a card the parents have seen. If a card "
+        "was published before any daily attendance was taken for the "
+        "term, it will continue to show 0 days present / 0 total school "
+        "days even after attendance is captured. The fix is a three-"
+        "step manual cycle:")
+    add_numbered(doc, [
+        "Open the affected report card and click Unpublish.",
+        "Go back to /reports, pick the same (term, class), click "
+        "Generate / refresh. The newly drafted card now reads the "
+        "freshly captured attendance.",
+        "Republish the card.",
+    ])
+    add_para(doc,
+        "If a school is in the habit of publishing cards before the "
+        "term has fully ended, this is the rhythm to expect.")
+
+    add_heading(doc, "13.9 EF Core GroupBy with multiple conditional Counts", 2)
+    add_para(doc,
+        "ReportCardService.GenerateAsync computes the per-pupil "
+        "attendance summary by flattening the daily-entry rows into a "
+        "small projection (StudentId, AttendanceStatus.Code, "
+        "CountsAsPresent), materialising them with ToListAsync, and "
+        "grouping in memory. Earlier drafts of the service tried to "
+        "do the GroupBy server-side with three conditional Count "
+        "predicates inside a single Select — that shape proved "
+        "unreliable in EF Core's SQL translation and silently "
+        "returned zero counts in some configurations. The flatten-"
+        "then-aggregate-in-memory pattern is the safer choice for any "
+        "future report that needs several conditional counts off one "
+        "lookup join, and the data volume (one class's daily entries "
+        "for a term — at worst a few thousand rows) keeps it cheap.")
+
     add_page_break(doc)
 
 
