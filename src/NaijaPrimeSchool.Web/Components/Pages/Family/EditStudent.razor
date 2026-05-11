@@ -4,11 +4,13 @@
 
 @inject IStudentService StudentService
 @inject IEnrolmentService EnrolmentService
+@inject IStudentPhotoService PhotoService
 @inject ILookupService LookupService
 @inject ISessionService SessionService
 @inject NavigationManager Nav
 @inject DialogService Dialog
 @inject NotificationService Notification
+@inject IJSRuntime JS
 
 <PageTitle>Edit student · Naija Prime School</PageTitle>
 
@@ -111,6 +113,41 @@ else
                                           ButtonStyle="ButtonStyle.Primary" Disabled="@saving" />
                         </div>
                     </RadzenTemplateForm>
+                </RadzenCard>
+            </RadzenTabsItem>
+
+            <RadzenTabsItem Text="Photo">
+                <RadzenCard class="nps-card">
+                    <div class="nps-photo-panel">
+                        <StudentAvatar PhotoUrl="@photoBust"
+                                       FirstName="@student.FirstName"
+                                       LastName="@student.LastName"
+                                       Size="large" />
+                        <div class="nps-photo-actions">
+                            <h3 style="margin: 0 0 0.25rem;">Pupil photograph</h3>
+                            <p style="margin: 0 0 1rem; color: var(--nps-ink-500);">
+                                JPG, PNG or WebP up to 5 MB. The same photo is shown
+                                wherever the pupil appears in the system.
+                            </p>
+                            <InputFile id="nps-photo-input"
+                                       OnChange="HandlePhotoSelected"
+                                       accept="image/jpeg,image/png,image/webp"
+                                       class="nps-hidden-input" />
+                            <div class="nps-inline-actions">
+                                <RadzenButton Text="@(uploading ? "Uploading..." : "Choose new photo")"
+                                              Icon="photo_camera" ButtonStyle="ButtonStyle.Primary"
+                                              Disabled="@uploading"
+                                              Click="@TriggerPhotoPicker" />
+                                @if (!string.IsNullOrEmpty(student.PhotoUrl))
+                                {
+                                    <RadzenButton Text="Remove photo" Icon="delete" Variant="Variant.Flat"
+                                                  ButtonStyle="ButtonStyle.Danger"
+                                                  Disabled="@uploading"
+                                                  Click="@RemovePhotoAsync" />
+                                }
+                            </div>
+                        </div>
+                    </div>
                 </RadzenCard>
             </RadzenTabsItem>
 
@@ -311,7 +348,9 @@ else
 
     private bool loadingProfile = true;
     private bool saving;
+    private bool uploading;
     private int selectedTab;
+    private string? photoBust;
 
     private StudentDto? student;
     private StudentFormModel form = new();
@@ -419,6 +458,9 @@ else
                     Allergies = student.Allergies,
                     MedicalNotes = student.MedicalNotes,
                 };
+                photoBust = string.IsNullOrEmpty(student.PhotoUrl)
+                    ? null
+                    : student.PhotoUrl + "?v=" + DateTime.UtcNow.Ticks;
             }
         }
         finally
@@ -660,6 +702,88 @@ else
         else
         {
             Notification.Notify(NotificationSeverity.Error, "Failed", string.Join("; ", result.Errors));
+        }
+    }
+
+    private async Task TriggerPhotoPicker() =>
+        await JS.InvokeVoidAsync("document.getElementById('nps-photo-input').click");
+
+    private async Task HandlePhotoSelected(InputFileChangeEventArgs e)
+    {
+        if (student is null) return;
+        var file = e.File;
+        if (file is null) return;
+
+        const long maxBytes = 5 * 1024 * 1024;
+        if (file.Size > maxBytes)
+        {
+            Notification.Notify(NotificationSeverity.Warning, "Too large",
+                "Photo must be 5 MB or smaller.");
+            return;
+        }
+
+        uploading = true;
+        try
+        {
+            await using var stream = file.OpenReadStream(maxBytes);
+            using var buffer = new MemoryStream();
+            await stream.CopyToAsync(buffer);
+            buffer.Position = 0;
+
+            var result = await PhotoService.UploadAsync(
+                Id, buffer, file.ContentType, buffer.Length, CancellationToken.None);
+
+            if (result.Succeeded)
+            {
+                Notification.Notify(NotificationSeverity.Success, "Uploaded",
+                    "Pupil photograph updated.");
+                await LoadStudentAsync();
+                photoBust = student?.PhotoUrl is null
+                    ? null
+                    : student.PhotoUrl + "?v=" + DateTime.UtcNow.Ticks;
+            }
+            else
+            {
+                Notification.Notify(NotificationSeverity.Error, "Failed",
+                    string.Join("; ", result.Errors));
+            }
+        }
+        finally
+        {
+            uploading = false;
+        }
+    }
+
+    private async Task RemovePhotoAsync()
+    {
+        if (student is null) return;
+
+        var confirm = await Dialog.Confirm(
+            "Remove this pupil's photograph?",
+            "Remove photo",
+            new ConfirmOptions { OkButtonText = "Remove", CancelButtonText = "Cancel" });
+        if (confirm != true) return;
+
+        uploading = true;
+        try
+        {
+            var result = await PhotoService.RemoveAsync(Id);
+            if (result.Succeeded)
+            {
+                Notification.Notify(NotificationSeverity.Success, "Removed",
+                    "Photograph removed.");
+                photoBust = null;
+                await LoadStudentAsync();
+            }
+            else
+            {
+                Notification.Notify(NotificationSeverity.Error, "Failed",
+                    string.Join("; ", result.Errors));
+            }
+        }
+        finally
+        {
+            uploading = false;
         }
     }
 }

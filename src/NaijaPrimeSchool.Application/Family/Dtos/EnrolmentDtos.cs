@@ -9,6 +9,9 @@ public class EnrolmentDto
     public Guid StudentId { get; set; }
     public string StudentName { get; set; } = string.Empty;
     public string StudentAdmissionNumber { get; set; } = string.Empty;
+    public string? StudentPhotoUrl { get; set; }
+    public string StudentFirstName { get; set; } = string.Empty;
+    public string StudentLastName { get; set; } = string.Empty;
 
     public Guid SchoolClassId { get; set; }
     public string SchoolClassName { get; set; } = string.Empty;

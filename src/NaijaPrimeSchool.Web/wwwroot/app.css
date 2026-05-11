@@ -533,3 +533,86 @@ h1:focus {
 .nps-trait-grid tbody tr:hover {
     background: #f8faf9;
 }
+
+/* ===================== Student avatars (sprint 5b) ===================== */
+.nps-avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    overflow: hidden;
+    background: var(--nps-green-200);
+    color: var(--nps-green-900);
+    font-weight: 700;
+    flex-shrink: 0;
+    border: 2px solid #fff;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+}
+
+.nps-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.nps-avatar-initials {
+    line-height: 1;
+    letter-spacing: 0.5px;
+    user-select: none;
+}
+
+.nps-avatar-sm {
+    width: 36px;
+    height: 36px;
+    font-size: 0.75rem;
+}
+
+.nps-avatar-md {
+    width: 64px;
+    height: 64px;
+    font-size: 1rem;
+}
+
+.nps-avatar-lg {
+    width: 96px;
+    height: 96px;
+    font-size: 1.4rem;
+}
+
+.nps-cell-with-avatar {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+}
+
+.nps-card-headline {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.nps-card-headline h1 {
+    margin: 0;
+}
+
+.nps-card-headline p {
+    margin: 0.15rem 0 0;
+}
+
+.nps-photo-panel {
+    display: flex;
+    gap: 1.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.nps-photo-actions {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 240px;
+}
+
+.nps-hidden-input {
+    display: none !important;
+}

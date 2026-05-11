@@ -49,9 +49,15 @@
         <Columns>
             <RadzenDataGridColumn TItem="EnrolmentDto" Title="Pupil">
                 <Template Context="e">
-                    <strong>@e.StudentName</strong>
-                    <br />
-                    <small style="color: var(--nps-ink-500);">@e.StudentAdmissionNumber</small>
+                    <div class="nps-cell-with-avatar">
+                        <StudentAvatar PhotoUrl="@e.StudentPhotoUrl"
+                                       FirstName="@e.StudentFirstName"
+                                       LastName="@e.StudentLastName" />
+                        <div style="display:flex; flex-direction:column;">
+                            <strong>@e.StudentName</strong>
+                            <small style="color: var(--nps-ink-500);">@e.StudentAdmissionNumber</small>
+                        </div>
+                    </div>
                 </Template>
             </RadzenDataGridColumn>
             <RadzenDataGridColumn TItem="EnrolmentDto" Title="Class">

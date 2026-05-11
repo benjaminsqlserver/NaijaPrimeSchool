@@ -21,11 +21,17 @@ else if (detail is null)
 else
 {
     <div class="nps-page-header">
-        <div>
-            <h1>@detail.Card.StudentName</h1>
-            <p>
-                @detail.Card.SchoolClassName · @detail.Card.TermName · admission #@detail.Card.StudentAdmissionNumber
-            </p>
+        <div class="nps-card-headline">
+            <StudentAvatar PhotoUrl="@detail.Card.StudentPhotoUrl"
+                           FirstName="@detail.Card.StudentFirstName"
+                           LastName="@detail.Card.StudentLastName"
+                           Size="large" />
+            <div>
+                <h1>@detail.Card.StudentName</h1>
+                <p>
+                    @detail.Card.SchoolClassName · @detail.Card.TermName · admission #@detail.Card.StudentAdmissionNumber
+                </p>
+            </div>
         </div>
         <div class="nps-page-actions">
             @if (detail.Card.IsPublished)

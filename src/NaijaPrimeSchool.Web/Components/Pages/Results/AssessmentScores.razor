@@ -72,9 +72,15 @@ else
                         <tr>
                             <td>@(idx + 1)</td>
                             <td>
-                                <strong>@row.StudentName</strong>
-                                <br />
-                                <small style="color: var(--nps-ink-500);">@row.StudentAdmissionNumber</small>
+                                <div class="nps-cell-with-avatar">
+                                    <StudentAvatar PhotoUrl="@row.StudentPhotoUrl"
+                                                   FirstName="@row.StudentFirstName"
+                                                   LastName="@row.StudentLastName" />
+                                    <div style="display:flex; flex-direction:column;">
+                                        <strong>@row.StudentName</strong>
+                                        <small style="color: var(--nps-ink-500);">@row.StudentAdmissionNumber</small>
+                                    </div>
+                                </div>
                             </td>
                             <td>
                                 <RadzenNumeric TValue="decimal?" Value="@row.Score"
