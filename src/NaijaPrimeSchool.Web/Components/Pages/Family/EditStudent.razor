@@ -706,7 +706,7 @@ else
     }
 
     private async Task TriggerPhotoPicker() =>
-        await JS.InvokeVoidAsync("document.getElementById('nps-photo-input').click");
+        await JS.InvokeVoidAsync("npsClickElement", "nps-photo-input");
 
     private async Task HandlePhotoSelected(InputFileChangeEventArgs e)
     {
