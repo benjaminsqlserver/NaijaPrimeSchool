@@ -187,8 +187,11 @@ public class AssessmentService(ApplicationDbContext db) : IAssessmentService
             .Select(e => new
             {
                 e.StudentId,
+                FirstName = e.Student!.FirstName,
+                LastName = e.Student!.LastName,
                 Name = e.Student!.FirstName + " " + e.Student!.LastName,
                 AdmissionNumber = e.Student!.AdmissionNumber,
+                PhotoUrl = e.Student!.PhotoUrl,
             })
             .OrderBy(s => s.Name)
             .ToListAsync(ct);
@@ -204,6 +207,9 @@ public class AssessmentService(ApplicationDbContext db) : IAssessmentService
                     StudentId = s.StudentId,
                     StudentName = s.Name.Trim(),
                     StudentAdmissionNumber = s.AdmissionNumber,
+                    StudentPhotoUrl = s.PhotoUrl,
+                    StudentFirstName = s.FirstName,
+                    StudentLastName = s.LastName,
                     Score = match?.Score,
                     IsAbsent = match?.IsAbsent ?? false,
                     Remarks = match?.Remarks,

@@ -96,6 +96,10 @@ Desktop.ini
 Generated_Code/
 *.Generated.cs
 
+# Uploaded pupil photos — kept locally only, keep the folder via .gitkeep
+src/NaijaPrimeSchool.Web/wwwroot/uploads/students/*
+!src/NaijaPrimeSchool.Web/wwwroot/uploads/students/.gitkeep
+
 # Rider
 _ReSharper.Caches/
 _ReSharper.*/

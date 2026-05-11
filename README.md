@@ -2,7 +2,7 @@
 
 A modern school management system for Nigerian primary schools, built with **.NET 10**, **Blazor Auto**, **Clean Architecture**, **SQL Server**, and **Radzen Blazor Components**.
 
-Five sprints have shipped. **Sprint 1** delivered the authentication & authorization foundation: user accounts, role-based access control, login/logout, activation/deactivation, and the SuperAdmin user-management screens. **Sprint 2** built the academic domain on top of that foundation: sessions, terms, class arms, subjects, timetable periods, and a click-to-edit weekly timetable grid. **Sprint 3** plugged students and parents into that academic structure: pupil profiles, parent/guardian directory, parent-to-pupil linkage with relationship + primary-contact + pickup flags, and per-session enrolment with a withdrawal lifecycle. **Sprint 4** lands attendance: a daily class register, per-subject session attendance off the timetable, the AttendanceStatus lookup, a submit/reopen lifecycle, and a per-class percentage summary. **Sprint 5** closes the academic loop: a per-(term, class, subject) gradebook of TermAssessments and AssessmentScores, a result computation pipeline that produces SubjectResults with grade bands and class positions, and per-(pupil, term) ReportCards with affective and psychomotor ratings, attendance roll-up, and a publish/unpublish lifecycle.
+Six sprints have shipped. **Sprint 1** delivered the authentication & authorization foundation: user accounts, role-based access control, login/logout, activation/deactivation, and the SuperAdmin user-management screens. **Sprint 2** built the academic domain on top of that foundation: sessions, terms, class arms, subjects, timetable periods, and a click-to-edit weekly timetable grid. **Sprint 3** plugged students and parents into that academic structure: pupil profiles, parent/guardian directory, parent-to-pupil linkage with relationship + primary-contact + pickup flags, and per-session enrolment with a withdrawal lifecycle. **Sprint 4** lands attendance: a daily class register, per-subject session attendance off the timetable, the AttendanceStatus lookup, a submit/reopen lifecycle, and a per-class percentage summary. **Sprint 5** closes the academic loop: a per-(term, class, subject) gradebook of TermAssessments and AssessmentScores, a result computation pipeline that produces SubjectResults with grade bands and class positions, and per-(pupil, term) ReportCards with affective and psychomotor ratings, attendance roll-up, and a publish/unpublish lifecycle. **Sprint 5b** wires up pupil photographs: a dedicated upload pipeline backed by a reusable `StudentAvatar` Razor component, with the photo (or a coloured initials tile fallback) shown next to every pupil row across the Students, Enrolments, daily- and subject-attendance, score-sheet, and report-card pages.
 
 Implementation walk-throughs for each sprint live at the repo root:
 
@@ -11,6 +11,7 @@ Implementation walk-throughs for each sprint live at the repo root:
 - `Sprint 3 - Implementation Guide.pdf`
 - `Sprint 4 - Implementation Guide.pdf`
 - `Sprint 5 - Implementation Guide.pdf`
+- `Sprint 5b - Implementation Guide.docx`
 
 ---
 
@@ -108,6 +109,23 @@ Implementation walk-throughs for each sprint live at the repo root:
 - **Lookup tables (no enums)**
   - `AssessmentTypes` (with `IsExam` flag), `GradeBands` (with `LowerBound`/`UpperBound` and `Remark`), `AffectiveTraits`, `PsychomotorSkills`, `TraitRatings` — every domain concept that would normally be a C# enum is a first-class table, seeded on startup
 - **Pages added** (`/assessments`, `/assessments/{id}/scores`, `/results`, `/reports`, `/reports/{id}`) — gradebook pages gated to **SuperAdmin** + **HeadTeacher** + **Teacher**; results and report-card pages gated to **SuperAdmin** + **HeadTeacher**
+
+## Sprint 5b — Student photos ✅
+
+- **Upload pipeline**
+  - `IStudentPhotoService` accepts a stream + content type, validates size and format (JPG, PNG, WebP up to 5 MB), writes the file to `wwwroot/uploads/students/{studentId}{ext}`, and updates `Student.PhotoUrl` in one `SaveChanges`
+  - Re-upload overwrites the previous file by Id; old extensions are cleaned up so format switches don't orphan a file
+  - Cache-busting `?v=<ticks>` query string defeats stale browser caches when a teacher replaces a photo
+- **Reusable component**
+  - `<StudentAvatar />` Razor component renders a circular photo if `PhotoUrl` is set, otherwise a coloured tile with the pupil's initials
+  - Three sizes (`small`, `medium`, `large`) so the same component drives small cell thumbnails and the big report-card header avatar
+- **Display surface**
+  - Avatars added next to every pupil row on **Students**, **Enrolments**, **Daily attendance**, **Subject attendance**, **Score sheet**, **Report cards list**, and as a large avatar on the **Report card detail** header
+  - DTO projections (`StudentDto`, `EnrolmentDto`, daily/subject attendance entry DTOs, `AssessmentScoreDto`, `ReportCardDto`) gained `StudentPhotoUrl` + `StudentFirstName` + `StudentLastName` so a single round-trip carries everything the component needs
+- **Upload UI**
+  - New **Photo** tab on the **Edit Student** page (`/students/{id}`) with a big preview, a hidden `<InputFile>`, and a Radzen-styled "Choose new photo" / "Remove photo" pair
+- **Storage hygiene**
+  - `.gitignore` ignores everything under `wwwroot/uploads/students/` except `.gitkeep`, so uploaded photos stay on the local filesystem and don't pollute the repo
 
 ## Cross-cutting (every sprint)
 
@@ -330,10 +348,15 @@ User management screens are gated behind the `ManageUsers` policy, which require
 | `src/NaijaPrimeSchool.Infrastructure/Services/ResultService.cs` | Compute weighted percentages, grade bands, positions |
 | `src/NaijaPrimeSchool.Infrastructure/Services/ReportCardService.cs` | Generate cards, edit comments + ratings, publish |
 | `src/NaijaPrimeSchool.Web/Components/Pages/Results/` | Assessments, score sheet, results, report cards |
+| `src/NaijaPrimeSchool.Application/Family/IStudentPhotoService.cs` | Photo upload / remove contract (sprint 5b) |
+| `src/NaijaPrimeSchool.Infrastructure/Services/StudentPhotoService.cs` | Saves to `wwwroot/uploads/students`, updates `Student.PhotoUrl` |
+| `src/NaijaPrimeSchool.Web/Components/Shared/StudentAvatar.razor` | Reusable circular avatar (photo or initials fallback) |
+| `src/NaijaPrimeSchool.Web/wwwroot/uploads/students/` | Per-pupil photo storage (gitignored except `.gitkeep`) |
 | `tools/generate_sprint2_guide.py` | Generator for `Sprint 2 - Implementation Guide.docx` |
 | `tools/generate_sprint3_guide.py` | Generator for `Sprint 3 - Implementation Guide.docx` |
 | `tools/generate_sprint4_guide.py` | Generator for `Sprint 4 - Implementation Guide.docx` |
 | `tools/generate_sprint5_guide.py` | Generator for `Sprint 5 - Implementation Guide.docx` |
+| `tools/generate_sprint5b_guide.py` | Generator for `Sprint 5b - Implementation Guide.docx` |
 
 ---
 
@@ -346,6 +369,7 @@ Delivered:
 - ✅ **Sprint 3** — Students & parents (pupil profiles, parent directory, linkage, enrolment)
 - ✅ **Sprint 4** — Attendance (daily + per-subject registers, submit/reopen lifecycle, summary)
 - ✅ **Sprint 5** — Assessments, results & report cards (gradebook, weighted compute, grade bands, term cards)
+- ✅ **Sprint 5b** — Student photographs (upload pipeline, reusable avatar component, photos shown across every pupil-facing page)
 
 Planned for upcoming sprints:
 

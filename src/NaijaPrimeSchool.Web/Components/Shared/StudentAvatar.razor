@@ -1,0 +1,45 @@
+@* Renders a circular pupil avatar — photo if available, initials fallback otherwise. *@
+
+<div class="nps-avatar @SizeClass()" title="@FullName">
+    @if (!string.IsNullOrWhiteSpace(PhotoUrl))
+    {
+        <img src="@CacheBustedUrl()" alt="@FullName" />
+    }
+    else
+    {
+        <span class="nps-avatar-initials">@Initials()</span>
+    }
+</div>
+
+@code {
+    [Parameter] public string? PhotoUrl { get; set; }
+    [Parameter] public string FirstName { get; set; } = string.Empty;
+    [Parameter] public string LastName { get; set; } = string.Empty;
+    [Parameter] public string Size { get; set; } = "small"; // small | medium | large
+
+    private string FullName => (FirstName + " " + LastName).Trim();
+
+    private string SizeClass() => Size switch
+    {
+        "large" => "nps-avatar-lg",
+        "medium" => "nps-avatar-md",
+        _ => "nps-avatar-sm",
+    };
+
+    private string Initials()
+    {
+        var f = string.IsNullOrEmpty(FirstName) ? "" : FirstName[..1].ToUpperInvariant();
+        var l = string.IsNullOrEmpty(LastName)  ? "" : LastName[..1].ToUpperInvariant();
+        var initials = (f + l).Trim();
+        return string.IsNullOrEmpty(initials) ? "?" : initials;
+    }
+
+    // Force browsers to refresh after a re-upload by appending a query string
+    // keyed off the current rendering pass. The PhotoUrl path itself stays
+    // stable per pupil (/uploads/students/{id}.jpg), so this is the only way
+    // to defeat the cache when a teacher uploads a replacement photo.
+    private string CacheBustedUrl() =>
+        PhotoUrl!.Contains('?')
+            ? PhotoUrl!
+            : PhotoUrl + "?v=" + DateTime.UtcNow.Ticks;
+}

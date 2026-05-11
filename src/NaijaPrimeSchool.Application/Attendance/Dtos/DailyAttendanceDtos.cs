@@ -40,6 +40,9 @@ public class DailyAttendanceEntryDto
     public Guid StudentId { get; set; }
     public string StudentName { get; set; } = string.Empty;
     public string StudentAdmissionNumber { get; set; } = string.Empty;
+    public string? StudentPhotoUrl { get; set; }
+    public string StudentFirstName { get; set; } = string.Empty;
+    public string StudentLastName { get; set; } = string.Empty;
 
     public Guid AttendanceStatusId { get; set; }
     public string AttendanceStatusName { get; set; } = string.Empty;
