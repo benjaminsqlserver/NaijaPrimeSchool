@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using NaijaPrimeSchool.Application.Academics;
 using NaijaPrimeSchool.Application.Attendance;
 using NaijaPrimeSchool.Application.Family;
+using NaijaPrimeSchool.Application.Finance;
 using NaijaPrimeSchool.Application.Results;
 using NaijaPrimeSchool.Application.Users;
 using NaijaPrimeSchool.Domain.Identity;
@@ -68,6 +69,14 @@ public static class DependencyInjection
         services.AddScoped<IAssessmentService, AssessmentService>();
         services.AddScoped<IResultService, ResultService>();
         services.AddScoped<IReportCardService, ReportCardService>();
+
+        services.AddScoped<IFeeScheduleService, FeeScheduleService>();
+        // InvoiceService is registered twice: as IInvoiceService for the UI,
+        // and as the concrete InvoiceService so PaymentService can call
+        // its internal RecomputeInvoiceTotalsAsync helper directly.
+        services.AddScoped<InvoiceService>();
+        services.AddScoped<IInvoiceService>(sp => sp.GetRequiredService<InvoiceService>());
+        services.AddScoped<IPaymentService, PaymentService>();
 
         return services;
     }

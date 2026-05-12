@@ -1,0 +1,258 @@
+@page "/payments/new"
+@attribute [Authorize(Roles = $"{Roles.SuperAdmin},{Roles.HeadTeacher},{Roles.SchoolBursar}")]
+@rendermode InteractiveServer
+
+@inject IPaymentService PaymentService
+@inject IInvoiceService InvoiceService
+@inject ILookupService LookupService
+@inject NavigationManager Nav
+@inject NotificationService Notification
+
+<PageTitle>Record payment · Naija Prime School</PageTitle>
+
+<div class="nps-page-header">
+    <div>
+        <h1>Record payment</h1>
+        <p>Pick a pupil, enter the payment, and allocate it across one or more outstanding invoices.</p>
+    </div>
+    <div class="nps-page-actions">
+        <RadzenButton Text="Back" Icon="arrow_back" Variant="Variant.Flat"
+                      ButtonStyle="ButtonStyle.Light" Click="@(() => Nav.NavigateTo("/payments"))" />
+    </div>
+</div>
+
+<RadzenCard class="nps-card" Style="margin-bottom: 1rem;">
+    <h3 style="margin: 0 0 1rem;">Payment details</h3>
+    <div class="nps-form-grid">
+        <div class="nps-field nps-span-2">
+            <label>Pupil *</label>
+            <RadzenDropDown TValue="Guid?" Data="@students" TextProperty="Name" ValueProperty="Id"
+                            @bind-Value="studentId" Placeholder="Search and pick a pupil"
+                            AllowFiltering="true"
+                            FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive"
+                            Change="@(_ => StudentChangedAsync())" />
+        </div>
+        <div class="nps-field">
+            <label>Payment date *</label>
+            <RadzenDatePicker TValue="DateTime?" @bind-Value="paidOn"
+                              DateFormat="d MMM yyyy" ShowTime="false" />
+        </div>
+        <div class="nps-field">
+            <label>Method *</label>
+            <RadzenDropDown TValue="Guid?" Data="@methods" TextProperty="Name" ValueProperty="Id"
+                            @bind-Value="methodId" Placeholder="Pick a method" />
+        </div>
+        <div class="nps-field">
+            <label>Amount *</label>
+            <RadzenNumeric TValue="decimal" @bind-Value="amount" Min="0" Format="N2" />
+        </div>
+        <div class="nps-field">
+            <label>Reference</label>
+            <RadzenTextBox @bind-Value="reference" Placeholder="Cheque no, bank ref, transaction id" />
+        </div>
+        <div class="nps-field nps-span-2">
+            <label>Notes</label>
+            <RadzenTextArea @bind-Value="notes" Rows="2" />
+        </div>
+    </div>
+</RadzenCard>
+
+@if (ledger is not null && ledger.Invoices.Any(i => i.Balance > 0))
+{
+    <RadzenCard class="nps-card">
+        <h3 style="margin: 0 0 1rem;">Outstanding invoices</h3>
+        <p style="color: var(--nps-ink-500); margin: 0 0 1rem;">
+            Total entered: <strong>@amount.ToString("N2")</strong> ·
+            Total allocated: <strong>@TotalAllocated.ToString("N2")</strong> ·
+            Unallocated: <strong>@((amount - TotalAllocated).ToString("N2"))</strong>
+        </p>
+        <table class="nps-score-grid">
+            <thead>
+                <tr>
+                    <th>Invoice</th>
+                    <th>Term</th>
+                    <th style="width: 140px; text-align: right;">Balance</th>
+                    <th style="width: 200px;">Allocate</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var inv in ledger.Invoices.Where(i => i.Balance > 0)
+                                              .OrderBy(i => i.IssuedOn))
+                {
+                    var iv = inv;
+                    <tr>
+                        <td>
+                            <strong>@iv.InvoiceNumber</strong>
+                            <br />
+                            <small style="color: var(--nps-ink-500);">
+                                @iv.SchoolClassName · issued @iv.IssuedOn.ToString("d MMM yyyy")
+                            </small>
+                        </td>
+                        <td>@iv.TermName</td>
+                        <td style="text-align: right;"><strong>@iv.Balance.ToString("N2")</strong></td>
+                        <td>
+                            <RadzenNumeric TValue="decimal" Value="@GetAllocation(iv.Id)"
+                                           Min="0" Max="@iv.Balance" Format="N2"
+                                           Change="@((decimal v) => SetAllocation(iv.Id, v))" />
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        <div class="nps-form-actions">
+            <RadzenButton Text="Auto-allocate oldest first" Icon="auto_fix_high" Variant="Variant.Flat"
+                          ButtonStyle="ButtonStyle.Info" Click="@AutoAllocate" />
+            <RadzenButton Text="@(saving ? "Saving..." : "Save payment")"
+                          Icon="save" ButtonStyle="ButtonStyle.Primary"
+                          Disabled="@saving" Click="@SaveAsync" />
+        </div>
+    </RadzenCard>
+}
+else if (studentId.HasValue)
+{
+    <RadzenCard class="nps-card">
+        <p style="color: var(--nps-ink-500);">
+            This pupil has no outstanding invoices. You can still record an unallocated payment
+            (credit on account) by leaving the table empty.
+        </p>
+        <div class="nps-form-actions">
+            <RadzenButton Text="@(saving ? "Saving..." : "Save payment")"
+                          Icon="save" ButtonStyle="ButtonStyle.Primary"
+                          Disabled="@saving" Click="@SaveAsync" />
+        </div>
+    </RadzenCard>
+}
+
+@code {
+    [SupplyParameterFromQuery] public Guid? StudentIdParam { get; set; }
+    [SupplyParameterFromQuery(Name = "studentId")] public Guid? QueryStudentId { get; set; }
+    [SupplyParameterFromQuery(Name = "invoiceId")] public Guid? QueryInvoiceId { get; set; }
+
+    private IReadOnlyList<LookupDto> students = [];
+    private IReadOnlyList<LookupDto> methods = [];
+
+    private Guid? studentId;
+    private Guid? methodId;
+    private DateTime? paidOn = DateTime.Today;
+    private decimal amount;
+    private string? reference;
+    private string? notes;
+    private bool saving;
+
+    private StudentLedgerDto? ledger;
+    private Dictionary<Guid, decimal> allocations = new();
+
+    private decimal TotalAllocated => allocations.Values.Sum();
+
+    protected override async Task OnInitializedAsync()
+    {
+        methods = await LookupService.GetPaymentMethodsAsync();
+        students = await LookupService.GetStudentsAsync();
+        if (QueryStudentId.HasValue)
+        {
+            studentId = QueryStudentId;
+            await StudentChangedAsync();
+            if (QueryInvoiceId.HasValue
+                && ledger is not null
+                && ledger.Invoices.FirstOrDefault(i => i.Id == QueryInvoiceId.Value) is { } invoice
+                && invoice.Balance > 0)
+            {
+                allocations[invoice.Id] = invoice.Balance;
+                amount = invoice.Balance;
+            }
+        }
+    }
+
+    private async Task StudentChangedAsync()
+    {
+        allocations = new Dictionary<Guid, decimal>();
+        if (studentId is null)
+        {
+            ledger = null;
+            return;
+        }
+        ledger = await InvoiceService.GetStudentLedgerAsync(studentId.Value);
+    }
+
+    private decimal GetAllocation(Guid invoiceId) =>
+        allocations.TryGetValue(invoiceId, out var v) ? v : 0m;
+
+    private void SetAllocation(Guid invoiceId, decimal value)
+    {
+        if (value <= 0m) allocations.Remove(invoiceId);
+        else allocations[invoiceId] = value;
+    }
+
+    private void AutoAllocate()
+    {
+        if (ledger is null) return;
+
+        allocations = new Dictionary<Guid, decimal>();
+        var remaining = amount;
+        foreach (var invoice in ledger.Invoices
+                     .Where(i => i.Balance > 0)
+                     .OrderBy(i => i.IssuedOn))
+        {
+            if (remaining <= 0) break;
+            var take = Math.Min(invoice.Balance, remaining);
+            allocations[invoice.Id] = take;
+            remaining -= take;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (studentId is null || methodId is null || paidOn is null || amount <= 0)
+        {
+            Notification.Notify(NotificationSeverity.Warning, "Missing fields",
+                "Pick a pupil, method, date, and an amount greater than zero.");
+            return;
+        }
+
+        if (TotalAllocated > amount)
+        {
+            Notification.Notify(NotificationSeverity.Warning, "Over-allocated",
+                "Allocations exceed the payment amount.");
+            return;
+        }
+
+        saving = true;
+        try
+        {
+            var request = new RecordPaymentRequest
+            {
+                StudentId = studentId.Value,
+                PaymentMethodId = methodId.Value,
+                PaidOn = DateOnly.FromDateTime(paidOn.Value),
+                Amount = amount,
+                Reference = reference,
+                Notes = notes,
+                Allocations = allocations
+                    .Where(kv => kv.Value > 0m)
+                    .Select(kv => new AllocationLineRequest
+                    {
+                        InvoiceId = kv.Key,
+                        AmountApplied = kv.Value,
+                    })
+                    .ToList(),
+            };
+
+            var result = await PaymentService.RecordAsync(request);
+            if (result.Succeeded)
+            {
+                Notification.Notify(NotificationSeverity.Success, "Saved",
+                    "Payment recorded.");
+                Nav.NavigateTo($"/payments/{result.Data}");
+            }
+            else
+            {
+                Notification.Notify(NotificationSeverity.Error, "Failed",
+                    string.Join("; ", result.Errors));
+            }
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+}

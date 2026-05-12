@@ -195,4 +195,28 @@ public class LookupService(
             .OrderBy(r => r.DisplayOrder)
             .Select(r => new LookupDto { Id = r.Id, Name = r.Name, Code = r.Value.ToString() })
             .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<LookupDto>> GetFeeCategoriesAsync(CancellationToken ct = default) =>
+        await db.FeeCategories
+            .OrderBy(c => c.DisplayOrder)
+            .Select(c => new LookupDto { Id = c.Id, Name = c.Name, Code = c.Code })
+            .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<LookupDto>> GetPaymentMethodsAsync(CancellationToken ct = default) =>
+        await db.PaymentMethods
+            .OrderBy(m => m.DisplayOrder)
+            .Select(m => new LookupDto { Id = m.Id, Name = m.Name, Code = m.Code })
+            .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<LookupDto>> GetInvoiceStatusesAsync(CancellationToken ct = default) =>
+        await db.InvoiceStatuses
+            .OrderBy(s => s.DisplayOrder)
+            .Select(s => new LookupDto { Id = s.Id, Name = s.Name, Code = s.Code })
+            .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<LookupDto>> GetPaymentStatusesAsync(CancellationToken ct = default) =>
+        await db.PaymentStatuses
+            .OrderBy(s => s.DisplayOrder)
+            .Select(s => new LookupDto { Id = s.Id, Name = s.Name, Code = s.Code })
+            .ToListAsync(ct);
 }

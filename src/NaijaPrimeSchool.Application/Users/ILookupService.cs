@@ -28,4 +28,9 @@ public interface ILookupService
     Task<IReadOnlyList<LookupDto>> GetAffectiveTraitsAsync(CancellationToken ct = default);
     Task<IReadOnlyList<LookupDto>> GetPsychomotorSkillsAsync(CancellationToken ct = default);
     Task<IReadOnlyList<LookupDto>> GetTraitRatingsAsync(CancellationToken ct = default);
+
+    Task<IReadOnlyList<LookupDto>> GetFeeCategoriesAsync(CancellationToken ct = default);
+    Task<IReadOnlyList<LookupDto>> GetPaymentMethodsAsync(CancellationToken ct = default);
+    Task<IReadOnlyList<LookupDto>> GetInvoiceStatusesAsync(CancellationToken ct = default);
+    Task<IReadOnlyList<LookupDto>> GetPaymentStatusesAsync(CancellationToken ct = default);
 }

@@ -1,0 +1,194 @@
+@page "/invoices/{Id:guid}"
+@attribute [Authorize(Roles = $"{Roles.SuperAdmin},{Roles.HeadTeacher},{Roles.SchoolBursar}")]
+@rendermode InteractiveServer
+
+@inject IInvoiceService InvoiceService
+@inject NavigationManager Nav
+@inject DialogService Dialog
+@inject NotificationService Notification
+
+<PageTitle>Invoice · Naija Prime School</PageTitle>
+
+@if (loading)
+{
+    <p>Loading invoice...</p>
+}
+else if (detail is null)
+{
+    <RadzenAlert Severity="AlertSeverity.Warning">Invoice not found.</RadzenAlert>
+}
+else
+{
+    <div class="nps-page-header">
+        <div class="nps-card-headline">
+            <StudentAvatar PhotoUrl="@detail.Invoice.StudentPhotoUrl"
+                           FirstName="@detail.Invoice.StudentFirstName"
+                           LastName="@detail.Invoice.StudentLastName"
+                           Size="large" />
+            <div>
+                <h1>@detail.Invoice.InvoiceNumber</h1>
+                <p>
+                    @detail.Invoice.StudentName · @detail.Invoice.StudentAdmissionNumber ·
+                    @detail.Invoice.SchoolClassName · @detail.Invoice.TermName
+                </p>
+            </div>
+        </div>
+        <div class="nps-page-actions">
+            <RadzenBadge Text="@detail.Invoice.InvoiceStatusName"
+                         BadgeStyle="@StatusStyle(detail.Invoice.InvoiceStatusCode)"
+                         Variant="Variant.Flat" />
+            <RadzenButton Text="Record payment" Icon="payments" ButtonStyle="ButtonStyle.Primary"
+                          Click="@GoToRecordPayment" />
+            <RadzenButton Text="Back" Icon="arrow_back" Variant="Variant.Flat"
+                          ButtonStyle="ButtonStyle.Light" Click="@(() => Nav.NavigateTo("/invoices"))" />
+        </div>
+    </div>
+
+    <RadzenCard class="nps-card" Style="margin-bottom: 1rem;">
+        <div class="nps-stat-grid">
+            <div class="nps-stat-card">
+                <div class="nps-stat-icon"><RadzenIcon Icon="request_quote" /></div>
+                <div>
+                    <div class="nps-stat-label">Subtotal</div>
+                    <div class="nps-stat-value">@detail.Invoice.Subtotal.ToString("N2")</div>
+                </div>
+            </div>
+            <div class="nps-stat-card">
+                <div class="nps-stat-icon"><RadzenIcon Icon="discount" /></div>
+                <div>
+                    <div class="nps-stat-label">Discount</div>
+                    <div class="nps-stat-value">@detail.Invoice.DiscountTotal.ToString("N2")</div>
+                </div>
+            </div>
+            <div class="nps-stat-card">
+                <div class="nps-stat-icon"><RadzenIcon Icon="paid" /></div>
+                <div>
+                    <div class="nps-stat-label">Paid</div>
+                    <div class="nps-stat-value">@detail.Invoice.AmountPaid.ToString("N2")</div>
+                </div>
+            </div>
+            <div class="nps-stat-card">
+                <div class="nps-stat-icon"><RadzenIcon Icon="account_balance_wallet" /></div>
+                <div>
+                    <div class="nps-stat-label">Balance</div>
+                    <div class="nps-stat-value">@detail.Invoice.Balance.ToString("N2")</div>
+                </div>
+            </div>
+        </div>
+    </RadzenCard>
+
+    <RadzenCard class="nps-card" Style="margin-bottom: 1rem;">
+        <h3 style="margin: 0 0 1rem;">Line items</h3>
+        <RadzenDataGrid TItem="InvoiceLineDto" Data="@detail.Lines" AllowPaging="false">
+            <Columns>
+                <RadzenDataGridColumn TItem="InvoiceLineDto" Title="Category" Property="FeeCategoryName" Width="180px" />
+                <RadzenDataGridColumn TItem="InvoiceLineDto" Title="Description" Property="Description" />
+                <RadzenDataGridColumn TItem="InvoiceLineDto" Title="Amount" Width="140px">
+                    <Template Context="l">@l.Amount.ToString("N2")</Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="InvoiceLineDto" Title="Discount" Width="180px">
+                    <Template Context="l">
+                        <RadzenNumeric TValue="decimal" Value="@l.Discount" Min="0" Max="@l.Amount" Format="N2"
+                                       Disabled="@(detail.Invoice.InvoiceStatusCode == "CANCELLED")"
+                                       Change="@(v => UpdateDiscountAsync(l.Id, v))" />
+                    </Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="InvoiceLineDto" Title="Net" Width="140px">
+                    <Template Context="l"><strong>@l.LineTotal.ToString("N2")</strong></Template>
+                </RadzenDataGridColumn>
+            </Columns>
+        </RadzenDataGrid>
+    </RadzenCard>
+
+    <RadzenCard class="nps-card">
+        <h3 style="margin: 0 0 1rem;">Payments applied (@detail.Payments.Count)</h3>
+        @if (detail.Payments.Count == 0)
+        {
+            <p style="color: var(--nps-ink-500);">No payments yet.</p>
+        }
+        else
+        {
+            <RadzenDataGrid TItem="InvoicePaymentDto" Data="@detail.Payments" AllowPaging="false">
+                <Columns>
+                    <RadzenDataGridColumn TItem="InvoicePaymentDto" Title="Receipt">
+                        <Template Context="p">
+                            <strong>@p.ReceiptNumber</strong>
+                            <br />
+                            <small style="color: var(--nps-ink-500);">@p.PaidOn.ToString("d MMM yyyy")</small>
+                        </Template>
+                    </RadzenDataGridColumn>
+                    <RadzenDataGridColumn TItem="InvoicePaymentDto" Title="Method" Property="PaymentMethodName" />
+                    <RadzenDataGridColumn TItem="InvoicePaymentDto" Title="Reference" Property="Reference" />
+                    <RadzenDataGridColumn TItem="InvoicePaymentDto" Title="Amount applied" Width="160px">
+                        <Template Context="p"><strong>@p.AmountApplied.ToString("N2")</strong></Template>
+                    </RadzenDataGridColumn>
+                    <RadzenDataGridColumn TItem="InvoicePaymentDto" Title="Open" Width="100px" Sortable="false" TextAlign="TextAlign.Right">
+                        <Template Context="p">
+                            <RadzenButton Icon="open_in_new" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                          ButtonStyle="ButtonStyle.Light"
+                                          Click="@(() => Nav.NavigateTo($"/payments/{p.PaymentId}"))" />
+                        </Template>
+                    </RadzenDataGridColumn>
+                </Columns>
+            </RadzenDataGrid>
+        }
+    </RadzenCard>
+
+    @if (!string.IsNullOrEmpty(detail.Invoice.Notes))
+    {
+        <RadzenCard class="nps-card" Style="margin-top:1rem;">
+            <h3 style="margin: 0 0 0.5rem;">Notes</h3>
+            <p style="margin: 0;">@detail.Invoice.Notes</p>
+        </RadzenCard>
+    }
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private InvoiceDetailDto? detail;
+    private bool loading = true;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        try { detail = await InvoiceService.GetByIdAsync(Id); }
+        finally { loading = false; }
+    }
+
+    private void GoToRecordPayment()
+    {
+        if (detail is null) return;
+        Nav.NavigateTo($"/payments/new?studentId={detail.Invoice.StudentId}&invoiceId={Id}");
+    }
+
+    private async Task UpdateDiscountAsync(Guid lineId, decimal discount)
+    {
+        var result = await InvoiceService.SetLineDiscountAsync(new UpdateInvoiceLineDiscountRequest
+        {
+            InvoiceLineId = lineId,
+            Discount = discount,
+        });
+        if (result.Succeeded)
+        {
+            Notification.Notify(NotificationSeverity.Success, "Saved", "Discount applied.");
+            await LoadAsync();
+        }
+        else
+        {
+            Notification.Notify(NotificationSeverity.Error, "Failed", string.Join("; ", result.Errors));
+            await LoadAsync();
+        }
+    }
+
+    private static BadgeStyle StatusStyle(string code) => code switch
+    {
+        "PAID" => BadgeStyle.Success,
+        "PARTIAL" => BadgeStyle.Info,
+        "OVERDUE" => BadgeStyle.Danger,
+        "CANCELLED" => BadgeStyle.Secondary,
+        _ => BadgeStyle.Warning,
+    };
+}

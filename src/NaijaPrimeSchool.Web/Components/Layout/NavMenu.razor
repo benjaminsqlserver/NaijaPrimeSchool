@@ -58,9 +58,16 @@
         </Authorized>
     </AuthorizeView>
 
-    <AuthorizeView Roles="@($"{Roles.SuperAdmin},{Roles.SchoolBursar}")">
+    <AuthorizeView Roles="@($"{Roles.SuperAdmin},{Roles.HeadTeacher},{Roles.SchoolBursar}")">
         <Authorized>
-            <RadzenPanelMenuItem Text="Finance" Icon="payments" Disabled="true" />
+            <RadzenPanelMenuItem Text="Finance" Icon="payments" Expanded="true">
+                <RadzenPanelMenuItem Text="Bursar dashboard" Icon="space_dashboard" Path="/finance" />
+                <RadzenPanelMenuItem Text="Fee schedules" Icon="receipt_long" Path="/fees" />
+                <RadzenPanelMenuItem Text="Invoices" Icon="request_quote" Path="/invoices" />
+                <RadzenPanelMenuItem Text="Issue invoices" Icon="post_add" Path="/invoices/issue" />
+                <RadzenPanelMenuItem Text="Payments" Icon="payments" Path="/payments" />
+                <RadzenPanelMenuItem Text="Record payment" Icon="add_card" Path="/payments/new" />
+            </RadzenPanelMenuItem>
         </Authorized>
     </AuthorizeView>
 

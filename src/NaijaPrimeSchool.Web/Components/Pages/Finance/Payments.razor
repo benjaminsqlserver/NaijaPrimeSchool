@@ -1,0 +1,153 @@
+@page "/payments"
+@attribute [Authorize(Roles = $"{Roles.SuperAdmin},{Roles.HeadTeacher},{Roles.SchoolBursar}")]
+@rendermode InteractiveServer
+
+@inject IPaymentService PaymentService
+@inject ILookupService LookupService
+@inject NavigationManager Nav
+@inject NotificationService Notification
+
+<PageTitle>Payments · Naija Prime School</PageTitle>
+
+<div class="nps-page-header">
+    <div>
+        <h1>Payments</h1>
+        <p>Every receipt issued for a pupil's payment. Filter by method, status, date range, or pupil.</p>
+    </div>
+    <div class="nps-page-actions">
+        <RadzenButton Text="Record payment" Icon="add" ButtonStyle="ButtonStyle.Primary"
+                      Click="@(() => Nav.NavigateTo("/payments/new"))" />
+    </div>
+</div>
+
+<RadzenCard class="nps-card" Style="margin-bottom: 1rem;">
+    <div class="nps-filter-bar">
+        <div class="nps-field">
+            <label>Search</label>
+            <RadzenTextBox @bind-Value="search" Placeholder="Receipt no, pupil, reference"
+                           Change="@(_ => LoadAsync())" Style="min-width: 280px;" />
+        </div>
+        <div class="nps-field">
+            <label>Method</label>
+            <RadzenDropDown TValue="Guid?" Data="@methods" TextProperty="Name" ValueProperty="Id"
+                            @bind-Value="methodId" AllowClear="true" Placeholder="All methods"
+                            Change="@(_ => LoadAsync())" Style="min-width: 180px;" />
+        </div>
+        <div class="nps-field">
+            <label>Status</label>
+            <RadzenDropDown TValue="Guid?" Data="@statuses" TextProperty="Name" ValueProperty="Id"
+                            @bind-Value="statusId" AllowClear="true" Placeholder="All statuses"
+                            Change="@(_ => LoadAsync())" Style="min-width: 180px;" />
+        </div>
+        <div class="nps-field">
+            <label>From</label>
+            <RadzenDatePicker TValue="DateTime?" @bind-Value="fromDate" DateFormat="d MMM yyyy"
+                              Change="@(_ => LoadAsync())" Style="min-width: 160px;" />
+        </div>
+        <div class="nps-field">
+            <label>To</label>
+            <RadzenDatePicker TValue="DateTime?" @bind-Value="toDate" DateFormat="d MMM yyyy"
+                              Change="@(_ => LoadAsync())" Style="min-width: 160px;" />
+        </div>
+    </div>
+</RadzenCard>
+
+<RadzenCard class="nps-card">
+    <RadzenDataGrid TItem="PaymentDto" Data="@payments" IsLoading="@loading"
+                    AllowPaging="true" PageSize="25" EmptyText="No payments match your filters.">
+        <Columns>
+            <RadzenDataGridColumn TItem="PaymentDto" Title="Receipt">
+                <Template Context="p">
+                    <strong>@p.ReceiptNumber</strong>
+                    <br />
+                    <small style="color: var(--nps-ink-500);">@p.PaidOn.ToString("d MMM yyyy")</small>
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="PaymentDto" Title="Pupil">
+                <Template Context="p">
+                    <div class="nps-cell-with-avatar">
+                        <StudentAvatar PhotoUrl="@p.StudentPhotoUrl"
+                                       FirstName="@p.StudentFirstName"
+                                       LastName="@p.StudentLastName" />
+                        <div style="display:flex; flex-direction:column;">
+                            <strong>@p.StudentName</strong>
+                            <small style="color: var(--nps-ink-500);">@p.StudentAdmissionNumber</small>
+                        </div>
+                    </div>
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="PaymentDto" Title="Method" Property="PaymentMethodName" Width="160px" />
+            <RadzenDataGridColumn TItem="PaymentDto" Title="Reference" Property="Reference" />
+            <RadzenDataGridColumn TItem="PaymentDto" Title="Amount" Width="120px">
+                <Template Context="p"><strong>@p.Amount.ToString("N2")</strong></Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="PaymentDto" Title="Allocated" Width="120px">
+                <Template Context="p">@p.AmountAllocated.ToString("N2")</Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="PaymentDto" Title="Status" Width="140px">
+                <Template Context="p">
+                    <RadzenBadge Text="@p.PaymentStatusName"
+                                 BadgeStyle="@StatusStyle(p.PaymentStatusCode)"
+                                 Variant="Variant.Flat" />
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="PaymentDto" Title="Open" Width="100px" Sortable="false" TextAlign="TextAlign.Right">
+                <Template Context="p">
+                    <RadzenButton Icon="visibility" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                  ButtonStyle="ButtonStyle.Light"
+                                  Click="@(() => Nav.NavigateTo($"/payments/{p.Id}"))" />
+                </Template>
+            </RadzenDataGridColumn>
+        </Columns>
+    </RadzenDataGrid>
+</RadzenCard>
+
+@code {
+    private IReadOnlyList<PaymentDto> payments = [];
+    private IReadOnlyList<LookupDto> methods = [];
+    private IReadOnlyList<LookupDto> statuses = [];
+    private bool loading;
+
+    private string? search;
+    private Guid? methodId;
+    private Guid? statusId;
+    private DateTime? fromDate;
+    private DateTime? toDate;
+
+    protected override async Task OnInitializedAsync()
+    {
+        methods = await LookupService.GetPaymentMethodsAsync();
+        statuses = await LookupService.GetPaymentStatusesAsync();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        try
+        {
+            payments = await PaymentService.ListAsync(new PaymentFilter
+            {
+                Search = search,
+                PaymentMethodId = methodId,
+                PaymentStatusId = statusId,
+                FromDate = fromDate.HasValue ? DateOnly.FromDateTime(fromDate.Value) : null,
+                ToDate = toDate.HasValue ? DateOnly.FromDateTime(toDate.Value) : null,
+            });
+        }
+        finally
+        {
+            loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private static BadgeStyle StatusStyle(string code) => code switch
+    {
+        "CONFIRMED" => BadgeStyle.Success,
+        "PENDING" => BadgeStyle.Warning,
+        "REFUNDED" => BadgeStyle.Secondary,
+        "BOUNCED" => BadgeStyle.Danger,
+        _ => BadgeStyle.Info,
+    };
+}

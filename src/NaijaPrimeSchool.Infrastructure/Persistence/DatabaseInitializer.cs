@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using NaijaPrimeSchool.Domain.Academics;
 using NaijaPrimeSchool.Domain.Attendance;
 using NaijaPrimeSchool.Domain.Family;
+using NaijaPrimeSchool.Domain.Finance;
 using NaijaPrimeSchool.Domain.Identity;
 using NaijaPrimeSchool.Domain.Results;
 
@@ -31,8 +32,108 @@ public static class DatabaseInitializer
         await SeedFamilyLookupsAsync(db, ct);
         await SeedAttendanceLookupsAsync(db, ct);
         await SeedResultsLookupsAsync(db, ct);
+        await SeedFinanceLookupsAsync(db, ct);
         await SeedRolesAsync(sp, ct);
         await SeedSuperAdminAsync(sp, logger, ct);
+    }
+
+    private static async Task SeedFinanceLookupsAsync(ApplicationDbContext db, CancellationToken ct)
+    {
+        if (!await db.FeeCategories.IgnoreQueryFilters().AnyAsync(ct))
+        {
+            (string Name, string Code, bool Mandatory)[] categories =
+            [
+                ("Tuition",            "TUI",  true),
+                ("Development Levy",   "DEV",  true),
+                ("Examination",        "EXAM", true),
+                ("Books",              "BOOK", false),
+                ("Uniforms",           "UNIF", false),
+                ("Transport",          "TRAN", false),
+                ("Meals",              "MEAL", false),
+                ("Boarding",           "BRD",  false),
+                ("PTA Levy",           "PTA",  true),
+                ("Other",              "OTH",  false),
+            ];
+            for (var i = 0; i < categories.Length; i++)
+            {
+                var c = categories[i];
+                db.FeeCategories.Add(new FeeCategory
+                {
+                    Name = c.Name,
+                    Code = c.Code,
+                    DisplayOrder = i + 1,
+                    IsMandatoryByDefault = c.Mandatory,
+                });
+            }
+        }
+
+        if (!await db.PaymentMethods.IgnoreQueryFilters().AnyAsync(ct))
+        {
+            (string Name, string Code, bool RequiresRef)[] methods =
+            [
+                ("Cash",           "CASH",  false),
+                ("Bank Transfer",  "BANK",  true),
+                ("POS",            "POS",   true),
+                ("Cheque",         "CHQ",   true),
+                ("Mobile Money",   "MMNY",  true),
+                ("Online Payment", "ONL",   true),
+            ];
+            for (var i = 0; i < methods.Length; i++)
+            {
+                var m = methods[i];
+                db.PaymentMethods.Add(new PaymentMethod
+                {
+                    Name = m.Name,
+                    Code = m.Code,
+                    DisplayOrder = i + 1,
+                    RequiresReference = m.RequiresRef,
+                });
+            }
+        }
+
+        if (!await db.InvoiceStatuses.IgnoreQueryFilters().AnyAsync(ct))
+        {
+            (string Name, string Code)[] statuses =
+            [
+                ("Draft",          "DRAFT"),
+                ("Issued",         "ISSUED"),
+                ("Partially Paid", "PARTIAL"),
+                ("Paid",           "PAID"),
+                ("Overdue",        "OVERDUE"),
+                ("Cancelled",      "CANCELLED"),
+            ];
+            for (var i = 0; i < statuses.Length; i++)
+            {
+                db.InvoiceStatuses.Add(new InvoiceStatus
+                {
+                    Name = statuses[i].Name,
+                    Code = statuses[i].Code,
+                    DisplayOrder = i + 1,
+                });
+            }
+        }
+
+        if (!await db.PaymentStatuses.IgnoreQueryFilters().AnyAsync(ct))
+        {
+            (string Name, string Code)[] statuses =
+            [
+                ("Pending",   "PENDING"),
+                ("Confirmed", "CONFIRMED"),
+                ("Bounced",   "BOUNCED"),
+                ("Refunded",  "REFUNDED"),
+            ];
+            for (var i = 0; i < statuses.Length; i++)
+            {
+                db.PaymentStatuses.Add(new PaymentStatus
+                {
+                    Name = statuses[i].Name,
+                    Code = statuses[i].Code,
+                    DisplayOrder = i + 1,
+                });
+            }
+        }
+
+        await db.SaveChangesAsync(ct);
     }
 
     private static async Task SeedResultsLookupsAsync(ApplicationDbContext db, CancellationToken ct)

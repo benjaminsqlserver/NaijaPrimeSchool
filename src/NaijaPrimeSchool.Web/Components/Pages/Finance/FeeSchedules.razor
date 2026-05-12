@@ -1,0 +1,300 @@
+@page "/fees"
+@attribute [Authorize(Roles = $"{Roles.SuperAdmin},{Roles.HeadTeacher},{Roles.SchoolBursar}")]
+@rendermode InteractiveServer
+
+@inject IFeeScheduleService FeeScheduleService
+@inject ITermService TermService
+@inject ILookupService LookupService
+@inject NavigationManager Nav
+@inject DialogService Dialog
+@inject NotificationService Notification
+
+<PageTitle>Fee schedules · Naija Prime School</PageTitle>
+
+<div class="nps-page-header">
+    <div>
+        <h1>Fee schedules</h1>
+        <p>Define the per-(term, class level) fee structure that drives every invoice issued to a pupil.</p>
+    </div>
+    <div class="nps-page-actions">
+        <RadzenButton Text="New schedule" Icon="add" ButtonStyle="ButtonStyle.Primary"
+                      Click="@(() => OpenForm(null))" />
+    </div>
+</div>
+
+<RadzenCard class="nps-card" Style="margin-bottom: 1rem;">
+    <div class="nps-filter-bar">
+        <div class="nps-field">
+            <label>Term</label>
+            <RadzenDropDown TValue="Guid?" Data="@terms" @bind-Value="termId"
+                            ValueProperty="Id" TextProperty="TermTypeName"
+                            AllowClear="true" Placeholder="All terms"
+                            Change="@(_ => LoadAsync())" Style="min-width: 220px;">
+                <Template Context="t">
+                    @{ var dto = (TermDto)t; }
+                    @dto.TermTypeName — @dto.SessionName
+                </Template>
+            </RadzenDropDown>
+        </div>
+        <div class="nps-field">
+            <label>Class level</label>
+            <RadzenDropDown TValue="Guid?" Data="@classLevels" TextProperty="Name" ValueProperty="Id"
+                            @bind-Value="classLevelId" AllowClear="true" Placeholder="All levels"
+                            Change="@(_ => LoadAsync())" Style="min-width: 200px;" />
+        </div>
+        <div class="nps-field">
+            <label>Status</label>
+            <RadzenDropDown TValue="bool?" Data="@statusOptions" TextProperty="Text" ValueProperty="Value"
+                            @bind-Value="isPublished" AllowClear="true" Placeholder="All"
+                            Change="@(_ => LoadAsync())" Style="min-width: 160px;" />
+        </div>
+    </div>
+</RadzenCard>
+
+<RadzenCard class="nps-card">
+    <RadzenDataGrid TItem="FeeScheduleDto" Data="@schedules" IsLoading="@loading"
+                    AllowPaging="true" PageSize="25" EmptyText="No fee schedules match your filters.">
+        <Columns>
+            <RadzenDataGridColumn TItem="FeeScheduleDto" Title="Title">
+                <Template Context="s">
+                    <strong>@s.Title</strong>
+                    <br />
+                    <small style="color: var(--nps-ink-500);">@s.ClassLevelName · @s.TermName</small>
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="FeeScheduleDto" Title="Items" Width="100px" Property="ItemCount" />
+            <RadzenDataGridColumn TItem="FeeScheduleDto" Title="Total" Width="140px">
+                <Template Context="s">
+                    <strong>@s.TotalAmount.ToString("N2")</strong>
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="FeeScheduleDto" Title="Invoices issued" Width="140px" Property="InvoicesIssued" />
+            <RadzenDataGridColumn TItem="FeeScheduleDto" Title="Status" Width="120px">
+                <Template Context="s">
+                    @if (s.IsPublished)
+                    {
+                        <RadzenBadge Text="Published" BadgeStyle="BadgeStyle.Success" Variant="Variant.Flat" />
+                    }
+                    else
+                    {
+                        <RadzenBadge Text="Draft" BadgeStyle="BadgeStyle.Secondary" Variant="Variant.Flat" />
+                    }
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="FeeScheduleDto" Title="Actions" Sortable="false"
+                                  Width="200px" TextAlign="TextAlign.Right">
+                <Template Context="s">
+                    <div class="nps-inline-actions">
+                        <RadzenButton Icon="edit_note" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                      ButtonStyle="ButtonStyle.Primary" title="Edit items"
+                                      Click="@(() => Nav.NavigateTo($"/fees/{s.Id}"))" />
+                        @if (s.IsPublished)
+                        {
+                            <RadzenButton Icon="lock_open" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                          ButtonStyle="ButtonStyle.Warning" title="Unpublish"
+                                          Click="@(() => UnpublishAsync(s))" />
+                        }
+                        else
+                        {
+                            <RadzenButton Icon="lock" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                          ButtonStyle="ButtonStyle.Success" title="Publish"
+                                          Click="@(() => PublishAsync(s))" />
+                        }
+                        <RadzenButton Icon="delete" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                      ButtonStyle="ButtonStyle.Danger" title="Delete"
+                                      Click="@(() => DeleteAsync(s))" />
+                    </div>
+                </Template>
+            </RadzenDataGridColumn>
+        </Columns>
+    </RadzenDataGrid>
+</RadzenCard>
+
+@if (showForm)
+{
+    <RadzenCard class="nps-card" Style="margin-top:1rem;">
+        <h3 style="margin: 0 0 1rem;">New fee schedule</h3>
+        <RadzenTemplateForm TItem="ScheduleFormModel" Data="@form" Submit="@SaveAsync">
+            <DataAnnotationsValidator />
+            <div class="nps-form-grid">
+                <div class="nps-field">
+                    <label>Term *</label>
+                    <RadzenDropDown TValue="Guid?" Data="@terms" @bind-Value="form.TermId"
+                                    ValueProperty="Id" TextProperty="TermTypeName"
+                                    Placeholder="Pick a term">
+                        <Template Context="t">
+                            @{ var dto = (TermDto)t; }
+                            @dto.TermTypeName — @dto.SessionName
+                        </Template>
+                    </RadzenDropDown>
+                </div>
+                <div class="nps-field">
+                    <label>Class level *</label>
+                    <RadzenDropDown TValue="Guid?" Data="@classLevels" TextProperty="Name" ValueProperty="Id"
+                                    @bind-Value="form.ClassLevelId" Placeholder="Pick a level" />
+                </div>
+                <div class="nps-field nps-span-2">
+                    <label>Title *</label>
+                    <RadzenTextBox @bind-Value="form.Title"
+                                   Placeholder="e.g. Primary 1 — First Term 2025/2026 fees" />
+                    <ValidationMessage For="() => form.Title" />
+                </div>
+                <div class="nps-field nps-span-2">
+                    <label>Notes</label>
+                    <RadzenTextArea @bind-Value="form.Notes" Rows="2" />
+                </div>
+            </div>
+            <div class="nps-form-actions">
+                <RadzenButton Text="Cancel" ButtonType="ButtonType.Button"
+                              ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat"
+                              Click="@(() => showForm = false)" />
+                <RadzenButton Text="@(saving ? "Saving..." : "Create schedule")"
+                              Icon="save" ButtonType="ButtonType.Submit"
+                              ButtonStyle="ButtonStyle.Primary" Disabled="@saving" />
+            </div>
+        </RadzenTemplateForm>
+    </RadzenCard>
+}
+
+@code {
+    private IReadOnlyList<FeeScheduleDto> schedules = [];
+    private List<TermDto> terms = [];
+    private IReadOnlyList<LookupDto> classLevels = [];
+
+    private bool loading;
+    private bool saving;
+    private bool showForm;
+
+    private Guid? termId;
+    private Guid? classLevelId;
+    private bool? isPublished;
+
+    private record StatusOption(string Text, bool? Value);
+    private readonly List<StatusOption> statusOptions =
+    [
+        new StatusOption("Draft", false),
+        new StatusOption("Published", true),
+    ];
+
+    private ScheduleFormModel form = new();
+
+    private class ScheduleFormModel
+    {
+        public Guid? TermId { get; set; }
+        public Guid? ClassLevelId { get; set; }
+
+        [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(120)]
+        public string Title { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.StringLength(500)]
+        public string? Notes { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        terms = (await TermService.ListAsync()).ToList();
+        termId = terms.FirstOrDefault(t => t.IsCurrent)?.Id;
+        classLevels = await LookupService.GetClassLevelsAsync();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        try
+        {
+            schedules = await FeeScheduleService.ListAsync(new FeeScheduleFilter
+            {
+                TermId = termId,
+                ClassLevelId = classLevelId,
+                IsPublished = isPublished,
+            });
+        }
+        finally
+        {
+            loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void OpenForm(FeeScheduleDto? _)
+    {
+        form = new ScheduleFormModel
+        {
+            TermId = termId ?? terms.FirstOrDefault(t => t.IsCurrent)?.Id,
+            ClassLevelId = classLevelId,
+        };
+        showForm = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (form.TermId is null || form.ClassLevelId is null)
+        {
+            Notification.Notify(NotificationSeverity.Warning, "Missing fields",
+                "Pick a term and a class level.");
+            return;
+        }
+
+        saving = true;
+        try
+        {
+            var result = await FeeScheduleService.CreateAsync(new CreateFeeScheduleRequest
+            {
+                TermId = form.TermId.Value,
+                ClassLevelId = form.ClassLevelId.Value,
+                Title = form.Title,
+                Notes = form.Notes,
+            });
+
+            if (result.Succeeded && result.Data != Guid.Empty)
+            {
+                Notification.Notify(NotificationSeverity.Success, "Created", "Fee schedule created.");
+                showForm = false;
+                Nav.NavigateTo($"/fees/{result.Data}");
+            }
+            else
+            {
+                Notification.Notify(NotificationSeverity.Error, "Failed", string.Join("; ", result.Errors));
+            }
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private async Task PublishAsync(FeeScheduleDto s)
+    {
+        var result = await FeeScheduleService.PublishAsync(s.Id);
+        Show(result, $"'{s.Title}' published.");
+        await LoadAsync();
+    }
+
+    private async Task UnpublishAsync(FeeScheduleDto s)
+    {
+        var result = await FeeScheduleService.UnpublishAsync(s.Id);
+        Show(result, $"'{s.Title}' unpublished.");
+        await LoadAsync();
+    }
+
+    private async Task DeleteAsync(FeeScheduleDto s)
+    {
+        var confirm = await Dialog.Confirm($"Delete fee schedule '{s.Title}'?",
+            "Delete fee schedule",
+            new ConfirmOptions { OkButtonText = "Delete", CancelButtonText = "Cancel" });
+        if (confirm != true) return;
+
+        var result = await FeeScheduleService.SoftDeleteAsync(s.Id);
+        Show(result, $"'{s.Title}' deleted.");
+        await LoadAsync();
+    }
+
+    private void Show(OperationResult result, string success)
+    {
+        if (result.Succeeded)
+            Notification.Notify(NotificationSeverity.Success, "Done", success);
+        else
+            Notification.Notify(NotificationSeverity.Error, "Failed", string.Join("; ", result.Errors));
+    }
+}
