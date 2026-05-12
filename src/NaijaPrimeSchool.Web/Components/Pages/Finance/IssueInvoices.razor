@@ -1,0 +1,151 @@
+@page "/invoices/issue"
+@attribute [Authorize(Roles = $"{Roles.SuperAdmin},{Roles.HeadTeacher},{Roles.SchoolBursar}")]
+@rendermode InteractiveServer
+
+@inject IFeeScheduleService FeeScheduleService
+@inject IInvoiceService InvoiceService
+@inject ITermService TermService
+@inject ILookupService LookupService
+@inject NavigationManager Nav
+@inject NotificationService Notification
+
+<PageTitle>Issue invoices · Naija Prime School</PageTitle>
+
+<div class="nps-page-header">
+    <div>
+        <h1>Issue invoices</h1>
+        <p>Pick a published fee schedule and a class. The system creates one invoice per actively-enrolled pupil with the schedule's line items.</p>
+    </div>
+    <div class="nps-page-actions">
+        <RadzenButton Text="Back" Icon="arrow_back" Variant="Variant.Flat"
+                      ButtonStyle="ButtonStyle.Light" Click="@(() => Nav.NavigateTo("/invoices"))" />
+    </div>
+</div>
+
+<RadzenCard class="nps-card">
+    <div class="nps-form-grid">
+        <div class="nps-field">
+            <label>Term *</label>
+            <RadzenDropDown TValue="Guid?" Data="@terms" @bind-Value="termId"
+                            ValueProperty="Id" TextProperty="TermTypeName"
+                            Placeholder="Pick a term"
+                            Change="@(_ => ReloadSchedulesAsync())">
+                <Template Context="t">
+                    @{ var dto = (TermDto)t; }
+                    @dto.TermTypeName — @dto.SessionName
+                </Template>
+            </RadzenDropDown>
+        </div>
+        <div class="nps-field">
+            <label>Fee schedule *</label>
+            <RadzenDropDown TValue="Guid?" Data="@schedules" TextProperty="Title" ValueProperty="Id"
+                            @bind-Value="scheduleId" Placeholder="Pick a published schedule" />
+            <small style="color: var(--nps-ink-500);">
+                Only published schedules for the chosen term are listed.
+            </small>
+        </div>
+        <div class="nps-field">
+            <label>Class *</label>
+            <RadzenDropDown TValue="Guid?" Data="@classes" TextProperty="Name" ValueProperty="Id"
+                            @bind-Value="classId" Placeholder="Pick a class" />
+            <small style="color: var(--nps-ink-500);">
+                Must match the class level of the chosen schedule.
+            </small>
+        </div>
+        <div class="nps-field">
+            <label>Issued on *</label>
+            <RadzenDatePicker TValue="DateTime?" @bind-Value="issuedOn"
+                              DateFormat="d MMM yyyy" ShowTime="false" />
+        </div>
+        <div class="nps-field">
+            <label>Due date</label>
+            <RadzenDatePicker TValue="DateTime?" @bind-Value="dueDate"
+                              DateFormat="d MMM yyyy" ShowTime="false" />
+        </div>
+    </div>
+    <div class="nps-form-actions">
+        <RadzenButton Text="@(issuing ? "Issuing..." : "Issue invoices")"
+                      Icon="receipt_long" ButtonStyle="ButtonStyle.Primary"
+                      Disabled="@issuing" Click="@IssueAsync" />
+    </div>
+</RadzenCard>
+
+@code {
+    private List<TermDto> terms = [];
+    private List<FeeScheduleDto> schedules = [];
+    private IReadOnlyList<LookupDto> classes = [];
+
+    private Guid? termId;
+    private Guid? scheduleId;
+    private Guid? classId;
+    private DateTime? issuedOn = DateTime.Today;
+    private DateTime? dueDate;
+
+    private bool issuing;
+
+    protected override async Task OnInitializedAsync()
+    {
+        terms = (await TermService.ListAsync()).ToList();
+        termId = terms.FirstOrDefault(t => t.IsCurrent)?.Id;
+        classes = await LookupService.GetClassesForSessionAsync();
+        await ReloadSchedulesAsync();
+    }
+
+    private async Task ReloadSchedulesAsync()
+    {
+        scheduleId = null;
+        if (termId.HasValue)
+        {
+            schedules = (await FeeScheduleService.ListAsync(new FeeScheduleFilter
+            {
+                TermId = termId,
+                IsPublished = true,
+            })).ToList();
+        }
+        else
+        {
+            schedules = [];
+        }
+    }
+
+    private async Task IssueAsync()
+    {
+        if (scheduleId is null || classId is null || issuedOn is null)
+        {
+            Notification.Notify(NotificationSeverity.Warning, "Missing fields",
+                "Pick a schedule, a class, and an issued-on date.");
+            return;
+        }
+
+        issuing = true;
+        try
+        {
+            var result = await InvoiceService.IssueAsync(new IssueInvoicesRequest
+            {
+                FeeScheduleId = scheduleId.Value,
+                SchoolClassId = classId.Value,
+                IssuedOn = DateOnly.FromDateTime(issuedOn.Value),
+                DueDate = dueDate.HasValue ? DateOnly.FromDateTime(dueDate.Value) : null,
+            });
+
+            if (result.Succeeded && result.Data is not null)
+            {
+                var msg = $"Issued {result.Data.Issued} invoice(s)";
+                if (result.Data.Skipped > 0) msg += $"; skipped {result.Data.Skipped}";
+                if (result.Data.Warnings.Count > 0)
+                    msg += $" ({result.Data.Warnings.Count} warning(s))";
+                Notification.Notify(NotificationSeverity.Success, "Done", msg);
+                Nav.NavigateTo("/invoices");
+            }
+            else
+            {
+                Notification.Notify(NotificationSeverity.Error, "Failed",
+                    string.Join("; ", result.Errors));
+            }
+        }
+        finally
+        {
+            issuing = false;
+        }
+    }
+}

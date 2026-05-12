@@ -9,6 +9,7 @@
     <File Path="Sprint 4 - Implementation Guide.pdf" />
     <File Path="Sprint 5 - Implementation Guide.docx" />
     <File Path="Sprint 5b - Implementation Guide.docx" />
+    <File Path="Sprint 6 - Implementation Guide.docx" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/NaijaPrimeSchool.Application/NaijaPrimeSchool.Application.csproj" />

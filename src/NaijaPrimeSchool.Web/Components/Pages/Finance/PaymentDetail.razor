@@ -1,0 +1,171 @@
+@page "/payments/{Id:guid}"
+@attribute [Authorize(Roles = $"{Roles.SuperAdmin},{Roles.HeadTeacher},{Roles.SchoolBursar}")]
+@rendermode InteractiveServer
+
+@inject IPaymentService PaymentService
+@inject NavigationManager Nav
+@inject DialogService Dialog
+@inject NotificationService Notification
+
+<PageTitle>Receipt · Naija Prime School</PageTitle>
+
+@if (loading)
+{
+    <p>Loading receipt...</p>
+}
+else if (detail is null)
+{
+    <RadzenAlert Severity="AlertSeverity.Warning">Payment not found.</RadzenAlert>
+}
+else
+{
+    <div class="nps-page-header">
+        <div class="nps-card-headline">
+            <StudentAvatar PhotoUrl="@detail.Payment.StudentPhotoUrl"
+                           FirstName="@detail.Payment.StudentFirstName"
+                           LastName="@detail.Payment.StudentLastName"
+                           Size="large" />
+            <div>
+                <h1>@detail.Payment.ReceiptNumber</h1>
+                <p>
+                    @detail.Payment.StudentName · @detail.Payment.StudentAdmissionNumber ·
+                    paid @detail.Payment.PaidOn.ToString("d MMM yyyy")
+                </p>
+            </div>
+        </div>
+        <div class="nps-page-actions">
+            <RadzenBadge Text="@detail.Payment.PaymentStatusName"
+                         BadgeStyle="@StatusStyle(detail.Payment.PaymentStatusCode)"
+                         Variant="Variant.Flat" />
+            @if (detail.Payment.PaymentStatusCode != "REFUNDED")
+            {
+                <RadzenButton Text="Refund" Icon="undo" Variant="Variant.Flat"
+                              ButtonStyle="ButtonStyle.Warning" Click="@RefundAsync" />
+            }
+            <RadzenButton Text="Back" Icon="arrow_back" Variant="Variant.Flat"
+                          ButtonStyle="ButtonStyle.Light" Click="@(() => Nav.NavigateTo("/payments"))" />
+        </div>
+    </div>
+
+    <RadzenCard class="nps-card" Style="margin-bottom: 1rem;">
+        <div class="nps-stat-grid">
+            <div class="nps-stat-card">
+                <div class="nps-stat-icon"><RadzenIcon Icon="paid" /></div>
+                <div>
+                    <div class="nps-stat-label">Amount</div>
+                    <div class="nps-stat-value">@detail.Payment.Amount.ToString("N2")</div>
+                </div>
+            </div>
+            <div class="nps-stat-card">
+                <div class="nps-stat-icon"><RadzenIcon Icon="receipt" /></div>
+                <div>
+                    <div class="nps-stat-label">Method</div>
+                    <div class="nps-stat-value" style="font-size: 1rem;">@detail.Payment.PaymentMethodName</div>
+                </div>
+            </div>
+            <div class="nps-stat-card">
+                <div class="nps-stat-icon"><RadzenIcon Icon="qr_code_2" /></div>
+                <div>
+                    <div class="nps-stat-label">Reference</div>
+                    <div class="nps-stat-value" style="font-size: 1rem;">
+                        @(string.IsNullOrEmpty(detail.Payment.Reference) ? "—" : detail.Payment.Reference)
+                    </div>
+                </div>
+            </div>
+            <div class="nps-stat-card">
+                <div class="nps-stat-icon"><RadzenIcon Icon="account_balance_wallet" /></div>
+                <div>
+                    <div class="nps-stat-label">Unallocated</div>
+                    <div class="nps-stat-value">@detail.Payment.AmountUnallocated.ToString("N2")</div>
+                </div>
+            </div>
+        </div>
+    </RadzenCard>
+
+    <RadzenCard class="nps-card">
+        <h3 style="margin: 0 0 1rem;">Allocations (@detail.Allocations.Count)</h3>
+        @if (detail.Allocations.Count == 0)
+        {
+            <p style="color: var(--nps-ink-500);">
+                No invoices were paired with this payment — held as credit on the pupil's ledger.
+            </p>
+        }
+        else
+        {
+            <RadzenDataGrid TItem="PaymentAllocationDto" Data="@detail.Allocations" AllowPaging="false">
+                <Columns>
+                    <RadzenDataGridColumn TItem="PaymentAllocationDto" Title="Invoice">
+                        <Template Context="a"><strong>@a.InvoiceNumber</strong></Template>
+                    </RadzenDataGridColumn>
+                    <RadzenDataGridColumn TItem="PaymentAllocationDto" Title="Applied" Width="180px">
+                        <Template Context="a"><strong>@a.AmountApplied.ToString("N2")</strong></Template>
+                    </RadzenDataGridColumn>
+                    <RadzenDataGridColumn TItem="PaymentAllocationDto" Title="Invoice balance after" Width="200px">
+                        <Template Context="a">@a.InvoiceBalanceAfter.ToString("N2")</Template>
+                    </RadzenDataGridColumn>
+                    <RadzenDataGridColumn TItem="PaymentAllocationDto" Title="Open invoice" Width="120px"
+                                          Sortable="false" TextAlign="TextAlign.Right">
+                        <Template Context="a">
+                            <RadzenButton Icon="open_in_new" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                          ButtonStyle="ButtonStyle.Light"
+                                          Click="@(() => Nav.NavigateTo($"/invoices/{a.InvoiceId}"))" />
+                        </Template>
+                    </RadzenDataGridColumn>
+                </Columns>
+            </RadzenDataGrid>
+        }
+    </RadzenCard>
+
+    @if (!string.IsNullOrEmpty(detail.Payment.Notes))
+    {
+        <RadzenCard class="nps-card" Style="margin-top:1rem;">
+            <h3 style="margin: 0 0 0.5rem;">Notes</h3>
+            <p style="margin: 0;">@detail.Payment.Notes</p>
+        </RadzenCard>
+    }
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private PaymentDetailDto? detail;
+    private bool loading = true;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        try { detail = await PaymentService.GetByIdAsync(Id); }
+        finally { loading = false; }
+    }
+
+    private async Task RefundAsync()
+    {
+        var confirm = await Dialog.Confirm(
+            "Refund this payment? The allocations will be released and the affected invoice balances will reopen.",
+            "Refund payment",
+            new ConfirmOptions { OkButtonText = "Refund", CancelButtonText = "Cancel" });
+        if (confirm != true) return;
+
+        var result = await PaymentService.RefundAsync(Id);
+        if (result.Succeeded)
+        {
+            Notification.Notify(NotificationSeverity.Success, "Refunded", "Payment refunded.");
+            await LoadAsync();
+        }
+        else
+        {
+            Notification.Notify(NotificationSeverity.Error, "Failed", string.Join("; ", result.Errors));
+        }
+    }
+
+    private static BadgeStyle StatusStyle(string code) => code switch
+    {
+        "CONFIRMED" => BadgeStyle.Success,
+        "PENDING" => BadgeStyle.Warning,
+        "REFUNDED" => BadgeStyle.Secondary,
+        "BOUNCED" => BadgeStyle.Danger,
+        _ => BadgeStyle.Info,
+    };
+}

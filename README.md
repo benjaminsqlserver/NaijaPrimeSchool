@@ -2,7 +2,7 @@
 
 A modern school management system for Nigerian primary schools, built with **.NET 10**, **Blazor Auto**, **Clean Architecture**, **SQL Server**, and **Radzen Blazor Components**.
 
-Six sprints have shipped. **Sprint 1** delivered the authentication & authorization foundation: user accounts, role-based access control, login/logout, activation/deactivation, and the SuperAdmin user-management screens. **Sprint 2** built the academic domain on top of that foundation: sessions, terms, class arms, subjects, timetable periods, and a click-to-edit weekly timetable grid. **Sprint 3** plugged students and parents into that academic structure: pupil profiles, parent/guardian directory, parent-to-pupil linkage with relationship + primary-contact + pickup flags, and per-session enrolment with a withdrawal lifecycle. **Sprint 4** lands attendance: a daily class register, per-subject session attendance off the timetable, the AttendanceStatus lookup, a submit/reopen lifecycle, and a per-class percentage summary. **Sprint 5** closes the academic loop: a per-(term, class, subject) gradebook of TermAssessments and AssessmentScores, a result computation pipeline that produces SubjectResults with grade bands and class positions, and per-(pupil, term) ReportCards with affective and psychomotor ratings, attendance roll-up, and a publish/unpublish lifecycle. **Sprint 5b** wires up pupil photographs: a dedicated upload pipeline backed by a reusable `StudentAvatar` Razor component, with the photo (or a coloured initials tile fallback) shown next to every pupil row across the Students, Enrolments, daily- and subject-attendance, score-sheet, and report-card pages.
+Seven sprints have shipped. **Sprint 1** delivered the authentication & authorization foundation: user accounts, role-based access control, login/logout, activation/deactivation, and the SuperAdmin user-management screens. **Sprint 2** built the academic domain on top of that foundation: sessions, terms, class arms, subjects, timetable periods, and a click-to-edit weekly timetable grid. **Sprint 3** plugged students and parents into that academic structure: pupil profiles, parent/guardian directory, parent-to-pupil linkage with relationship + primary-contact + pickup flags, and per-session enrolment with a withdrawal lifecycle. **Sprint 4** lands attendance: a daily class register, per-subject session attendance off the timetable, the AttendanceStatus lookup, a submit/reopen lifecycle, and a per-class percentage summary. **Sprint 5** closes the academic loop: a per-(term, class, subject) gradebook of TermAssessments and AssessmentScores, a result computation pipeline that produces SubjectResults with grade bands and class positions, and per-(pupil, term) ReportCards with affective and psychomotor ratings, attendance roll-up, and a publish/unpublish lifecycle. **Sprint 5b** wires up pupil photographs: a dedicated upload pipeline backed by a reusable `StudentAvatar` Razor component, with the photo (or a coloured initials tile fallback) shown next to every pupil row across the Students, Enrolments, daily- and subject-attendance, score-sheet, and report-card pages. **Sprint 6** lays the financial spine: per-(term, class level) `FeeSchedule`s with line items, one-click invoice issuance to every actively-enrolled pupil, multi-allocation payments with auto-allocate, refund flow, and a bursar dashboard summarising invoiced, collected and outstanding amounts.
 
 Implementation walk-throughs for each sprint live at the repo root:
 
@@ -12,6 +12,7 @@ Implementation walk-throughs for each sprint live at the repo root:
 - `Sprint 4 - Implementation Guide.pdf`
 - `Sprint 5 - Implementation Guide.pdf`
 - `Sprint 5b - Implementation Guide.docx`
+- `Sprint 6 - Implementation Guide.docx`
 
 ---
 
@@ -127,6 +128,30 @@ Implementation walk-throughs for each sprint live at the repo root:
 - **Storage hygiene**
   - `.gitignore` ignores everything under `wwwroot/uploads/students/` except `.gitkeep`, so uploaded photos stay on the local filesystem and don't pollute the repo
 
+## Sprint 6 — Fees, invoices, receipts & bursar workflows ✅
+
+- **Fee schedules**
+  - **FeeSchedule** keyed by (Term × ClassLevel) carrying a title, optional notes, and a publish/unpublish lifecycle
+  - **FeeScheduleItem** per line item keyed to a `FeeCategory`, with description, amount, mandatory flag, and display order
+  - Composite unique index on (TermId, ClassLevelId) — no two competing schedules for the same audience
+  - Edit and item changes refused while the schedule is published; unpublishing refused once invoices have been issued from it
+- **Invoices**
+  - **Invoice** issued per pupil per term with sequential `NPS/INV/<year>/<seq>` numbering
+  - **InvoiceLine** per fee category carrying description, amount, per-line discount, and a back-link to the source `FeeScheduleItem`
+  - Statuses (`Draft`, `Issued`, `PartiallyPaid`, `Paid`, `Overdue`, `Cancelled`) recomputed automatically after every discount or payment change
+  - Bulk issue action that fans a published schedule into one invoice per actively-enrolled pupil in a chosen class, skipping pupils that already have an invoice for that (term, class)
+- **Payments & receipts**
+  - **Payment** with sequential `NPS/RCP/<year>/<seq>` receipt numbering
+  - **PaymentAllocation** distributes a single payment across one or more invoices; composite unique (PaymentId, InvoiceId) index prevents double-allocation
+  - Auto-allocate-oldest-first helper on the record-payment page; hand-allocate row-by-row also supported
+  - Refund flow releases allocations and flips status to `Refunded`, leaving the receipt history intact
+- **Bursar dashboard**
+  - Per-term summary of total invoiced, total collected, total outstanding, plus invoice-status counts
+  - Collected-by-method and invoiced-by-category breakdowns
+- **Lookup tables (no enums)**
+  - `FeeCategories` (with `IsMandatoryByDefault` flag), `PaymentMethods` (with `RequiresReference` flag), `InvoiceStatuses`, `PaymentStatuses` — each seeded on startup; services key off `Code` so rows can be renamed without breaking logic
+- **Pages added** (`/fees`, `/fees/{id}`, `/invoices`, `/invoices/issue`, `/invoices/{id}`, `/payments`, `/payments/new`, `/payments/{id}`, `/finance`) — all gated to **SuperAdmin** + **HeadTeacher** + **SchoolBursar**. The previously-disabled Finance navigation placeholder is now a fully realised workspace.
+
 ## Cross-cutting (every sprint)
 
 - **Beautiful, inviting UI**
@@ -134,7 +159,7 @@ Implementation walk-throughs for each sprint live at the repo root:
   - Radzen Blazor components (DataGrid, Dialog, Notification, Layout, Sidebar, Forms)
   - Responsive layout
 - **Data integrity**
-  - No enums; every lookup (roles, titles, genders, term types, class levels, week days, relationships, enrolment statuses, blood groups, marital statuses, attendance statuses, assessment types, grade bands, affective traits, psychomotor skills, trait ratings, …) is a first-class table
+  - No enums; every lookup (roles, titles, genders, term types, class levels, week days, relationships, enrolment statuses, blood groups, marital statuses, attendance statuses, assessment types, grade bands, affective traits, psychomotor skills, trait ratings, fee categories, payment methods, invoice statuses, payment statuses, …) is a first-class table
   - Soft delete for all entities, enforced globally via EF Core query filters
   - Auditing (CreatedOn/By, ModifiedOn/By, DeletedOn/By) applied automatically in `SaveChanges`
 
@@ -163,14 +188,16 @@ NaijaPrimeSchool/
 │   │   ├── Academics/                           # Session, Term, SchoolClass, Subject, Timetable* (sprint 2)
 │   │   ├── Family/                              # Student, Parent, StudentParent, Enrolment + lookups (sprint 3)
 │   │   ├── Attendance/                          # Daily/Subject registers + AttendanceStatus lookup (sprint 4)
-│   │   └── Results/                             # TermAssessment, SubjectResult, ReportCard + lookups (sprint 5)
+│   │   ├── Results/                             # TermAssessment, SubjectResult, ReportCard + lookups (sprint 5)
+│   │   └── Finance/                             # FeeSchedule, Invoice, Payment + lookups (sprint 6)
 │   ├── NaijaPrimeSchool.Application/            # DTOs, service contracts, shared abstractions
 │   │   ├── Common/                              # ICurrentUser, OperationResult
 │   │   ├── Users/                               # IUserService, ILookupService, DTOs (sprint 1)
 │   │   ├── Academics/                           # I*Service interfaces and DTOs (sprint 2)
 │   │   ├── Family/                              # IStudentService, IParentService, IEnrolmentService, DTOs (sprint 3)
 │   │   ├── Attendance/                          # IDailyAttendanceService, ISubjectAttendanceService, DTOs (sprint 4)
-│   │   └── Results/                             # IAssessmentService, IResultService, IReportCardService, DTOs (sprint 5)
+│   │   ├── Results/                             # IAssessmentService, IResultService, IReportCardService, DTOs (sprint 5)
+│   │   └── Finance/                             # IFeeScheduleService, IInvoiceService, IPaymentService, DTOs (sprint 6)
 │   ├── NaijaPrimeSchool.Infrastructure/         # EF Core DbContext, Identity stores, service impls, seed, migrations
 │   ├── NaijaPrimeSchool.Web/                    # Blazor server host (auth endpoints, layout, pages, Program.cs)
 │   │   └── Components/Pages/
@@ -178,7 +205,8 @@ NaijaPrimeSchool/
 │   │       ├── Academics/                       # Sessions, Terms, Classes, Subjects, Periods, Timetable (sprint 2)
 │   │       ├── Family/                          # Students, Parents, Enrolments (sprint 3)
 │   │       ├── Attendance/                      # Daily, Subject and Summary attendance pages (sprint 4)
-│   │       └── Results/                         # Assessments, Score sheet, Results, Report cards (sprint 5)
+│   │       ├── Results/                         # Assessments, Score sheet, Results, Report cards (sprint 5)
+│   │       └── Finance/                         # Fee schedules, Invoices, Payments, Bursar dashboard (sprint 6)
 │   └── NaijaPrimeSchool.Web.Client/             # Blazor WebAssembly client (Auto interactivity)
 ├── tools/                                       # Scripts (e.g. sprint guide generators)
 └── NaijaPrimeSchool.slnx
@@ -352,11 +380,18 @@ User management screens are gated behind the `ManageUsers` policy, which require
 | `src/NaijaPrimeSchool.Infrastructure/Services/StudentPhotoService.cs` | Saves to `wwwroot/uploads/students`, updates `Student.PhotoUrl` |
 | `src/NaijaPrimeSchool.Web/Components/Shared/StudentAvatar.razor` | Reusable circular avatar (photo or initials fallback) |
 | `src/NaijaPrimeSchool.Web/wwwroot/uploads/students/` | Per-pupil photo storage (gitignored except `.gitkeep`) |
+| `src/NaijaPrimeSchool.Domain/Finance/` | FeeSchedule, FeeScheduleItem, Invoice, InvoiceLine, Payment, PaymentAllocation + lookups (sprint 6) |
+| `src/NaijaPrimeSchool.Application/Finance/` | I*Service contracts and DTOs for fees, invoices, payments, ledger |
+| `src/NaijaPrimeSchool.Infrastructure/Services/FeeScheduleService.cs` | Schedule + items CRUD, publish lifecycle |
+| `src/NaijaPrimeSchool.Infrastructure/Services/InvoiceService.cs` | Issue from schedule, set discounts, cancel, ledger, status recompute |
+| `src/NaijaPrimeSchool.Infrastructure/Services/PaymentService.cs` | Record, refund, bursar-dashboard summary |
+| `src/NaijaPrimeSchool.Web/Components/Pages/Finance/` | Fee schedules, invoices, payments, bursar dashboard |
 | `tools/generate_sprint2_guide.py` | Generator for `Sprint 2 - Implementation Guide.docx` |
 | `tools/generate_sprint3_guide.py` | Generator for `Sprint 3 - Implementation Guide.docx` |
 | `tools/generate_sprint4_guide.py` | Generator for `Sprint 4 - Implementation Guide.docx` |
 | `tools/generate_sprint5_guide.py` | Generator for `Sprint 5 - Implementation Guide.docx` |
 | `tools/generate_sprint5b_guide.py` | Generator for `Sprint 5b - Implementation Guide.docx` |
+| `tools/generate_sprint6_guide.py` | Generator for `Sprint 6 - Implementation Guide.docx` |
 
 ---
 
@@ -370,10 +405,10 @@ Delivered:
 - ✅ **Sprint 4** — Attendance (daily + per-subject registers, submit/reopen lifecycle, summary)
 - ✅ **Sprint 5** — Assessments, results & report cards (gradebook, weighted compute, grade bands, term cards)
 - ✅ **Sprint 5b** — Student photographs (upload pipeline, reusable avatar component, photos shown across every pupil-facing page)
+- ✅ **Sprint 6** — Fees, invoices, receipts & bursar workflows (fee schedules, invoice issuance, multi-allocation payments with refund, bursar dashboard)
 
 Planned for upcoming sprints:
 
-- Sprint 6 — Fees, invoices, receipts, bursar workflows
 - Sprint 7 — Store & inventory management for the storekeeper
 - Sprint 8 — Parent and student portals
 - Notifications (email / SMS)

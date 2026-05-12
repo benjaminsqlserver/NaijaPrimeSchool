@@ -1,4 +1,5 @@
 using NaijaPrimeSchool.Domain.Common;
+using NaijaPrimeSchool.Domain.Finance;
 
 namespace NaijaPrimeSchool.Domain.Academics;
 
@@ -8,4 +9,5 @@ public class ClassLevel : BaseEntity
     public int DisplayOrder { get; set; }
 
     public ICollection<SchoolClass> Classes { get; set; } = [];
+    public ICollection<FeeSchedule> FeeSchedules { get; set; } = [];
 }

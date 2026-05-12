@@ -8,6 +8,7 @@ using NaijaPrimeSchool.Domain.Academics;
 using NaijaPrimeSchool.Domain.Attendance;
 using NaijaPrimeSchool.Domain.Common;
 using NaijaPrimeSchool.Domain.Family;
+using NaijaPrimeSchool.Domain.Finance;
 using NaijaPrimeSchool.Domain.Identity;
 using NaijaPrimeSchool.Domain.Results;
 
@@ -65,6 +66,17 @@ public class ApplicationDbContext(
     public DbSet<ReportCard> ReportCards => Set<ReportCard>();
     public DbSet<AffectiveRating> AffectiveRatings => Set<AffectiveRating>();
     public DbSet<PsychomotorRating> PsychomotorRatings => Set<PsychomotorRating>();
+
+    public DbSet<FeeCategory> FeeCategories => Set<FeeCategory>();
+    public DbSet<PaymentMethod> PaymentMethods => Set<PaymentMethod>();
+    public DbSet<InvoiceStatus> InvoiceStatuses => Set<InvoiceStatus>();
+    public DbSet<PaymentStatus> PaymentStatuses => Set<PaymentStatus>();
+    public DbSet<FeeSchedule> FeeSchedules => Set<FeeSchedule>();
+    public DbSet<FeeScheduleItem> FeeScheduleItems => Set<FeeScheduleItem>();
+    public DbSet<Invoice> Invoices => Set<Invoice>();
+    public DbSet<InvoiceLine> InvoiceLines => Set<InvoiceLine>();
+    public DbSet<Payment> Payments => Set<Payment>();
+    public DbSet<PaymentAllocation> PaymentAllocations => Set<PaymentAllocation>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -148,6 +160,7 @@ public class ApplicationDbContext(
         ConfigureFamily(builder);
         ConfigureAttendance(builder);
         ConfigureResults(builder);
+        ConfigureFinance(builder);
     }
 
     private static void ConfigureAcademics(ModelBuilder builder)
@@ -794,6 +807,209 @@ public class ApplicationDbContext(
             b.HasIndex(r => new { r.ReportCardId, r.PsychomotorSkillId }).IsUnique();
             b.HasIndex(r => r.IsDeleted);
             b.HasQueryFilter(r => !r.IsDeleted);
+        });
+    }
+
+    private static void ConfigureFinance(ModelBuilder builder)
+    {
+        ConfigureLookup<FeeCategory>(builder, "FeeCategories", extra: b =>
+        {
+            b.Property(c => c.Name).HasMaxLength(60).IsRequired();
+            b.Property(c => c.Code).HasMaxLength(10).IsRequired();
+            b.HasIndex(c => c.Name).IsUnique();
+            b.HasIndex(c => c.Code).IsUnique();
+        });
+
+        ConfigureLookup<PaymentMethod>(builder, "PaymentMethods", extra: b =>
+        {
+            b.Property(m => m.Name).HasMaxLength(60).IsRequired();
+            b.Property(m => m.Code).HasMaxLength(10).IsRequired();
+            b.HasIndex(m => m.Name).IsUnique();
+            b.HasIndex(m => m.Code).IsUnique();
+        });
+
+        ConfigureLookup<InvoiceStatus>(builder, "InvoiceStatuses", extra: b =>
+        {
+            b.Property(s => s.Name).HasMaxLength(40).IsRequired();
+            b.Property(s => s.Code).HasMaxLength(20).IsRequired();
+            b.HasIndex(s => s.Name).IsUnique();
+            b.HasIndex(s => s.Code).IsUnique();
+        });
+
+        ConfigureLookup<PaymentStatus>(builder, "PaymentStatuses", extra: b =>
+        {
+            b.Property(s => s.Name).HasMaxLength(40).IsRequired();
+            b.Property(s => s.Code).HasMaxLength(20).IsRequired();
+            b.HasIndex(s => s.Name).IsUnique();
+            b.HasIndex(s => s.Code).IsUnique();
+        });
+
+        builder.Entity<FeeSchedule>(b =>
+        {
+            b.ToTable("FeeSchedules");
+            b.HasKey(s => s.Id);
+            b.Property(s => s.Title).HasMaxLength(120).IsRequired();
+            b.Property(s => s.Notes).HasMaxLength(500);
+            b.Property(s => s.CreatedBy).HasMaxLength(100);
+            b.Property(s => s.ModifiedBy).HasMaxLength(100);
+            b.Property(s => s.DeletedBy).HasMaxLength(100);
+
+            b.HasOne(s => s.Term).WithMany(t => t.FeeSchedules)
+                .HasForeignKey(s => s.TermId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasOne(s => s.ClassLevel).WithMany(cl => cl.FeeSchedules)
+                .HasForeignKey(s => s.ClassLevelId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasIndex(s => new { s.TermId, s.ClassLevelId }).IsUnique();
+            b.HasIndex(s => s.IsDeleted);
+            b.HasQueryFilter(s => !s.IsDeleted);
+        });
+
+        builder.Entity<FeeScheduleItem>(b =>
+        {
+            b.ToTable("FeeScheduleItems");
+            b.HasKey(i => i.Id);
+            b.Property(i => i.Description).HasMaxLength(160).IsRequired();
+            b.Property(i => i.Amount).HasPrecision(12, 2);
+            b.Property(i => i.CreatedBy).HasMaxLength(100);
+            b.Property(i => i.ModifiedBy).HasMaxLength(100);
+            b.Property(i => i.DeletedBy).HasMaxLength(100);
+
+            b.HasOne(i => i.FeeSchedule).WithMany(s => s.Items)
+                .HasForeignKey(i => i.FeeScheduleId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            b.HasOne(i => i.FeeCategory).WithMany(c => c.ScheduleItems)
+                .HasForeignKey(i => i.FeeCategoryId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasIndex(i => new { i.FeeScheduleId, i.DisplayOrder });
+            b.HasIndex(i => i.IsDeleted);
+            b.HasQueryFilter(i => !i.IsDeleted);
+        });
+
+        builder.Entity<Invoice>(b =>
+        {
+            b.ToTable("Invoices");
+            b.HasKey(i => i.Id);
+            b.Property(i => i.InvoiceNumber).HasMaxLength(40).IsRequired();
+            b.Property(i => i.Notes).HasMaxLength(500);
+            b.Property(i => i.Subtotal).HasPrecision(12, 2);
+            b.Property(i => i.DiscountTotal).HasPrecision(12, 2);
+            b.Property(i => i.AmountDue).HasPrecision(12, 2);
+            b.Property(i => i.AmountPaid).HasPrecision(12, 2);
+            b.Property(i => i.CreatedBy).HasMaxLength(100);
+            b.Property(i => i.ModifiedBy).HasMaxLength(100);
+            b.Property(i => i.DeletedBy).HasMaxLength(100);
+            b.Ignore(i => i.Balance);
+
+            b.HasOne(i => i.Student).WithMany(s => s.Invoices)
+                .HasForeignKey(i => i.StudentId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasOne(i => i.Term).WithMany(t => t.Invoices)
+                .HasForeignKey(i => i.TermId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasOne(i => i.SchoolClass).WithMany(c => c.Invoices)
+                .HasForeignKey(i => i.SchoolClassId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasOne(i => i.InvoiceStatus).WithMany(s => s.Invoices)
+                .HasForeignKey(i => i.InvoiceStatusId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasIndex(i => i.InvoiceNumber).IsUnique();
+            b.HasIndex(i => new { i.StudentId, i.TermId });
+            b.HasIndex(i => i.IsDeleted);
+            b.HasQueryFilter(i => !i.IsDeleted);
+        });
+
+        builder.Entity<InvoiceLine>(b =>
+        {
+            b.ToTable("InvoiceLines");
+            b.HasKey(l => l.Id);
+            b.Property(l => l.Description).HasMaxLength(160).IsRequired();
+            b.Property(l => l.Amount).HasPrecision(12, 2);
+            b.Property(l => l.Discount).HasPrecision(12, 2);
+            b.Property(l => l.CreatedBy).HasMaxLength(100);
+            b.Property(l => l.ModifiedBy).HasMaxLength(100);
+            b.Property(l => l.DeletedBy).HasMaxLength(100);
+            b.Ignore(l => l.LineTotal);
+
+            b.HasOne(l => l.Invoice).WithMany(i => i.Lines)
+                .HasForeignKey(l => l.InvoiceId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            b.HasOne(l => l.FeeCategory).WithMany(c => c.InvoiceLines)
+                .HasForeignKey(l => l.FeeCategoryId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasOne(l => l.FeeScheduleItem).WithMany()
+                .HasForeignKey(l => l.FeeScheduleItemId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            b.HasIndex(l => l.IsDeleted);
+            b.HasQueryFilter(l => !l.IsDeleted);
+        });
+
+        builder.Entity<Payment>(b =>
+        {
+            b.ToTable("Payments");
+            b.HasKey(p => p.Id);
+            b.Property(p => p.ReceiptNumber).HasMaxLength(40).IsRequired();
+            b.Property(p => p.Amount).HasPrecision(12, 2);
+            b.Property(p => p.Reference).HasMaxLength(120);
+            b.Property(p => p.Notes).HasMaxLength(300);
+            b.Property(p => p.CreatedBy).HasMaxLength(100);
+            b.Property(p => p.ModifiedBy).HasMaxLength(100);
+            b.Property(p => p.DeletedBy).HasMaxLength(100);
+
+            b.HasOne(p => p.Student).WithMany(s => s.Payments)
+                .HasForeignKey(p => p.StudentId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasOne(p => p.PaymentMethod).WithMany(m => m.Payments)
+                .HasForeignKey(p => p.PaymentMethodId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasOne(p => p.PaymentStatus).WithMany(s => s.Payments)
+                .HasForeignKey(p => p.PaymentStatusId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasOne(p => p.CollectedBy).WithMany()
+                .HasForeignKey(p => p.CollectedById)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            b.HasIndex(p => p.ReceiptNumber).IsUnique();
+            b.HasIndex(p => p.PaidOn);
+            b.HasIndex(p => p.IsDeleted);
+            b.HasQueryFilter(p => !p.IsDeleted);
+        });
+
+        builder.Entity<PaymentAllocation>(b =>
+        {
+            b.ToTable("PaymentAllocations");
+            b.HasKey(a => a.Id);
+            b.Property(a => a.AmountApplied).HasPrecision(12, 2);
+            b.Property(a => a.CreatedBy).HasMaxLength(100);
+            b.Property(a => a.ModifiedBy).HasMaxLength(100);
+            b.Property(a => a.DeletedBy).HasMaxLength(100);
+
+            b.HasOne(a => a.Payment).WithMany(p => p.Allocations)
+                .HasForeignKey(a => a.PaymentId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            b.HasOne(a => a.Invoice).WithMany(i => i.Allocations)
+                .HasForeignKey(a => a.InvoiceId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // One allocation row per (Payment, Invoice) pair.
+            b.HasIndex(a => new { a.PaymentId, a.InvoiceId }).IsUnique();
+            b.HasIndex(a => a.IsDeleted);
+            b.HasQueryFilter(a => !a.IsDeleted);
         });
     }
 

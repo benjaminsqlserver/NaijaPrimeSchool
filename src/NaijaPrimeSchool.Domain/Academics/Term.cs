@@ -1,5 +1,6 @@
 using NaijaPrimeSchool.Domain.Attendance;
 using NaijaPrimeSchool.Domain.Common;
+using NaijaPrimeSchool.Domain.Finance;
 using NaijaPrimeSchool.Domain.Results;
 
 namespace NaijaPrimeSchool.Domain.Academics;
@@ -21,4 +22,6 @@ public class Term : BaseEntity
     public ICollection<TermAssessment> TermAssessments { get; set; } = [];
     public ICollection<SubjectResult> SubjectResults { get; set; } = [];
     public ICollection<ReportCard> ReportCards { get; set; } = [];
+    public ICollection<FeeSchedule> FeeSchedules { get; set; } = [];
+    public ICollection<Invoice> Invoices { get; set; } = [];
 }

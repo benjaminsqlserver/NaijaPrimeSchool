@@ -1,0 +1,158 @@
+@page "/invoices"
+@attribute [Authorize(Roles = $"{Roles.SuperAdmin},{Roles.HeadTeacher},{Roles.SchoolBursar}")]
+@rendermode InteractiveServer
+
+@inject IInvoiceService InvoiceService
+@inject ITermService TermService
+@inject ILookupService LookupService
+@inject NavigationManager Nav
+@inject DialogService Dialog
+@inject NotificationService Notification
+
+<PageTitle>Invoices · Naija Prime School</PageTitle>
+
+<div class="nps-page-header">
+    <div>
+        <h1>Invoices</h1>
+        <p>Every bill issued to a pupil for a term, with status, balance, and audit trail.</p>
+    </div>
+    <div class="nps-page-actions">
+        <RadzenButton Text="Issue invoices" Icon="receipt_long" ButtonStyle="ButtonStyle.Primary"
+                      Click="@(() => Nav.NavigateTo("/invoices/issue"))" />
+    </div>
+</div>
+
+<RadzenCard class="nps-card" Style="margin-bottom: 1rem;">
+    <div class="nps-filter-bar">
+        <div class="nps-field">
+            <label>Search</label>
+            <RadzenTextBox @bind-Value="search" Placeholder="Invoice no, pupil name, admission no"
+                           Change="@(_ => LoadAsync())" Style="min-width: 280px;" />
+        </div>
+        <div class="nps-field">
+            <label>Term</label>
+            <RadzenDropDown TValue="Guid?" Data="@terms" @bind-Value="termId"
+                            ValueProperty="Id" TextProperty="TermTypeName"
+                            AllowClear="true" Placeholder="All terms"
+                            Change="@(_ => LoadAsync())" Style="min-width: 220px;">
+                <Template Context="t">
+                    @{ var dto = (TermDto)t; }
+                    @dto.TermTypeName — @dto.SessionName
+                </Template>
+            </RadzenDropDown>
+        </div>
+        <div class="nps-field">
+            <label>Status</label>
+            <RadzenDropDown TValue="Guid?" Data="@statuses" TextProperty="Name" ValueProperty="Id"
+                            @bind-Value="statusId" AllowClear="true" Placeholder="All statuses"
+                            Change="@(_ => LoadAsync())" Style="min-width: 200px;" />
+        </div>
+    </div>
+</RadzenCard>
+
+<RadzenCard class="nps-card">
+    <RadzenDataGrid TItem="InvoiceDto" Data="@invoices" IsLoading="@loading"
+                    AllowPaging="true" PageSize="25" EmptyText="No invoices match your filters.">
+        <Columns>
+            <RadzenDataGridColumn TItem="InvoiceDto" Title="Invoice">
+                <Template Context="i">
+                    <strong>@i.InvoiceNumber</strong>
+                    <br />
+                    <small style="color: var(--nps-ink-500);">Issued @i.IssuedOn.ToString("d MMM yyyy")</small>
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="InvoiceDto" Title="Pupil">
+                <Template Context="i">
+                    <div class="nps-cell-with-avatar">
+                        <StudentAvatar PhotoUrl="@i.StudentPhotoUrl"
+                                       FirstName="@i.StudentFirstName"
+                                       LastName="@i.StudentLastName" />
+                        <div style="display:flex; flex-direction:column;">
+                            <strong>@i.StudentName</strong>
+                            <small style="color: var(--nps-ink-500);">@i.StudentAdmissionNumber · @i.SchoolClassName</small>
+                        </div>
+                    </div>
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="InvoiceDto" Title="Term" Property="TermName" />
+            <RadzenDataGridColumn TItem="InvoiceDto" Title="Total" Width="120px">
+                <Template Context="i">@i.AmountDue.ToString("N2")</Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="InvoiceDto" Title="Paid" Width="120px">
+                <Template Context="i">@i.AmountPaid.ToString("N2")</Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="InvoiceDto" Title="Balance" Width="120px">
+                <Template Context="i">
+                    <strong>@i.Balance.ToString("N2")</strong>
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="InvoiceDto" Title="Status" Width="140px">
+                <Template Context="i">
+                    <RadzenBadge Text="@i.InvoiceStatusName"
+                                 BadgeStyle="@StatusStyle(i.InvoiceStatusCode)"
+                                 Variant="Variant.Flat" />
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="InvoiceDto" Title="Actions" Width="140px"
+                                  Sortable="false" TextAlign="TextAlign.Right">
+                <Template Context="i">
+                    <div class="nps-inline-actions">
+                        <RadzenButton Icon="visibility" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                      ButtonStyle="ButtonStyle.Primary" title="View"
+                                      Click="@(() => Nav.NavigateTo($"/invoices/{i.Id}"))" />
+                        <RadzenButton Icon="payments" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                      ButtonStyle="ButtonStyle.Success" title="Record payment"
+                                      Click="@(() => Nav.NavigateTo($"/payments/new?studentId={i.StudentId}&invoiceId={i.Id}"))" />
+                    </div>
+                </Template>
+            </RadzenDataGridColumn>
+        </Columns>
+    </RadzenDataGrid>
+</RadzenCard>
+
+@code {
+    private IReadOnlyList<InvoiceDto> invoices = [];
+    private List<TermDto> terms = [];
+    private IReadOnlyList<LookupDto> statuses = [];
+
+    private bool loading;
+    private string? search;
+    private Guid? termId;
+    private Guid? statusId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        terms = (await TermService.ListAsync()).ToList();
+        termId = terms.FirstOrDefault(t => t.IsCurrent)?.Id;
+        statuses = await LookupService.GetInvoiceStatusesAsync();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        try
+        {
+            invoices = await InvoiceService.ListAsync(new InvoiceFilter
+            {
+                TermId = termId,
+                InvoiceStatusId = statusId,
+                Search = search,
+            });
+        }
+        finally
+        {
+            loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private static BadgeStyle StatusStyle(string code) => code switch
+    {
+        "PAID" => BadgeStyle.Success,
+        "PARTIAL" => BadgeStyle.Info,
+        "OVERDUE" => BadgeStyle.Danger,
+        "CANCELLED" => BadgeStyle.Secondary,
+        _ => BadgeStyle.Warning,
+    };
+}

@@ -1,0 +1,328 @@
+@page "/fees/{Id:guid}"
+@attribute [Authorize(Roles = $"{Roles.SuperAdmin},{Roles.HeadTeacher},{Roles.SchoolBursar}")]
+@rendermode InteractiveServer
+
+@inject IFeeScheduleService FeeScheduleService
+@inject ILookupService LookupService
+@inject NavigationManager Nav
+@inject DialogService Dialog
+@inject NotificationService Notification
+
+<PageTitle>Fee schedule · Naija Prime School</PageTitle>
+
+@if (loading)
+{
+    <p>Loading fee schedule...</p>
+}
+else if (detail is null)
+{
+    <RadzenAlert Severity="AlertSeverity.Warning">Fee schedule not found.</RadzenAlert>
+}
+else
+{
+    <div class="nps-page-header">
+        <div>
+            <h1>@detail.Schedule.Title</h1>
+            <p>@detail.Schedule.ClassLevelName · @detail.Schedule.TermName</p>
+        </div>
+        <div class="nps-page-actions">
+            @if (detail.Schedule.IsPublished)
+            {
+                <RadzenBadge Text="Published" BadgeStyle="BadgeStyle.Success" Variant="Variant.Flat" />
+                <RadzenButton Text="Unpublish" Icon="lock_open" Variant="Variant.Flat"
+                              ButtonStyle="ButtonStyle.Warning" Click="@UnpublishAsync" />
+            }
+            else
+            {
+                <RadzenButton Text="Publish" Icon="lock" Variant="Variant.Flat"
+                              ButtonStyle="ButtonStyle.Success" Click="@PublishAsync" />
+            }
+            <RadzenButton Text="Back" Icon="arrow_back" Variant="Variant.Flat"
+                          ButtonStyle="ButtonStyle.Light" Click="@(() => Nav.NavigateTo("/fees"))" />
+        </div>
+    </div>
+
+    <RadzenCard class="nps-card" Style="margin-bottom: 1rem;">
+        <div class="nps-form-grid">
+            <div class="nps-field nps-span-2">
+                <label>Title</label>
+                <RadzenTextBox @bind-Value="title" Disabled="@detail.Schedule.IsPublished" />
+            </div>
+            <div class="nps-field nps-span-2">
+                <label>Notes</label>
+                <RadzenTextArea @bind-Value="notes" Rows="2" Disabled="@detail.Schedule.IsPublished" />
+            </div>
+        </div>
+        <div class="nps-form-actions">
+            <RadzenButton Text="@(savingHeader ? "Saving..." : "Save header")" Icon="save"
+                          ButtonStyle="ButtonStyle.Primary"
+                          Disabled="@(savingHeader || detail.Schedule.IsPublished)"
+                          Click="@SaveHeaderAsync" />
+        </div>
+    </RadzenCard>
+
+    <RadzenCard class="nps-card">
+        <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <h3 style="margin:0;">Line items (total <strong>@detail.Items.Sum(i => i.Amount).ToString("N2")</strong>)</h3>
+            <RadzenButton Text="Add item" Icon="add" ButtonStyle="ButtonStyle.Primary"
+                          Disabled="@detail.Schedule.IsPublished"
+                          Click="@OpenAddItem" />
+        </div>
+
+        @if (detail.Items.Count == 0)
+        {
+            <p style="color: var(--nps-ink-500);">No items yet. Add at least one before publishing.</p>
+        }
+        else
+        {
+            <RadzenDataGrid TItem="FeeScheduleItemDto" Data="@detail.Items" AllowPaging="false">
+                <Columns>
+                    <RadzenDataGridColumn TItem="FeeScheduleItemDto" Title="#" Width="60px" Property="DisplayOrder" />
+                    <RadzenDataGridColumn TItem="FeeScheduleItemDto" Title="Category">
+                        <Template Context="i">
+                            <strong>@i.FeeCategoryName</strong>
+                            <br />
+                            <small style="color: var(--nps-ink-500);">@i.FeeCategoryCode</small>
+                        </Template>
+                    </RadzenDataGridColumn>
+                    <RadzenDataGridColumn TItem="FeeScheduleItemDto" Title="Description" Property="Description" />
+                    <RadzenDataGridColumn TItem="FeeScheduleItemDto" Title="Amount" Width="140px">
+                        <Template Context="i">
+                            <strong>@i.Amount.ToString("N2")</strong>
+                        </Template>
+                    </RadzenDataGridColumn>
+                    <RadzenDataGridColumn TItem="FeeScheduleItemDto" Title="Mandatory" Width="120px">
+                        <Template Context="i">
+                            @if (i.IsMandatory)
+                            {
+                                <RadzenBadge Text="Yes" BadgeStyle="BadgeStyle.Success" Variant="Variant.Flat" />
+                            }
+                            else
+                            {
+                                <RadzenBadge Text="Optional" BadgeStyle="BadgeStyle.Secondary" Variant="Variant.Flat" />
+                            }
+                        </Template>
+                    </RadzenDataGridColumn>
+                    <RadzenDataGridColumn TItem="FeeScheduleItemDto" Title="Actions" Width="160px"
+                                          Sortable="false" TextAlign="TextAlign.Right">
+                        <Template Context="i">
+                            <div class="nps-inline-actions">
+                                <RadzenButton Icon="edit" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                              ButtonStyle="ButtonStyle.Light"
+                                              Disabled="@detail.Schedule.IsPublished"
+                                              Click="@(() => OpenEditItem(i))" title="Edit" />
+                                <RadzenButton Icon="delete" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                              ButtonStyle="ButtonStyle.Danger"
+                                              Disabled="@detail.Schedule.IsPublished"
+                                              Click="@(() => RemoveItemAsync(i))" title="Remove" />
+                            </div>
+                        </Template>
+                    </RadzenDataGridColumn>
+                </Columns>
+            </RadzenDataGrid>
+        }
+
+        @if (showItemForm)
+        {
+            <RadzenCard class="nps-card" Style="margin-top:1rem; background: var(--nps-green-200);">
+                <h3 style="margin: 0 0 1rem;">@(itemEditingId.HasValue ? "Edit item" : "Add item")</h3>
+                <div class="nps-form-grid">
+                    <div class="nps-field">
+                        <label>Category *</label>
+                        <RadzenDropDown TValue="Guid?" Data="@feeCategories" TextProperty="Name" ValueProperty="Id"
+                                        @bind-Value="itemForm.FeeCategoryId" Placeholder="Pick a category" />
+                    </div>
+                    <div class="nps-field">
+                        <label>Amount *</label>
+                        <RadzenNumeric TValue="decimal" @bind-Value="itemForm.Amount" Min="0" Format="N2" />
+                    </div>
+                    <div class="nps-field nps-span-2">
+                        <label>Description *</label>
+                        <RadzenTextBox @bind-Value="itemForm.Description" />
+                    </div>
+                    <div class="nps-field">
+                        <label>Mandatory</label>
+                        <RadzenSwitch @bind-Value="itemForm.IsMandatory" />
+                    </div>
+                    <div class="nps-field">
+                        <label>Display order</label>
+                        <RadzenNumeric TValue="int" @bind-Value="itemForm.DisplayOrder" Min="0" />
+                    </div>
+                </div>
+                <div class="nps-form-actions">
+                    <RadzenButton Text="Cancel" ButtonType="ButtonType.Button"
+                                  ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat"
+                                  Click="@(() => showItemForm = false)" />
+                    <RadzenButton Text="@(itemSaving ? "Saving..." : "Save")"
+                                  Icon="save" ButtonStyle="ButtonStyle.Primary"
+                                  Disabled="@itemSaving" Click="@SaveItemAsync" />
+                </div>
+            </RadzenCard>
+        }
+    </RadzenCard>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private FeeScheduleDetailDto? detail;
+    private bool loading = true;
+
+    private string title = string.Empty;
+    private string? notes;
+    private bool savingHeader;
+
+    private IReadOnlyList<LookupDto> feeCategories = [];
+
+    private bool showItemForm;
+    private bool itemSaving;
+    private Guid? itemEditingId;
+    private ItemFormModel itemForm = new();
+
+    private class ItemFormModel
+    {
+        public Guid? FeeCategoryId { get; set; }
+        public string Description { get; set; } = string.Empty;
+        public decimal Amount { get; set; }
+        public bool IsMandatory { get; set; } = true;
+        public int DisplayOrder { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        feeCategories = await LookupService.GetFeeCategoriesAsync();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        try
+        {
+            detail = await FeeScheduleService.GetByIdAsync(Id);
+            if (detail is not null)
+            {
+                title = detail.Schedule.Title;
+                notes = detail.Schedule.Notes;
+            }
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task SaveHeaderAsync()
+    {
+        savingHeader = true;
+        try
+        {
+            var result = await FeeScheduleService.UpdateAsync(new UpdateFeeScheduleRequest
+            {
+                Id = Id,
+                Title = title,
+                Notes = notes,
+            });
+            Show(result, "Header saved.");
+            if (result.Succeeded) await LoadAsync();
+        }
+        finally
+        {
+            savingHeader = false;
+        }
+    }
+
+    private async Task PublishAsync()
+    {
+        var result = await FeeScheduleService.PublishAsync(Id);
+        Show(result, "Schedule published.");
+        await LoadAsync();
+    }
+
+    private async Task UnpublishAsync()
+    {
+        var result = await FeeScheduleService.UnpublishAsync(Id);
+        Show(result, "Schedule unpublished.");
+        await LoadAsync();
+    }
+
+    private void OpenAddItem()
+    {
+        itemEditingId = null;
+        itemForm = new ItemFormModel
+        {
+            DisplayOrder = (detail?.Items.Count ?? 0) + 1,
+        };
+        showItemForm = true;
+    }
+
+    private void OpenEditItem(FeeScheduleItemDto item)
+    {
+        itemEditingId = item.Id;
+        itemForm = new ItemFormModel
+        {
+            FeeCategoryId = item.FeeCategoryId,
+            Description = item.Description,
+            Amount = item.Amount,
+            IsMandatory = item.IsMandatory,
+            DisplayOrder = item.DisplayOrder,
+        };
+        showItemForm = true;
+    }
+
+    private async Task SaveItemAsync()
+    {
+        if (itemForm.FeeCategoryId is null || string.IsNullOrWhiteSpace(itemForm.Description)
+            || itemForm.Amount <= 0)
+        {
+            Notification.Notify(NotificationSeverity.Warning, "Missing fields",
+                "Pick a category, write a description, and set an amount.");
+            return;
+        }
+
+        itemSaving = true;
+        try
+        {
+            var result = await FeeScheduleService.UpsertItemAsync(new UpsertFeeScheduleItemRequest
+            {
+                Id = itemEditingId,
+                FeeScheduleId = Id,
+                FeeCategoryId = itemForm.FeeCategoryId.Value,
+                Description = itemForm.Description,
+                Amount = itemForm.Amount,
+                IsMandatory = itemForm.IsMandatory,
+                DisplayOrder = itemForm.DisplayOrder,
+            });
+            Show(result, "Item saved.");
+            if (result.Succeeded)
+            {
+                showItemForm = false;
+                await LoadAsync();
+            }
+        }
+        finally
+        {
+            itemSaving = false;
+        }
+    }
+
+    private async Task RemoveItemAsync(FeeScheduleItemDto item)
+    {
+        var confirm = await Dialog.Confirm($"Remove item '{item.Description}'?",
+            "Remove line item",
+            new ConfirmOptions { OkButtonText = "Remove", CancelButtonText = "Cancel" });
+        if (confirm != true) return;
+
+        var result = await FeeScheduleService.RemoveItemAsync(item.Id);
+        Show(result, "Item removed.");
+        await LoadAsync();
+    }
+
+    private void Show(OperationResult result, string success)
+    {
+        if (result.Succeeded)
+            Notification.Notify(NotificationSeverity.Success, "Done", success);
+        else
+            Notification.Notify(NotificationSeverity.Error, "Failed", string.Join("; ", result.Errors));
+    }
+}

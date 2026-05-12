@@ -1,0 +1,162 @@
+@page "/finance"
+@attribute [Authorize(Roles = $"{Roles.SuperAdmin},{Roles.HeadTeacher},{Roles.SchoolBursar}")]
+@rendermode InteractiveServer
+
+@inject IPaymentService PaymentService
+@inject ITermService TermService
+@inject NavigationManager Nav
+
+<PageTitle>Bursar dashboard · Naija Prime School</PageTitle>
+
+<div class="nps-page-header">
+    <div>
+        <h1>Bursar dashboard</h1>
+        <p>Money in, money owed, and the breakdown across methods and fee categories — at a glance.</p>
+    </div>
+    <div class="nps-page-actions">
+        <RadzenDropDown TValue="Guid?" Data="@terms" @bind-Value="termId"
+                        ValueProperty="Id" TextProperty="TermTypeName"
+                        AllowClear="true" Placeholder="All terms"
+                        Change="@(_ => LoadAsync())" Style="min-width: 240px;">
+            <Template Context="t">
+                @{ var dto = (TermDto)t; }
+                @dto.TermTypeName — @dto.SessionName
+            </Template>
+        </RadzenDropDown>
+    </div>
+</div>
+
+@if (loading || summary is null)
+{
+    <p>Loading dashboard...</p>
+}
+else
+{
+    <RadzenCard class="nps-card" Style="margin-bottom: 1rem;">
+        <div class="nps-stat-grid">
+            <div class="nps-stat-card">
+                <div class="nps-stat-icon"><RadzenIcon Icon="request_quote" /></div>
+                <div>
+                    <div class="nps-stat-label">Invoiced</div>
+                    <div class="nps-stat-value">@summary.TotalInvoiced.ToString("N2")</div>
+                </div>
+            </div>
+            <div class="nps-stat-card">
+                <div class="nps-stat-icon"><RadzenIcon Icon="paid" /></div>
+                <div>
+                    <div class="nps-stat-label">Collected</div>
+                    <div class="nps-stat-value">@summary.TotalCollected.ToString("N2")</div>
+                </div>
+            </div>
+            <div class="nps-stat-card">
+                <div class="nps-stat-icon"><RadzenIcon Icon="account_balance_wallet" /></div>
+                <div>
+                    <div class="nps-stat-label">Outstanding</div>
+                    <div class="nps-stat-value">@summary.TotalOutstanding.ToString("N2")</div>
+                </div>
+            </div>
+            <div class="nps-stat-card">
+                <div class="nps-stat-icon"><RadzenIcon Icon="receipt_long" /></div>
+                <div>
+                    <div class="nps-stat-label">Invoices</div>
+                    <div class="nps-stat-value">@summary.InvoiceCount</div>
+                </div>
+            </div>
+        </div>
+    </RadzenCard>
+
+    <RadzenCard class="nps-card" Style="margin-bottom: 1rem;">
+        <h3 style="margin: 0 0 1rem;">Invoice status breakdown</h3>
+        <div class="nps-stat-grid">
+            <div class="nps-stat-card">
+                <div class="nps-stat-icon" style="background: #d9f1e3;"><RadzenIcon Icon="check_circle" /></div>
+                <div>
+                    <div class="nps-stat-label">Paid in full</div>
+                    <div class="nps-stat-value">@summary.PaidInvoiceCount</div>
+                </div>
+            </div>
+            <div class="nps-stat-card">
+                <div class="nps-stat-icon" style="background: #fff3cd; color: #b8860b;"><RadzenIcon Icon="trending_up" /></div>
+                <div>
+                    <div class="nps-stat-label">Partially paid</div>
+                    <div class="nps-stat-value">@summary.PartiallyPaidInvoiceCount</div>
+                </div>
+            </div>
+            <div class="nps-stat-card">
+                <div class="nps-stat-icon" style="background: #fde2e2; color: #d64545;"><RadzenIcon Icon="hourglass_empty" /></div>
+                <div>
+                    <div class="nps-stat-label">Unpaid</div>
+                    <div class="nps-stat-value">@summary.UnpaidInvoiceCount</div>
+                </div>
+            </div>
+            <div class="nps-stat-card">
+                <div class="nps-stat-icon"><RadzenIcon Icon="payments" /></div>
+                <div>
+                    <div class="nps-stat-label">Payments recorded</div>
+                    <div class="nps-stat-value">@summary.PaymentCount</div>
+                </div>
+            </div>
+        </div>
+    </RadzenCard>
+
+    <div class="nps-form-grid">
+        <RadzenCard class="nps-card">
+            <h3 style="margin: 0 0 1rem;">Collected by method</h3>
+            @if (summary.ByMethod.Count == 0)
+            {
+                <p style="color: var(--nps-ink-500);">No payments yet.</p>
+            }
+            else
+            {
+                <RadzenDataGrid TItem="MethodBreakdownDto" Data="@summary.ByMethod" AllowPaging="false">
+                    <Columns>
+                        <RadzenDataGridColumn TItem="MethodBreakdownDto" Title="Method" Property="PaymentMethodName" />
+                        <RadzenDataGridColumn TItem="MethodBreakdownDto" Title="Count" Width="100px" Property="PaymentCount" />
+                        <RadzenDataGridColumn TItem="MethodBreakdownDto" Title="Total" Width="160px">
+                            <Template Context="m"><strong>@m.TotalAmount.ToString("N2")</strong></Template>
+                        </RadzenDataGridColumn>
+                    </Columns>
+                </RadzenDataGrid>
+            }
+        </RadzenCard>
+        <RadzenCard class="nps-card">
+            <h3 style="margin: 0 0 1rem;">Invoiced by category</h3>
+            @if (summary.ByCategory.Count == 0)
+            {
+                <p style="color: var(--nps-ink-500);">No invoices yet.</p>
+            }
+            else
+            {
+                <RadzenDataGrid TItem="CategoryBreakdownDto" Data="@summary.ByCategory" AllowPaging="false">
+                    <Columns>
+                        <RadzenDataGridColumn TItem="CategoryBreakdownDto" Title="Category" Property="FeeCategoryName" />
+                        <RadzenDataGridColumn TItem="CategoryBreakdownDto" Title="Invoiced" Width="180px">
+                            <Template Context="c"><strong>@c.TotalInvoiced.ToString("N2")</strong></Template>
+                        </RadzenDataGridColumn>
+                    </Columns>
+                </RadzenDataGrid>
+            }
+        </RadzenCard>
+    </div>
+}
+
+@code {
+    private FinanceSummaryDto? summary;
+    private List<TermDto> terms = [];
+    private Guid? termId;
+    private bool loading;
+
+    protected override async Task OnInitializedAsync()
+    {
+        terms = (await TermService.ListAsync()).ToList();
+        termId = terms.FirstOrDefault(t => t.IsCurrent)?.Id;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        try { summary = await PaymentService.GetSummaryAsync(termId); }
+        finally { loading = false; StateHasChanged(); }
+    }
+}
