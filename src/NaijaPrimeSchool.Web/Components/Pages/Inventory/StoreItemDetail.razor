@@ -1,0 +1,306 @@
+@page "/store/items/{Id:guid}"
+@attribute [Authorize(Roles = $"{Roles.SuperAdmin},{Roles.HeadTeacher},{Roles.SchoolStoreKeeper}")]
+@rendermode InteractiveServer
+
+@inject IStoreItemService ItemService
+@inject ILookupService LookupService
+@inject NavigationManager Nav
+@inject DialogService Dialog
+@inject NotificationService Notification
+
+<PageTitle>Item · Naija Prime School</PageTitle>
+
+@if (loading)
+{
+    <p>Loading item...</p>
+}
+else if (detail is null)
+{
+    <RadzenAlert Severity="AlertSeverity.Warning">Item not found.</RadzenAlert>
+}
+else
+{
+    <div class="nps-page-header">
+        <div>
+            <h1>@detail.Item.Name</h1>
+            <p>
+                @detail.Item.ItemCategoryName ·
+                on hand <strong>@detail.Item.QuantityOnHand.ToString("N2")</strong> @detail.Item.UnitOfMeasureCode
+                @if (!string.IsNullOrEmpty(detail.Item.Sku))
+                {
+                    <span> · SKU @detail.Item.Sku</span>
+                }
+            </p>
+        </div>
+        <div class="nps-page-actions">
+            @if (detail.Item.IsBelowReorder && detail.Item.IsActive)
+            {
+                <RadzenBadge Text="Low stock" BadgeStyle="BadgeStyle.Warning" Variant="Variant.Flat" />
+            }
+            <RadzenButton Text="Record movement" Icon="add" ButtonStyle="ButtonStyle.Primary"
+                          Click="@(() => Nav.NavigateTo($"/store/movements/new?itemId={Id}"))" />
+            <RadzenButton Text="Back" Icon="arrow_back" Variant="Variant.Flat"
+                          ButtonStyle="ButtonStyle.Light" Click="@(() => Nav.NavigateTo("/store/items"))" />
+        </div>
+    </div>
+
+    <RadzenCard class="nps-card" Style="margin-bottom: 1rem;">
+        <div class="nps-stat-grid">
+            <div class="nps-stat-card">
+                <div class="nps-stat-icon"><RadzenIcon Icon="inventory" /></div>
+                <div>
+                    <div class="nps-stat-label">On hand</div>
+                    <div class="nps-stat-value">@detail.Item.QuantityOnHand.ToString("N2") @detail.Item.UnitOfMeasureCode</div>
+                </div>
+            </div>
+            <div class="nps-stat-card">
+                <div class="nps-stat-icon"><RadzenIcon Icon="warning_amber" /></div>
+                <div>
+                    <div class="nps-stat-label">Reorder level</div>
+                    <div class="nps-stat-value">@detail.Item.ReorderLevel.ToString("N2")</div>
+                </div>
+            </div>
+            <div class="nps-stat-card">
+                <div class="nps-stat-icon"><RadzenIcon Icon="payments" /></div>
+                <div>
+                    <div class="nps-stat-label">Last unit cost</div>
+                    <div class="nps-stat-value">@detail.Item.LastUnitCost.ToString("N2")</div>
+                </div>
+            </div>
+            <div class="nps-stat-card">
+                <div class="nps-stat-icon"><RadzenIcon Icon="account_balance_wallet" /></div>
+                <div>
+                    <div class="nps-stat-label">Stock value</div>
+                    <div class="nps-stat-value">@detail.Item.StockValue.ToString("N2")</div>
+                </div>
+            </div>
+        </div>
+    </RadzenCard>
+
+    <RadzenCard class="nps-card" Style="margin-bottom: 1rem;">
+        <h3 style="margin: 0 0 1rem;">Edit catalog fields</h3>
+        <RadzenTemplateForm TItem="ItemEditModel" Data="@form" Submit="@SaveAsync">
+            <DataAnnotationsValidator />
+            <div class="nps-form-grid">
+                <div class="nps-field nps-span-2">
+                    <label>Name *</label>
+                    <RadzenTextBox @bind-Value="form.Name" />
+                </div>
+                <div class="nps-field">
+                    <label>SKU</label>
+                    <RadzenTextBox @bind-Value="form.Sku" />
+                </div>
+                <div class="nps-field">
+                    <label>Category *</label>
+                    <RadzenDropDown TValue="Guid?" Data="@categories" TextProperty="Name" ValueProperty="Id"
+                                    @bind-Value="form.ItemCategoryId" />
+                </div>
+                <div class="nps-field">
+                    <label>Unit of measure *</label>
+                    <RadzenDropDown TValue="Guid?" Data="@units" TextProperty="Name" ValueProperty="Id"
+                                    @bind-Value="form.UnitOfMeasureId" />
+                </div>
+                <div class="nps-field">
+                    <label>Reorder level</label>
+                    <RadzenNumeric TValue="decimal" @bind-Value="form.ReorderLevel" Min="0" Format="N2" />
+                </div>
+                <div class="nps-field nps-span-2">
+                    <label>Description</label>
+                    <RadzenTextArea @bind-Value="form.Description" Rows="2" />
+                </div>
+            </div>
+            <div class="nps-form-actions">
+                @if (detail.Item.IsActive)
+                {
+                    <RadzenButton Text="Deactivate" Icon="block" Variant="Variant.Flat"
+                                  ButtonStyle="ButtonStyle.Warning" ButtonType="ButtonType.Button"
+                                  Click="@(() => SetActiveAsync(false))" />
+                }
+                else
+                {
+                    <RadzenButton Text="Activate" Icon="check_circle" Variant="Variant.Flat"
+                                  ButtonStyle="ButtonStyle.Success" ButtonType="ButtonType.Button"
+                                  Click="@(() => SetActiveAsync(true))" />
+                }
+                <RadzenButton Text="@(saving ? "Saving..." : "Save changes")"
+                              Icon="save" ButtonType="ButtonType.Submit"
+                              ButtonStyle="ButtonStyle.Primary" Disabled="@saving" />
+            </div>
+        </RadzenTemplateForm>
+    </RadzenCard>
+
+    <RadzenCard class="nps-card">
+        <h3 style="margin: 0 0 1rem;">Movement history (@detail.Movements.Count latest)</h3>
+        @if (detail.Movements.Count == 0)
+        {
+            <p style="color: var(--nps-ink-500);">No movements recorded for this item yet.</p>
+        }
+        else
+        {
+            <RadzenDataGrid TItem="StockMovementDto" Data="@detail.Movements" AllowPaging="true" PageSize="25">
+                <Columns>
+                    <RadzenDataGridColumn TItem="StockMovementDto" Title="Number">
+                        <Template Context="m">
+                            <strong>@m.MovementNumber</strong>
+                            <br />
+                            <small style="color: var(--nps-ink-500);">@m.MovedOn.ToString("d MMM yyyy")</small>
+                        </Template>
+                    </RadzenDataGridColumn>
+                    <RadzenDataGridColumn TItem="StockMovementDto" Title="Type" Width="160px">
+                        <Template Context="m">
+                            <RadzenBadge Text="@m.StockMovementTypeName"
+                                         BadgeStyle="@(m.Direction == +1 ? BadgeStyle.Success : BadgeStyle.Warning)"
+                                         Variant="Variant.Flat" />
+                        </Template>
+                    </RadzenDataGridColumn>
+                    <RadzenDataGridColumn TItem="StockMovementDto" Title="Quantity" Width="160px">
+                        <Template Context="m">
+                            <strong>
+                                @(m.Direction == +1 ? "+" : "−")@m.Quantity.ToString("N2")
+                            </strong> @m.UnitOfMeasureCode
+                        </Template>
+                    </RadzenDataGridColumn>
+                    <RadzenDataGridColumn TItem="StockMovementDto" Title="Counter-party">
+                        <Template Context="m">
+                            @if (m.ReceivedFromSupplierName is { Length: > 0 })
+                            {
+                                <text>From <strong>@m.ReceivedFromSupplierName</strong></text>
+                            }
+                            else if (m.IssuedToStudentName is { Length: > 0 })
+                            {
+                                <text>To pupil <strong>@m.IssuedToStudentName</strong></text>
+                            }
+                            else if (m.IssuedToSchoolClassName is { Length: > 0 })
+                            {
+                                <text>To class <strong>@m.IssuedToSchoolClassName</strong></text>
+                            }
+                            else if (m.IssuedToUserName is { Length: > 0 })
+                            {
+                                <text>To staff <strong>@m.IssuedToUserName</strong></text>
+                            }
+                            else
+                            {
+                                <span style="color: var(--nps-ink-500);">—</span>
+                            }
+                        </Template>
+                    </RadzenDataGridColumn>
+                    <RadzenDataGridColumn TItem="StockMovementDto" Title="Reference" Property="Reference" />
+                    <RadzenDataGridColumn TItem="StockMovementDto" Title="Total cost" Width="140px">
+                        <Template Context="m">@m.TotalCost.ToString("N2")</Template>
+                    </RadzenDataGridColumn>
+                </Columns>
+            </RadzenDataGrid>
+        }
+    </RadzenCard>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private StoreItemDetailDto? detail;
+    private bool loading = true;
+    private bool saving;
+
+    private IReadOnlyList<LookupDto> categories = [];
+    private IReadOnlyList<LookupDto> units = [];
+
+    private ItemEditModel form = new();
+
+    private class ItemEditModel
+    {
+        [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(120)]
+        public string Name { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.StringLength(60)]
+        public string? Sku { get; set; }
+
+        [System.ComponentModel.DataAnnotations.StringLength(500)]
+        public string? Description { get; set; }
+
+        public Guid? ItemCategoryId { get; set; }
+        public Guid? UnitOfMeasureId { get; set; }
+        public decimal ReorderLevel { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        categories = await LookupService.GetItemCategoriesAsync();
+        units = await LookupService.GetUnitsOfMeasureAsync();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        try
+        {
+            detail = await ItemService.GetByIdAsync(Id);
+            if (detail is not null)
+            {
+                form = new ItemEditModel
+                {
+                    Name = detail.Item.Name,
+                    Sku = detail.Item.Sku,
+                    Description = detail.Item.Description,
+                    ItemCategoryId = detail.Item.ItemCategoryId,
+                    UnitOfMeasureId = detail.Item.UnitOfMeasureId,
+                    ReorderLevel = detail.Item.ReorderLevel,
+                };
+            }
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (form.ItemCategoryId is null || form.UnitOfMeasureId is null) return;
+
+        saving = true;
+        try
+        {
+            var result = await ItemService.UpdateAsync(new UpdateStoreItemRequest
+            {
+                Id = Id,
+                Name = form.Name,
+                Sku = form.Sku,
+                Description = form.Description,
+                ItemCategoryId = form.ItemCategoryId.Value,
+                UnitOfMeasureId = form.UnitOfMeasureId.Value,
+                ReorderLevel = form.ReorderLevel,
+            });
+            if (result.Succeeded)
+            {
+                Notification.Notify(NotificationSeverity.Success, "Saved", "Item updated.");
+                await LoadAsync();
+            }
+            else
+            {
+                Notification.Notify(NotificationSeverity.Error, "Failed",
+                    string.Join("; ", result.Errors));
+            }
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private async Task SetActiveAsync(bool active)
+    {
+        var result = await ItemService.SetActiveAsync(Id, active, CancellationToken.None);
+        if (result.Succeeded)
+        {
+            Notification.Notify(NotificationSeverity.Success, "Updated",
+                active ? "Item activated." : "Item deactivated.");
+            await LoadAsync();
+        }
+        else
+        {
+            Notification.Notify(NotificationSeverity.Error, "Failed",
+                string.Join("; ", result.Errors));
+        }
+    }
+}

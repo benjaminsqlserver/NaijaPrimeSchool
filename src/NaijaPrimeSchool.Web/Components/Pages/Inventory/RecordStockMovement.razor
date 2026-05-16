@@ -1,0 +1,230 @@
+@page "/store/movements/new"
+@attribute [Authorize(Roles = $"{Roles.SuperAdmin},{Roles.HeadTeacher},{Roles.SchoolStoreKeeper}")]
+@rendermode InteractiveServer
+
+@inject IStockMovementService MovementService
+@inject ILookupService LookupService
+@inject NavigationManager Nav
+@inject NotificationService Notification
+
+<PageTitle>Record stock movement · Naija Prime School</PageTitle>
+
+<div class="nps-page-header">
+    <div>
+        <h1>Record stock movement</h1>
+        <p>One movement = one row in the audit log. Pick a type and the counter-party flips into place.</p>
+    </div>
+    <div class="nps-page-actions">
+        <RadzenButton Text="Back" Icon="arrow_back" Variant="Variant.Flat"
+                      ButtonStyle="ButtonStyle.Light" Click="@(() => Nav.NavigateTo("/store/movements"))" />
+    </div>
+</div>
+
+<RadzenCard class="nps-card">
+    <h3 style="margin: 0 0 1rem;">Details</h3>
+    <div class="nps-form-grid">
+        <div class="nps-field nps-span-2">
+            <label>Item *</label>
+            <RadzenDropDown TValue="Guid?" Data="@items" TextProperty="Name" ValueProperty="Id"
+                            @bind-Value="itemId" Placeholder="Search and pick an item"
+                            AllowFiltering="true"
+                            FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive" />
+        </div>
+        <div class="nps-field">
+            <label>Movement type *</label>
+            <RadzenDropDown TValue="Guid?" Data="@types" TextProperty="Name" ValueProperty="Id"
+                            @bind-Value="typeId" Placeholder="Pick a type"
+                            Change="@(_ => UpdateDirection())" />
+        </div>
+        <div class="nps-field">
+            <label>Date *</label>
+            <RadzenDatePicker TValue="DateTime?" @bind-Value="movedOn"
+                              DateFormat="d MMM yyyy" ShowTime="false" />
+        </div>
+        <div class="nps-field">
+            <label>Quantity *</label>
+            <RadzenNumeric TValue="decimal" @bind-Value="quantity" Min="0" Format="N3" />
+        </div>
+        <div class="nps-field">
+            <label>Unit cost</label>
+            <RadzenNumeric TValue="decimal" @bind-Value="unitCost" Min="0" Format="N2" />
+        </div>
+        <div class="nps-field">
+            <label>Reference</label>
+            <RadzenTextBox @bind-Value="reference" Placeholder="PO number, invoice, requisition no" />
+        </div>
+        <div class="nps-field nps-span-2">
+            <label>Notes</label>
+            <RadzenTextArea @bind-Value="notes" Rows="2" />
+        </div>
+    </div>
+
+    @if (selectedDirection == +1)
+    {
+        <h3 style="margin: 1.5rem 0 1rem;">Inbound — received from</h3>
+        <div class="nps-form-grid">
+            <div class="nps-field nps-span-2">
+                <label>Supplier</label>
+                <RadzenDropDown TValue="Guid?" Data="@suppliers" TextProperty="Name" ValueProperty="Id"
+                                @bind-Value="supplierId" AllowClear="true"
+                                Placeholder="Pick a supplier (optional)"
+                                AllowFiltering="true"
+                                FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive" />
+            </div>
+        </div>
+    }
+    else if (selectedDirection == -1)
+    {
+        <h3 style="margin: 1.5rem 0 1rem;">Outbound — issued to</h3>
+        <p style="color: var(--nps-ink-500); margin: 0 0 1rem;">
+            Pick at most one recipient. Leave all three empty for general consumption (e.g. cleaning supplies used by the school).
+        </p>
+        <div class="nps-form-grid">
+            <div class="nps-field">
+                <label>Pupil</label>
+                <RadzenDropDown TValue="Guid?" Data="@students" TextProperty="Name" ValueProperty="Id"
+                                @bind-Value="studentId" AllowClear="true" Placeholder="—"
+                                AllowFiltering="true"
+                                FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive" />
+            </div>
+            <div class="nps-field">
+                <label>Class</label>
+                <RadzenDropDown TValue="Guid?" Data="@classes" TextProperty="Name" ValueProperty="Id"
+                                @bind-Value="schoolClassId" AllowClear="true" Placeholder="—" />
+            </div>
+            <div class="nps-field nps-span-2">
+                <label>Staff member</label>
+                <RadzenDropDown TValue="Guid?" Data="@teachers" TextProperty="Name" ValueProperty="Id"
+                                @bind-Value="userId" AllowClear="true" Placeholder="—"
+                                AllowFiltering="true"
+                                FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive" />
+            </div>
+        </div>
+    }
+
+    <div class="nps-form-actions">
+        <RadzenButton Text="@(saving ? "Saving..." : "Save movement")"
+                      Icon="save" ButtonStyle="ButtonStyle.Primary"
+                      Disabled="@saving" Click="@SaveAsync" />
+    </div>
+</RadzenCard>
+
+@code {
+    [SupplyParameterFromQuery(Name = "itemId")] public Guid? QueryItemId { get; set; }
+
+    private IReadOnlyList<LookupDto> items = [];
+    private IReadOnlyList<LookupDto> types = [];
+    private IReadOnlyList<LookupDto> suppliers = [];
+    private IReadOnlyList<LookupDto> students = [];
+    private IReadOnlyList<LookupDto> classes = [];
+    private IReadOnlyList<LookupDto> teachers = [];
+
+    private Guid? itemId;
+    private Guid? typeId;
+    private DateTime? movedOn = DateTime.Today;
+    private decimal quantity;
+    private decimal unitCost;
+    private string? reference;
+    private string? notes;
+
+    private Guid? supplierId;
+    private Guid? studentId;
+    private Guid? schoolClassId;
+    private Guid? userId;
+
+    private bool saving;
+    private int selectedDirection;
+    private List<LookupDto> typesRaw = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        items = await LookupService.GetStoreItemsAsync();
+        var typeList = await LookupService.GetStockMovementTypesAsync();
+        types = typeList;
+        typesRaw = typeList.ToList();
+        suppliers = await LookupService.GetActiveSuppliersAsync();
+        students = await LookupService.GetStudentsAsync();
+        classes = await LookupService.GetClassesForSessionAsync();
+        teachers = await LookupService.GetTeachersAsync();
+
+        if (QueryItemId.HasValue) itemId = QueryItemId;
+    }
+
+    private void UpdateDirection()
+    {
+        // Reset counter-party fields when the type changes.
+        supplierId = null;
+        studentId = null;
+        schoolClassId = null;
+        userId = null;
+
+        if (typeId is null)
+        {
+            selectedDirection = 0;
+            return;
+        }
+
+        var code = typesRaw.FirstOrDefault(t => t.Id == typeId)?.Code;
+        selectedDirection = code switch
+        {
+            "OPENING" or "PURCHASE" or "RETURN" or "ADJ_IN" => +1,
+            "ISSUE" or "WRITEOFF" or "ADJ_OUT" => -1,
+            _ => 0,
+        };
+    }
+
+    private async Task SaveAsync()
+    {
+        if (itemId is null || typeId is null || movedOn is null || quantity <= 0)
+        {
+            Notification.Notify(NotificationSeverity.Warning, "Missing fields",
+                "Pick an item, type, date, and a quantity greater than zero.");
+            return;
+        }
+
+        // Mutually-exclusive recipient guard mirrors the server-side check.
+        var recipients = new[] { studentId.HasValue, schoolClassId.HasValue, userId.HasValue }
+            .Count(b => b);
+        if (recipients > 1)
+        {
+            Notification.Notify(NotificationSeverity.Warning, "Pick one recipient",
+                "Choose at most one of pupil / class / staff member.");
+            return;
+        }
+
+        saving = true;
+        try
+        {
+            var result = await MovementService.RecordAsync(new RecordStockMovementRequest
+            {
+                StoreItemId = itemId.Value,
+                StockMovementTypeId = typeId.Value,
+                MovedOn = DateOnly.FromDateTime(movedOn.Value),
+                Quantity = quantity,
+                UnitCost = unitCost,
+                Reference = reference,
+                Notes = notes,
+                ReceivedFromSupplierId = supplierId,
+                IssuedToStudentId = studentId,
+                IssuedToSchoolClassId = schoolClassId,
+                IssuedToUserId = userId,
+            });
+
+            if (result.Succeeded)
+            {
+                Notification.Notify(NotificationSeverity.Success, "Saved",
+                    "Movement recorded.");
+                Nav.NavigateTo($"/store/items/{itemId.Value}");
+            }
+            else
+            {
+                Notification.Notify(NotificationSeverity.Error, "Failed",
+                    string.Join("; ", result.Errors));
+            }
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+}

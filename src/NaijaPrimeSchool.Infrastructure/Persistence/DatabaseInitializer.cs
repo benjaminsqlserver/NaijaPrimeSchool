@@ -6,6 +6,7 @@ using NaijaPrimeSchool.Domain.Academics;
 using NaijaPrimeSchool.Domain.Attendance;
 using NaijaPrimeSchool.Domain.Family;
 using NaijaPrimeSchool.Domain.Finance;
+using NaijaPrimeSchool.Domain.Inventory;
 using NaijaPrimeSchool.Domain.Identity;
 using NaijaPrimeSchool.Domain.Results;
 
@@ -33,8 +34,92 @@ public static class DatabaseInitializer
         await SeedAttendanceLookupsAsync(db, ct);
         await SeedResultsLookupsAsync(db, ct);
         await SeedFinanceLookupsAsync(db, ct);
+        await SeedInventoryLookupsAsync(db, ct);
         await SeedRolesAsync(sp, ct);
         await SeedSuperAdminAsync(sp, logger, ct);
+    }
+
+    private static async Task SeedInventoryLookupsAsync(ApplicationDbContext db, CancellationToken ct)
+    {
+        if (!await db.ItemCategories.IgnoreQueryFilters().AnyAsync(ct))
+        {
+            (string Name, string Code)[] categories =
+            [
+                ("Books",            "BOOK"),
+                ("Uniforms",         "UNIF"),
+                ("Stationery",       "STAT"),
+                ("Sports Equipment", "SPRT"),
+                ("Cleaning Supplies","CLN"),
+                ("Food",             "FOOD"),
+                ("Furniture",        "FURN"),
+                ("ICT Equipment",    "ICT"),
+                ("Medical Supplies", "MED"),
+                ("Other",            "OTH"),
+            ];
+            for (var i = 0; i < categories.Length; i++)
+            {
+                db.ItemCategories.Add(new ItemCategory
+                {
+                    Name = categories[i].Name,
+                    Code = categories[i].Code,
+                    DisplayOrder = i + 1,
+                });
+            }
+        }
+
+        if (!await db.UnitsOfMeasure.IgnoreQueryFilters().AnyAsync(ct))
+        {
+            (string Name, string Code)[] units =
+            [
+                ("Each",     "EA"),
+                ("Piece",    "PC"),
+                ("Pack",     "PK"),
+                ("Box",      "BOX"),
+                ("Carton",   "CTN"),
+                ("Set",      "SET"),
+                ("Bag",      "BAG"),
+                ("Kilogram", "KG"),
+                ("Litre",    "L"),
+                ("Metre",    "M"),
+            ];
+            for (var i = 0; i < units.Length; i++)
+            {
+                db.UnitsOfMeasure.Add(new UnitOfMeasure
+                {
+                    Name = units[i].Name,
+                    Code = units[i].Code,
+                    DisplayOrder = i + 1,
+                });
+            }
+        }
+
+        if (!await db.StockMovementTypes.IgnoreQueryFilters().AnyAsync(ct))
+        {
+            // Direction +1 puts stock in, -1 takes stock out. The service layer
+            // multiplies Quantity by Direction to roll up the on-hand figure.
+            (string Name, string Code, int Direction)[] types =
+            [
+                ("Opening Balance",  "OPENING", +1),
+                ("Purchase",         "PURCHASE", +1),
+                ("Return",           "RETURN",   +1),
+                ("Adjustment In",    "ADJ_IN",   +1),
+                ("Issue",            "ISSUE",    -1),
+                ("Write-off",        "WRITEOFF", -1),
+                ("Adjustment Out",   "ADJ_OUT",  -1),
+            ];
+            for (var i = 0; i < types.Length; i++)
+            {
+                db.StockMovementTypes.Add(new StockMovementType
+                {
+                    Name = types[i].Name,
+                    Code = types[i].Code,
+                    Direction = types[i].Direction,
+                    DisplayOrder = i + 1,
+                });
+            }
+        }
+
+        await db.SaveChangesAsync(ct);
     }
 
     private static async Task SeedFinanceLookupsAsync(ApplicationDbContext db, CancellationToken ct)

@@ -1,0 +1,307 @@
+@page "/store/suppliers"
+@attribute [Authorize(Roles = $"{Roles.SuperAdmin},{Roles.HeadTeacher},{Roles.SchoolStoreKeeper}")]
+@rendermode InteractiveServer
+
+@inject ISupplierService SupplierService
+@inject NavigationManager Nav
+@inject DialogService Dialog
+@inject NotificationService Notification
+
+<PageTitle>Suppliers · Naija Prime School</PageTitle>
+
+<div class="nps-page-header">
+    <div>
+        <h1>Suppliers</h1>
+        <p>The vendors the school buys from. Each row tracks total purchases recorded against the supplier.</p>
+    </div>
+    <div class="nps-page-actions">
+        <RadzenButton Text="New supplier" Icon="add" ButtonStyle="ButtonStyle.Primary"
+                      Click="@(() => OpenForm(null))" />
+    </div>
+</div>
+
+<RadzenCard class="nps-card" Style="margin-bottom: 1rem;">
+    <div class="nps-filter-bar">
+        <div class="nps-field">
+            <label>Search</label>
+            <RadzenTextBox @bind-Value="search" Placeholder="Name, contact, phone, email"
+                           Change="@(_ => LoadAsync())" Style="min-width: 280px;" />
+        </div>
+        <div class="nps-field">
+            <label>Status</label>
+            <RadzenDropDown TValue="bool?" Data="@statusOptions" TextProperty="Text" ValueProperty="Value"
+                            @bind-Value="isActive" AllowClear="true" Placeholder="All"
+                            Change="@(_ => LoadAsync())" Style="min-width: 160px;" />
+        </div>
+    </div>
+</RadzenCard>
+
+<RadzenCard class="nps-card">
+    <RadzenDataGrid TItem="SupplierDto" Data="@suppliers" IsLoading="@loading"
+                    AllowPaging="true" PageSize="25" EmptyText="No suppliers match your filters.">
+        <Columns>
+            <RadzenDataGridColumn TItem="SupplierDto" Title="Name">
+                <Template Context="s">
+                    <strong>@s.Name</strong>
+                    @if (!string.IsNullOrEmpty(s.ContactName))
+                    {
+                        <br />
+                        <small style="color: var(--nps-ink-500);">@s.ContactName</small>
+                    }
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="SupplierDto" Title="Contact" Sortable="false">
+                <Template Context="s">
+                    <div style="display:flex; flex-direction:column;">
+                        <span>@s.Phone</span>
+                        <small style="color: var(--nps-ink-500);">@s.Email</small>
+                    </div>
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="SupplierDto" Title="Purchases" Width="120px" Property="PurchaseCount" />
+            <RadzenDataGridColumn TItem="SupplierDto" Title="Total" Width="160px">
+                <Template Context="s"><strong>@s.TotalPurchased.ToString("N2")</strong></Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="SupplierDto" Title="Status" Width="120px">
+                <Template Context="s">
+                    @if (s.IsActive)
+                    {
+                        <RadzenBadge Text="Active" BadgeStyle="BadgeStyle.Success" Variant="Variant.Flat" />
+                    }
+                    else
+                    {
+                        <RadzenBadge Text="Inactive" BadgeStyle="BadgeStyle.Secondary" Variant="Variant.Flat" />
+                    }
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="SupplierDto" Title="Actions" Width="200px" Sortable="false"
+                                  TextAlign="TextAlign.Right">
+                <Template Context="s">
+                    <div class="nps-inline-actions">
+                        <RadzenButton Icon="edit" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                      ButtonStyle="ButtonStyle.Light" title="Edit"
+                                      Click="@(() => OpenForm(s))" />
+                        @if (s.IsActive)
+                        {
+                            <RadzenButton Icon="block" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                          ButtonStyle="ButtonStyle.Warning" title="Deactivate"
+                                          Click="@(() => SetActiveAsync(s, false))" />
+                        }
+                        else
+                        {
+                            <RadzenButton Icon="check_circle" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                          ButtonStyle="ButtonStyle.Success" title="Activate"
+                                          Click="@(() => SetActiveAsync(s, true))" />
+                        }
+                        <RadzenButton Icon="delete" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                      ButtonStyle="ButtonStyle.Danger" title="Delete"
+                                      Click="@(() => DeleteAsync(s))" />
+                    </div>
+                </Template>
+            </RadzenDataGridColumn>
+        </Columns>
+    </RadzenDataGrid>
+</RadzenCard>
+
+@if (showForm)
+{
+    <RadzenCard class="nps-card" Style="margin-top:1rem;">
+        <h3 style="margin: 0 0 1rem;">@(editingId.HasValue ? "Edit supplier" : "New supplier")</h3>
+        <RadzenTemplateForm TItem="SupplierFormModel" Data="@form" Submit="@SaveAsync">
+            <DataAnnotationsValidator />
+            <div class="nps-form-grid">
+                <div class="nps-field nps-span-2">
+                    <label>Name *</label>
+                    <RadzenTextBox @bind-Value="form.Name" />
+                    <ValidationMessage For="() => form.Name" />
+                </div>
+                <div class="nps-field">
+                    <label>Contact name</label>
+                    <RadzenTextBox @bind-Value="form.ContactName" />
+                </div>
+                <div class="nps-field">
+                    <label>Phone</label>
+                    <RadzenTextBox @bind-Value="form.Phone" />
+                </div>
+                <div class="nps-field nps-span-2">
+                    <label>Email</label>
+                    <RadzenTextBox @bind-Value="form.Email" />
+                </div>
+                <div class="nps-field nps-span-2">
+                    <label>Address</label>
+                    <RadzenTextArea @bind-Value="form.Address" Rows="2" />
+                </div>
+                <div class="nps-field nps-span-2">
+                    <label>Notes</label>
+                    <RadzenTextArea @bind-Value="form.Notes" Rows="2" />
+                </div>
+            </div>
+            <div class="nps-form-actions">
+                <RadzenButton Text="Cancel" ButtonType="ButtonType.Button"
+                              ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat"
+                              Click="@(() => showForm = false)" />
+                <RadzenButton Text="@(saving ? "Saving..." : "Save")"
+                              Icon="save" ButtonType="ButtonType.Submit"
+                              ButtonStyle="ButtonStyle.Primary" Disabled="@saving" />
+            </div>
+        </RadzenTemplateForm>
+    </RadzenCard>
+}
+
+@code {
+    private IReadOnlyList<SupplierDto> suppliers = [];
+    private bool loading;
+    private bool saving;
+    private bool showForm;
+    private Guid? editingId;
+
+    private string? search;
+    private bool? isActive;
+
+    private record StatusOption(string Text, bool? Value);
+    private readonly List<StatusOption> statusOptions =
+    [
+        new StatusOption("Active", true),
+        new StatusOption("Inactive", false),
+    ];
+
+    private SupplierFormModel form = new();
+
+    private class SupplierFormModel
+    {
+        [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(120)]
+        public string Name { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.StringLength(120)]
+        public string? ContactName { get; set; }
+
+        [System.ComponentModel.DataAnnotations.StringLength(30)]
+        public string? Phone { get; set; }
+
+        [System.ComponentModel.DataAnnotations.EmailAddress, System.ComponentModel.DataAnnotations.StringLength(256)]
+        public string? Email { get; set; }
+
+        [System.ComponentModel.DataAnnotations.StringLength(300)]
+        public string? Address { get; set; }
+
+        [System.ComponentModel.DataAnnotations.StringLength(500)]
+        public string? Notes { get; set; }
+    }
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        try
+        {
+            suppliers = await SupplierService.ListAsync(new SupplierFilter
+            {
+                Search = search,
+                IsActive = isActive,
+            });
+        }
+        finally
+        {
+            loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void OpenForm(SupplierDto? s)
+    {
+        editingId = s?.Id;
+        form = new SupplierFormModel
+        {
+            Name = s?.Name ?? string.Empty,
+            ContactName = s?.ContactName,
+            Phone = s?.Phone,
+            Email = s?.Email,
+            Address = s?.Address,
+            Notes = s?.Notes,
+        };
+        showForm = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        saving = true;
+        try
+        {
+            OperationResult result = editingId.HasValue
+                ? await SupplierService.UpdateAsync(new UpdateSupplierRequest
+                {
+                    Id = editingId.Value,
+                    Name = form.Name,
+                    ContactName = form.ContactName,
+                    Phone = form.Phone,
+                    Email = form.Email,
+                    Address = form.Address,
+                    Notes = form.Notes,
+                })
+                : await SupplierService.CreateAsync(new CreateSupplierRequest
+                {
+                    Name = form.Name,
+                    ContactName = form.ContactName,
+                    Phone = form.Phone,
+                    Email = form.Email,
+                    Address = form.Address,
+                    Notes = form.Notes,
+                });
+
+            if (result.Succeeded)
+            {
+                Notification.Notify(NotificationSeverity.Success, "Saved",
+                    $"Supplier '{form.Name}' saved.");
+                showForm = false;
+                await LoadAsync();
+            }
+            else
+            {
+                Notification.Notify(NotificationSeverity.Error, "Failed",
+                    string.Join("; ", result.Errors));
+            }
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private async Task SetActiveAsync(SupplierDto s, bool active)
+    {
+        var result = await SupplierService.SetActiveAsync(s.Id, active, CancellationToken.None);
+        if (result.Succeeded)
+        {
+            Notification.Notify(NotificationSeverity.Success, "Updated",
+                active ? $"'{s.Name}' activated." : $"'{s.Name}' deactivated.");
+            await LoadAsync();
+        }
+        else
+        {
+            Notification.Notify(NotificationSeverity.Error, "Failed",
+                string.Join("; ", result.Errors));
+        }
+    }
+
+    private async Task DeleteAsync(SupplierDto s)
+    {
+        var confirm = await Dialog.Confirm(
+            $"Delete '{s.Name}'? Only suppliers with no purchase history can be deleted.",
+            "Delete supplier",
+            new ConfirmOptions { OkButtonText = "Delete", CancelButtonText = "Cancel" });
+        if (confirm != true) return;
+
+        var result = await SupplierService.SoftDeleteAsync(s.Id);
+        if (result.Succeeded)
+        {
+            Notification.Notify(NotificationSeverity.Success, "Deleted", $"'{s.Name}' removed.");
+            await LoadAsync();
+        }
+        else
+        {
+            Notification.Notify(NotificationSeverity.Error, "Failed",
+                string.Join("; ", result.Errors));
+        }
+    }
+}

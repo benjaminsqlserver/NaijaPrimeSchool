@@ -10,6 +10,7 @@ using NaijaPrimeSchool.Domain.Common;
 using NaijaPrimeSchool.Domain.Family;
 using NaijaPrimeSchool.Domain.Finance;
 using NaijaPrimeSchool.Domain.Identity;
+using NaijaPrimeSchool.Domain.Inventory;
 using NaijaPrimeSchool.Domain.Results;
 
 namespace NaijaPrimeSchool.Infrastructure.Persistence;
@@ -77,6 +78,13 @@ public class ApplicationDbContext(
     public DbSet<InvoiceLine> InvoiceLines => Set<InvoiceLine>();
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<PaymentAllocation> PaymentAllocations => Set<PaymentAllocation>();
+
+    public DbSet<ItemCategory> ItemCategories => Set<ItemCategory>();
+    public DbSet<UnitOfMeasure> UnitsOfMeasure => Set<UnitOfMeasure>();
+    public DbSet<StockMovementType> StockMovementTypes => Set<StockMovementType>();
+    public DbSet<Supplier> Suppliers => Set<Supplier>();
+    public DbSet<StoreItem> StoreItems => Set<StoreItem>();
+    public DbSet<StockMovement> StockMovements => Set<StockMovement>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -161,6 +169,7 @@ public class ApplicationDbContext(
         ConfigureAttendance(builder);
         ConfigureResults(builder);
         ConfigureFinance(builder);
+        ConfigureInventory(builder);
     }
 
     private static void ConfigureAcademics(ModelBuilder builder)
@@ -1010,6 +1019,130 @@ public class ApplicationDbContext(
             b.HasIndex(a => new { a.PaymentId, a.InvoiceId }).IsUnique();
             b.HasIndex(a => a.IsDeleted);
             b.HasQueryFilter(a => !a.IsDeleted);
+        });
+    }
+
+    private static void ConfigureInventory(ModelBuilder builder)
+    {
+        ConfigureLookup<ItemCategory>(builder, "ItemCategories", extra: b =>
+        {
+            b.Property(c => c.Name).HasMaxLength(60).IsRequired();
+            b.Property(c => c.Code).HasMaxLength(10).IsRequired();
+            b.HasIndex(c => c.Name).IsUnique();
+            b.HasIndex(c => c.Code).IsUnique();
+        });
+
+        ConfigureLookup<UnitOfMeasure>(builder, "UnitsOfMeasure", extra: b =>
+        {
+            b.Property(u => u.Name).HasMaxLength(40).IsRequired();
+            b.Property(u => u.Code).HasMaxLength(10).IsRequired();
+            b.HasIndex(u => u.Name).IsUnique();
+            b.HasIndex(u => u.Code).IsUnique();
+        });
+
+        ConfigureLookup<StockMovementType>(builder, "StockMovementTypes", extra: b =>
+        {
+            b.Property(t => t.Name).HasMaxLength(40).IsRequired();
+            b.Property(t => t.Code).HasMaxLength(20).IsRequired();
+            b.HasIndex(t => t.Name).IsUnique();
+            b.HasIndex(t => t.Code).IsUnique();
+        });
+
+        builder.Entity<Supplier>(b =>
+        {
+            b.ToTable("Suppliers");
+            b.HasKey(s => s.Id);
+            b.Property(s => s.Name).HasMaxLength(120).IsRequired();
+            b.Property(s => s.ContactName).HasMaxLength(120);
+            b.Property(s => s.Phone).HasMaxLength(30);
+            b.Property(s => s.Email).HasMaxLength(256);
+            b.Property(s => s.Address).HasMaxLength(300);
+            b.Property(s => s.Notes).HasMaxLength(500);
+            b.Property(s => s.CreatedBy).HasMaxLength(100);
+            b.Property(s => s.ModifiedBy).HasMaxLength(100);
+            b.Property(s => s.DeletedBy).HasMaxLength(100);
+
+            b.HasIndex(s => s.Name);
+            b.HasIndex(s => s.IsDeleted);
+            b.HasQueryFilter(s => !s.IsDeleted);
+        });
+
+        builder.Entity<StoreItem>(b =>
+        {
+            b.ToTable("StoreItems");
+            b.HasKey(i => i.Id);
+            b.Property(i => i.Name).HasMaxLength(120).IsRequired();
+            b.Property(i => i.Sku).HasMaxLength(60);
+            b.Property(i => i.Description).HasMaxLength(500);
+            b.Property(i => i.QuantityOnHand).HasPrecision(14, 3);
+            b.Property(i => i.ReorderLevel).HasPrecision(14, 3);
+            b.Property(i => i.LastUnitCost).HasPrecision(12, 2);
+            b.Property(i => i.CreatedBy).HasMaxLength(100);
+            b.Property(i => i.ModifiedBy).HasMaxLength(100);
+            b.Property(i => i.DeletedBy).HasMaxLength(100);
+
+            b.HasOne(i => i.ItemCategory).WithMany(c => c.Items)
+                .HasForeignKey(i => i.ItemCategoryId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasOne(i => i.UnitOfMeasure).WithMany(u => u.Items)
+                .HasForeignKey(i => i.UnitOfMeasureId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasIndex(i => i.Name);
+            b.HasIndex(i => i.Sku).IsUnique()
+                .HasFilter("[Sku] IS NOT NULL");
+            b.HasIndex(i => i.IsDeleted);
+            b.HasQueryFilter(i => !i.IsDeleted);
+        });
+
+        builder.Entity<StockMovement>(b =>
+        {
+            b.ToTable("StockMovements");
+            b.HasKey(m => m.Id);
+            b.Property(m => m.MovementNumber).HasMaxLength(40).IsRequired();
+            b.Property(m => m.Quantity).HasPrecision(14, 3);
+            b.Property(m => m.UnitCost).HasPrecision(12, 2);
+            b.Property(m => m.TotalCost).HasPrecision(14, 2);
+            b.Property(m => m.Reference).HasMaxLength(120);
+            b.Property(m => m.Notes).HasMaxLength(300);
+            b.Property(m => m.CreatedBy).HasMaxLength(100);
+            b.Property(m => m.ModifiedBy).HasMaxLength(100);
+            b.Property(m => m.DeletedBy).HasMaxLength(100);
+
+            b.HasOne(m => m.StoreItem).WithMany(i => i.Movements)
+                .HasForeignKey(m => m.StoreItemId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasOne(m => m.StockMovementType).WithMany(t => t.Movements)
+                .HasForeignKey(m => m.StockMovementTypeId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasOne(m => m.ReceivedFromSupplier).WithMany(s => s.Purchases)
+                .HasForeignKey(m => m.ReceivedFromSupplierId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            b.HasOne(m => m.IssuedToStudent).WithMany(s => s.StockIssuances)
+                .HasForeignKey(m => m.IssuedToStudentId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            b.HasOne(m => m.IssuedToSchoolClass).WithMany(c => c.StockIssuances)
+                .HasForeignKey(m => m.IssuedToSchoolClassId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            b.HasOne(m => m.IssuedToUser).WithMany()
+                .HasForeignKey(m => m.IssuedToUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            b.HasOne(m => m.PerformedBy).WithMany()
+                .HasForeignKey(m => m.PerformedById)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            b.HasIndex(m => m.MovementNumber).IsUnique();
+            b.HasIndex(m => new { m.StoreItemId, m.MovedOn });
+            b.HasIndex(m => m.MovedOn);
+            b.HasIndex(m => m.IsDeleted);
+            b.HasQueryFilter(m => !m.IsDeleted);
         });
     }
 

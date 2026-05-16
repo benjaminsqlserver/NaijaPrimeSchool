@@ -33,4 +33,10 @@ public interface ILookupService
     Task<IReadOnlyList<LookupDto>> GetPaymentMethodsAsync(CancellationToken ct = default);
     Task<IReadOnlyList<LookupDto>> GetInvoiceStatusesAsync(CancellationToken ct = default);
     Task<IReadOnlyList<LookupDto>> GetPaymentStatusesAsync(CancellationToken ct = default);
+
+    Task<IReadOnlyList<LookupDto>> GetItemCategoriesAsync(CancellationToken ct = default);
+    Task<IReadOnlyList<LookupDto>> GetUnitsOfMeasureAsync(CancellationToken ct = default);
+    Task<IReadOnlyList<LookupDto>> GetStockMovementTypesAsync(CancellationToken ct = default);
+    Task<IReadOnlyList<LookupDto>> GetActiveSuppliersAsync(CancellationToken ct = default);
+    Task<IReadOnlyList<LookupDto>> GetStoreItemsAsync(string? searchTerm = null, CancellationToken ct = default);
 }

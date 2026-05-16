@@ -6,6 +6,7 @@ using NaijaPrimeSchool.Application.Academics;
 using NaijaPrimeSchool.Application.Attendance;
 using NaijaPrimeSchool.Application.Family;
 using NaijaPrimeSchool.Application.Finance;
+using NaijaPrimeSchool.Application.Inventory;
 using NaijaPrimeSchool.Application.Results;
 using NaijaPrimeSchool.Application.Users;
 using NaijaPrimeSchool.Domain.Identity;
@@ -77,6 +78,10 @@ public static class DependencyInjection
         services.AddScoped<InvoiceService>();
         services.AddScoped<IInvoiceService>(sp => sp.GetRequiredService<InvoiceService>());
         services.AddScoped<IPaymentService, PaymentService>();
+
+        services.AddScoped<ISupplierService, SupplierService>();
+        services.AddScoped<IStoreItemService, StoreItemService>();
+        services.AddScoped<IStockMovementService, StockMovementService>();
 
         return services;
     }
