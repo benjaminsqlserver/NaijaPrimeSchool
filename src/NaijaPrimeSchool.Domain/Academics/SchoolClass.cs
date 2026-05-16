@@ -3,6 +3,7 @@ using NaijaPrimeSchool.Domain.Common;
 using NaijaPrimeSchool.Domain.Family;
 using NaijaPrimeSchool.Domain.Finance;
 using NaijaPrimeSchool.Domain.Identity;
+using NaijaPrimeSchool.Domain.Inventory;
 using NaijaPrimeSchool.Domain.Results;
 
 namespace NaijaPrimeSchool.Domain.Academics;
@@ -28,4 +29,5 @@ public class SchoolClass : BaseEntity
     public ICollection<SubjectResult> SubjectResults { get; set; } = [];
     public ICollection<ReportCard> ReportCards { get; set; } = [];
     public ICollection<Invoice> Invoices { get; set; } = [];
+    public ICollection<StockMovement> StockIssuances { get; set; } = [];
 }

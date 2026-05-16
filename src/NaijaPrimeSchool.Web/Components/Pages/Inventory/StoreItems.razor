@@ -1,0 +1,176 @@
+@page "/store/items"
+@attribute [Authorize(Roles = $"{Roles.SuperAdmin},{Roles.HeadTeacher},{Roles.SchoolStoreKeeper}")]
+@rendermode InteractiveServer
+
+@inject IStoreItemService ItemService
+@inject ILookupService LookupService
+@inject NavigationManager Nav
+@inject DialogService Dialog
+@inject NotificationService Notification
+
+<PageTitle>Store catalog · Naija Prime School</PageTitle>
+
+<div class="nps-page-header">
+    <div>
+        <h1>Store catalog</h1>
+        <p>Every item the storekeeper tracks — books, uniforms, stationery, cleaning supplies, food, and the rest.</p>
+    </div>
+    <div class="nps-page-actions">
+        <RadzenButton Text="New item" Icon="add" ButtonStyle="ButtonStyle.Primary"
+                      Click="@(() => Nav.NavigateTo("/store/items/new"))" />
+    </div>
+</div>
+
+<RadzenCard class="nps-card" Style="margin-bottom: 1rem;">
+    <div class="nps-filter-bar">
+        <div class="nps-field">
+            <label>Search</label>
+            <RadzenTextBox @bind-Value="search" Placeholder="Name or SKU"
+                           Change="@(_ => LoadAsync())" Style="min-width: 240px;" />
+        </div>
+        <div class="nps-field">
+            <label>Category</label>
+            <RadzenDropDown TValue="Guid?" Data="@categories" TextProperty="Name" ValueProperty="Id"
+                            @bind-Value="categoryId" AllowClear="true" Placeholder="All categories"
+                            Change="@(_ => LoadAsync())" Style="min-width: 200px;" />
+        </div>
+        <div class="nps-field">
+            <label>Status</label>
+            <RadzenDropDown TValue="bool?" Data="@statusOptions" TextProperty="Text" ValueProperty="Value"
+                            @bind-Value="isActive" AllowClear="true" Placeholder="All"
+                            Change="@(_ => LoadAsync())" Style="min-width: 160px;" />
+        </div>
+        <div class="nps-field">
+            <label>Low stock only</label>
+            <RadzenSwitch @bind-Value="lowStockOnly" Change="@(_ => LoadAsync())" />
+        </div>
+    </div>
+</RadzenCard>
+
+<RadzenCard class="nps-card">
+    <RadzenDataGrid TItem="StoreItemDto" Data="@items" IsLoading="@loading"
+                    AllowPaging="true" PageSize="25" EmptyText="No items match your filters.">
+        <Columns>
+            <RadzenDataGridColumn TItem="StoreItemDto" Title="Item">
+                <Template Context="i">
+                    <strong>@i.Name</strong>
+                    @if (!string.IsNullOrEmpty(i.Sku))
+                    {
+                        <br />
+                        <small style="color: var(--nps-ink-500);">SKU @i.Sku</small>
+                    }
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="StoreItemDto" Title="Category" Property="ItemCategoryName" Width="160px" />
+            <RadzenDataGridColumn TItem="StoreItemDto" Title="On hand" Width="140px">
+                <Template Context="i">
+                    <strong>@i.QuantityOnHand.ToString("N2")</strong> @i.UnitOfMeasureCode
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="StoreItemDto" Title="Reorder" Width="120px">
+                <Template Context="i">@i.ReorderLevel.ToString("N2")</Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="StoreItemDto" Title="Last cost" Width="140px">
+                <Template Context="i">@i.LastUnitCost.ToString("N2")</Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="StoreItemDto" Title="Status" Width="120px">
+                <Template Context="i">
+                    @if (!i.IsActive)
+                    {
+                        <RadzenBadge Text="Inactive" BadgeStyle="BadgeStyle.Secondary" Variant="Variant.Flat" />
+                    }
+                    else if (i.IsBelowReorder)
+                    {
+                        <RadzenBadge Text="Low" BadgeStyle="BadgeStyle.Warning" Variant="Variant.Flat" />
+                    }
+                    else
+                    {
+                        <RadzenBadge Text="In stock" BadgeStyle="BadgeStyle.Success" Variant="Variant.Flat" />
+                    }
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="StoreItemDto" Title="Actions" Width="180px" Sortable="false"
+                                  TextAlign="TextAlign.Right">
+                <Template Context="i">
+                    <div class="nps-inline-actions">
+                        <RadzenButton Icon="visibility" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                      ButtonStyle="ButtonStyle.Primary" title="Open"
+                                      Click="@(() => Nav.NavigateTo($"/store/items/{i.Id}"))" />
+                        <RadzenButton Icon="add" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                      ButtonStyle="ButtonStyle.Success" title="Record movement"
+                                      Click="@(() => Nav.NavigateTo($"/store/movements/new?itemId={i.Id}"))" />
+                        <RadzenButton Icon="delete" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                      ButtonStyle="ButtonStyle.Danger" title="Delete"
+                                      Click="@(() => DeleteAsync(i))" />
+                    </div>
+                </Template>
+            </RadzenDataGridColumn>
+        </Columns>
+    </RadzenDataGrid>
+</RadzenCard>
+
+@code {
+    private IReadOnlyList<StoreItemDto> items = [];
+    private IReadOnlyList<LookupDto> categories = [];
+
+    private bool loading;
+    private string? search;
+    private Guid? categoryId;
+    private bool? isActive;
+    private bool lowStockOnly;
+
+    private record StatusOption(string Text, bool? Value);
+    private readonly List<StatusOption> statusOptions =
+    [
+        new StatusOption("Active", true),
+        new StatusOption("Inactive", false),
+    ];
+
+    protected override async Task OnInitializedAsync()
+    {
+        categories = await LookupService.GetItemCategoriesAsync();
+        isActive = true;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        try
+        {
+            items = await ItemService.ListAsync(new StoreItemFilter
+            {
+                Search = search,
+                ItemCategoryId = categoryId,
+                IsActive = isActive,
+                OnlyBelowReorder = lowStockOnly ? true : null,
+            });
+        }
+        finally
+        {
+            loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task DeleteAsync(StoreItemDto item)
+    {
+        var confirm = await Dialog.Confirm(
+            $"Delete '{item.Name}'? Only items with no movement history can be deleted.",
+            "Delete item",
+            new ConfirmOptions { OkButtonText = "Delete", CancelButtonText = "Cancel" });
+        if (confirm != true) return;
+
+        var result = await ItemService.SoftDeleteAsync(item.Id);
+        if (result.Succeeded)
+        {
+            Notification.Notify(NotificationSeverity.Success, "Deleted", $"'{item.Name}' removed.");
+            await LoadAsync();
+        }
+        else
+        {
+            Notification.Notify(NotificationSeverity.Error, "Failed",
+                string.Join("; ", result.Errors));
+        }
+    }
+}

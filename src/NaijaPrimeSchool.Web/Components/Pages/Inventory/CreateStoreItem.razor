@@ -1,0 +1,162 @@
+@page "/store/items/new"
+@attribute [Authorize(Roles = $"{Roles.SuperAdmin},{Roles.HeadTeacher},{Roles.SchoolStoreKeeper}")]
+@rendermode InteractiveServer
+
+@inject IStoreItemService ItemService
+@inject ILookupService LookupService
+@inject NavigationManager Nav
+@inject NotificationService Notification
+
+<PageTitle>New store item · Naija Prime School</PageTitle>
+
+<div class="nps-page-header">
+    <div>
+        <h1>New store item</h1>
+        <p>Add an item to the catalog. Set the opening quantity to seed the stock on hand.</p>
+    </div>
+    <div class="nps-page-actions">
+        <RadzenButton Text="Back" Icon="arrow_back" Variant="Variant.Flat"
+                      ButtonStyle="ButtonStyle.Light" Click="@(() => Nav.NavigateTo("/store/items"))" />
+    </div>
+</div>
+
+<RadzenCard class="nps-card">
+    <RadzenTemplateForm TItem="ItemFormModel" Data="@form" Submit="@SaveAsync">
+        <DataAnnotationsValidator />
+
+        <h3 style="margin: 0 0 1rem;">Identity</h3>
+        <div class="nps-form-grid">
+            <div class="nps-field nps-span-2">
+                <label>Name *</label>
+                <RadzenTextBox @bind-Value="form.Name" Placeholder="e.g. English Textbook — Primary 4" />
+                <ValidationMessage For="() => form.Name" />
+            </div>
+            <div class="nps-field">
+                <label>SKU</label>
+                <RadzenTextBox @bind-Value="form.Sku" Placeholder="Optional unique code" />
+            </div>
+            <div class="nps-field">
+                <label>Category *</label>
+                <RadzenDropDown TValue="Guid?" Data="@categories" TextProperty="Name" ValueProperty="Id"
+                                @bind-Value="form.ItemCategoryId" Placeholder="Pick a category" />
+            </div>
+            <div class="nps-field">
+                <label>Unit of measure *</label>
+                <RadzenDropDown TValue="Guid?" Data="@units" TextProperty="Name" ValueProperty="Id"
+                                @bind-Value="form.UnitOfMeasureId" Placeholder="Pick a unit" />
+            </div>
+            <div class="nps-field">
+                <label>Reorder level</label>
+                <RadzenNumeric TValue="decimal" @bind-Value="form.ReorderLevel" Min="0" Format="N2" />
+                <small style="color: var(--nps-ink-500);">
+                    Low-stock badge appears when on-hand falls to or below this number.
+                </small>
+            </div>
+            <div class="nps-field nps-span-2">
+                <label>Description</label>
+                <RadzenTextArea @bind-Value="form.Description" Rows="2" />
+            </div>
+        </div>
+
+        <h3 style="margin: 1.5rem 0 1rem;">Opening balance (optional)</h3>
+        <div class="nps-form-grid">
+            <div class="nps-field">
+                <label>Opening quantity</label>
+                <RadzenNumeric TValue="decimal" @bind-Value="form.OpeningQuantity" Min="0" Format="N2" />
+                <small style="color: var(--nps-ink-500);">
+                    Recorded as a single "Opening Balance" movement.
+                </small>
+            </div>
+            <div class="nps-field">
+                <label>Opening unit cost</label>
+                <RadzenNumeric TValue="decimal" @bind-Value="form.OpeningUnitCost" Min="0" Format="N2" />
+                <small style="color: var(--nps-ink-500);">
+                    Feeds the stock-value figure on the dashboard.
+                </small>
+            </div>
+        </div>
+
+        <div class="nps-form-actions">
+            <RadzenButton Text="Cancel" ButtonType="ButtonType.Button"
+                          ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat"
+                          Click="@(() => Nav.NavigateTo("/store/items"))" />
+            <RadzenButton Text="@(saving ? "Saving..." : "Save item")"
+                          Icon="save" ButtonType="ButtonType.Submit"
+                          ButtonStyle="ButtonStyle.Primary" Disabled="@saving" />
+        </div>
+    </RadzenTemplateForm>
+</RadzenCard>
+
+@code {
+    private ItemFormModel form = new();
+    private bool saving;
+
+    private IReadOnlyList<LookupDto> categories = [];
+    private IReadOnlyList<LookupDto> units = [];
+
+    private class ItemFormModel
+    {
+        [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(120)]
+        public string Name { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.StringLength(60)]
+        public string? Sku { get; set; }
+
+        [System.ComponentModel.DataAnnotations.StringLength(500)]
+        public string? Description { get; set; }
+
+        public Guid? ItemCategoryId { get; set; }
+        public Guid? UnitOfMeasureId { get; set; }
+        public decimal ReorderLevel { get; set; }
+        public decimal OpeningQuantity { get; set; }
+        public decimal OpeningUnitCost { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        categories = await LookupService.GetItemCategoriesAsync();
+        units = await LookupService.GetUnitsOfMeasureAsync();
+    }
+
+    private async Task SaveAsync()
+    {
+        if (form.ItemCategoryId is null || form.UnitOfMeasureId is null)
+        {
+            Notification.Notify(NotificationSeverity.Warning, "Missing fields",
+                "Pick a category and a unit of measure.");
+            return;
+        }
+
+        saving = true;
+        try
+        {
+            var result = await ItemService.CreateAsync(new CreateStoreItemRequest
+            {
+                Name = form.Name,
+                Sku = form.Sku,
+                Description = form.Description,
+                ItemCategoryId = form.ItemCategoryId.Value,
+                UnitOfMeasureId = form.UnitOfMeasureId.Value,
+                ReorderLevel = form.ReorderLevel,
+                OpeningQuantity = form.OpeningQuantity,
+                OpeningUnitCost = form.OpeningUnitCost,
+                IsActive = true,
+            });
+
+            if (result.Succeeded && result.Data != Guid.Empty)
+            {
+                Notification.Notify(NotificationSeverity.Success, "Saved", $"'{form.Name}' added.");
+                Nav.NavigateTo($"/store/items/{result.Data}");
+            }
+            else
+            {
+                Notification.Notify(NotificationSeverity.Error, "Failed",
+                    string.Join("; ", result.Errors));
+            }
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+}

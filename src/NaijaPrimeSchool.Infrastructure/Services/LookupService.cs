@@ -219,4 +219,51 @@ public class LookupService(
             .OrderBy(s => s.DisplayOrder)
             .Select(s => new LookupDto { Id = s.Id, Name = s.Name, Code = s.Code })
             .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<LookupDto>> GetItemCategoriesAsync(CancellationToken ct = default) =>
+        await db.ItemCategories
+            .OrderBy(c => c.DisplayOrder)
+            .Select(c => new LookupDto { Id = c.Id, Name = c.Name, Code = c.Code })
+            .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<LookupDto>> GetUnitsOfMeasureAsync(CancellationToken ct = default) =>
+        await db.UnitsOfMeasure
+            .OrderBy(u => u.DisplayOrder)
+            .Select(u => new LookupDto { Id = u.Id, Name = u.Name, Code = u.Code })
+            .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<LookupDto>> GetStockMovementTypesAsync(CancellationToken ct = default) =>
+        await db.StockMovementTypes
+            .OrderBy(t => t.DisplayOrder)
+            .Select(t => new LookupDto { Id = t.Id, Name = t.Name, Code = t.Code })
+            .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<LookupDto>> GetActiveSuppliersAsync(CancellationToken ct = default) =>
+        await db.Suppliers
+            .Where(s => s.IsActive)
+            .OrderBy(s => s.Name)
+            .Select(s => new LookupDto { Id = s.Id, Name = s.Name })
+            .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<LookupDto>> GetStoreItemsAsync(string? searchTerm = null, CancellationToken ct = default)
+    {
+        var q = db.StoreItems.Where(i => i.IsActive);
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            var term = searchTerm.Trim().ToLower();
+            q = q.Where(i =>
+                i.Name.ToLower().Contains(term)
+                || (i.Sku != null && i.Sku.ToLower().Contains(term)));
+        }
+        return await q
+            .OrderBy(i => i.Name)
+            .Take(50)
+            .Select(i => new LookupDto
+            {
+                Id = i.Id,
+                Name = i.Name,
+                Code = i.Sku,
+            })
+            .ToListAsync(ct);
+    }
 }

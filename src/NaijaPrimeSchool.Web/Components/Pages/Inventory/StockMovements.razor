@@ -1,0 +1,172 @@
+@page "/store/movements"
+@attribute [Authorize(Roles = $"{Roles.SuperAdmin},{Roles.HeadTeacher},{Roles.SchoolStoreKeeper}")]
+@rendermode InteractiveServer
+
+@inject IStockMovementService MovementService
+@inject ILookupService LookupService
+@inject NavigationManager Nav
+
+<PageTitle>Stock movements · Naija Prime School</PageTitle>
+
+<div class="nps-page-header">
+    <div>
+        <h1>Stock movements</h1>
+        <p>Every receipt, issuance, return, write-off, and adjustment that touched the store.</p>
+    </div>
+    <div class="nps-page-actions">
+        <RadzenButton Text="Record movement" Icon="add" ButtonStyle="ButtonStyle.Primary"
+                      Click="@(() => Nav.NavigateTo("/store/movements/new"))" />
+    </div>
+</div>
+
+<RadzenCard class="nps-card" Style="margin-bottom: 1rem;">
+    <div class="nps-filter-bar">
+        <div class="nps-field">
+            <label>Search</label>
+            <RadzenTextBox @bind-Value="search" Placeholder="Movement no, item, reference"
+                           Change="@(_ => LoadAsync())" Style="min-width: 280px;" />
+        </div>
+        <div class="nps-field">
+            <label>Type</label>
+            <RadzenDropDown TValue="Guid?" Data="@types" TextProperty="Name" ValueProperty="Id"
+                            @bind-Value="typeId" AllowClear="true" Placeholder="All types"
+                            Change="@(_ => LoadAsync())" Style="min-width: 180px;" />
+        </div>
+        <div class="nps-field">
+            <label>Direction</label>
+            <RadzenDropDown TValue="int?" Data="@directionOptions" TextProperty="Text" ValueProperty="Value"
+                            @bind-Value="direction" AllowClear="true" Placeholder="Any"
+                            Change="@(_ => LoadAsync())" Style="min-width: 140px;" />
+        </div>
+        <div class="nps-field">
+            <label>From</label>
+            <RadzenDatePicker TValue="DateTime?" @bind-Value="fromDate" DateFormat="d MMM yyyy"
+                              Change="@(_ => LoadAsync())" Style="min-width: 160px;" />
+        </div>
+        <div class="nps-field">
+            <label>To</label>
+            <RadzenDatePicker TValue="DateTime?" @bind-Value="toDate" DateFormat="d MMM yyyy"
+                              Change="@(_ => LoadAsync())" Style="min-width: 160px;" />
+        </div>
+    </div>
+</RadzenCard>
+
+<RadzenCard class="nps-card">
+    <RadzenDataGrid TItem="StockMovementDto" Data="@movements" IsLoading="@loading"
+                    AllowPaging="true" PageSize="25" EmptyText="No movements match your filters.">
+        <Columns>
+            <RadzenDataGridColumn TItem="StockMovementDto" Title="Movement">
+                <Template Context="m">
+                    <strong>@m.MovementNumber</strong>
+                    <br />
+                    <small style="color: var(--nps-ink-500);">@m.MovedOn.ToString("d MMM yyyy")</small>
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="StockMovementDto" Title="Item">
+                <Template Context="m">
+                    <strong>@m.StoreItemName</strong>
+                    @if (!string.IsNullOrEmpty(m.StoreItemSku))
+                    {
+                        <br />
+                        <small style="color: var(--nps-ink-500);">SKU @m.StoreItemSku</small>
+                    }
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="StockMovementDto" Title="Type" Width="160px">
+                <Template Context="m">
+                    <RadzenBadge Text="@m.StockMovementTypeName"
+                                 BadgeStyle="@(m.Direction == +1 ? BadgeStyle.Success : BadgeStyle.Warning)"
+                                 Variant="Variant.Flat" />
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="StockMovementDto" Title="Quantity" Width="160px">
+                <Template Context="m">
+                    <strong>
+                        @(m.Direction == +1 ? "+" : "−")@m.Quantity.ToString("N2")
+                    </strong> @m.UnitOfMeasureCode
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="StockMovementDto" Title="Counter-party">
+                <Template Context="m">
+                    @if (m.ReceivedFromSupplierName is { Length: > 0 })
+                    {
+                        <text>From <strong>@m.ReceivedFromSupplierName</strong></text>
+                    }
+                    else if (m.IssuedToStudentName is { Length: > 0 })
+                    {
+                        <div class="nps-cell-with-avatar">
+                            <StudentAvatar PhotoUrl="@m.IssuedToStudentPhotoUrl"
+                                           FirstName="@m.IssuedToStudentFirstName"
+                                           LastName="@m.IssuedToStudentLastName" />
+                            <div style="display:flex; flex-direction:column;">
+                                <strong>@m.IssuedToStudentName</strong>
+                                <small style="color: var(--nps-ink-500);">@m.IssuedToStudentAdmissionNumber</small>
+                            </div>
+                        </div>
+                    }
+                    else if (m.IssuedToSchoolClassName is { Length: > 0 })
+                    {
+                        <text>To class <strong>@m.IssuedToSchoolClassName</strong></text>
+                    }
+                    else if (m.IssuedToUserName is { Length: > 0 })
+                    {
+                        <text>To staff <strong>@m.IssuedToUserName</strong></text>
+                    }
+                    else
+                    {
+                        <span style="color: var(--nps-ink-500);">—</span>
+                    }
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="StockMovementDto" Title="Total cost" Width="140px">
+                <Template Context="m">@m.TotalCost.ToString("N2")</Template>
+            </RadzenDataGridColumn>
+        </Columns>
+    </RadzenDataGrid>
+</RadzenCard>
+
+@code {
+    private IReadOnlyList<StockMovementDto> movements = [];
+    private IReadOnlyList<LookupDto> types = [];
+
+    private bool loading;
+    private string? search;
+    private Guid? typeId;
+    private int? direction;
+    private DateTime? fromDate;
+    private DateTime? toDate;
+
+    private record DirectionOption(string Text, int? Value);
+    private readonly List<DirectionOption> directionOptions =
+    [
+        new DirectionOption("Inbound", +1),
+        new DirectionOption("Outbound", -1),
+    ];
+
+    protected override async Task OnInitializedAsync()
+    {
+        types = await LookupService.GetStockMovementTypesAsync();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        try
+        {
+            movements = await MovementService.ListAsync(new StockMovementFilter
+            {
+                Search = search,
+                StockMovementTypeId = typeId,
+                Direction = direction,
+                FromDate = fromDate.HasValue ? DateOnly.FromDateTime(fromDate.Value) : null,
+                ToDate = toDate.HasValue ? DateOnly.FromDateTime(toDate.Value) : null,
+            });
+        }
+        finally
+        {
+            loading = false;
+            StateHasChanged();
+        }
+    }
+}

@@ -71,9 +71,16 @@
         </Authorized>
     </AuthorizeView>
 
-    <AuthorizeView Roles="@($"{Roles.SuperAdmin},{Roles.SchoolStoreKeeper}")">
+    <AuthorizeView Roles="@($"{Roles.SuperAdmin},{Roles.HeadTeacher},{Roles.SchoolStoreKeeper}")">
         <Authorized>
-            <RadzenPanelMenuItem Text="Store & Inventory" Icon="inventory_2" Disabled="true" />
+            <RadzenPanelMenuItem Text="Store & Inventory" Icon="inventory_2" Expanded="true">
+                <RadzenPanelMenuItem Text="Store dashboard" Icon="space_dashboard" Path="/store" />
+                <RadzenPanelMenuItem Text="Catalog" Icon="inventory_2" Path="/store/items" />
+                <RadzenPanelMenuItem Text="New item" Icon="add_box" Path="/store/items/new" />
+                <RadzenPanelMenuItem Text="Movements" Icon="swap_vert" Path="/store/movements" />
+                <RadzenPanelMenuItem Text="Record movement" Icon="post_add" Path="/store/movements/new" />
+                <RadzenPanelMenuItem Text="Suppliers" Icon="local_shipping" Path="/store/suppliers" />
+            </RadzenPanelMenuItem>
         </Authorized>
     </AuthorizeView>
 

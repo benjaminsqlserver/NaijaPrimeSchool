@@ -2,7 +2,7 @@
 
 A modern school management system for Nigerian primary schools, built with **.NET 10**, **Blazor Auto**, **Clean Architecture**, **SQL Server**, and **Radzen Blazor Components**.
 
-Seven sprints have shipped. **Sprint 1** delivered the authentication & authorization foundation: user accounts, role-based access control, login/logout, activation/deactivation, and the SuperAdmin user-management screens. **Sprint 2** built the academic domain on top of that foundation: sessions, terms, class arms, subjects, timetable periods, and a click-to-edit weekly timetable grid. **Sprint 3** plugged students and parents into that academic structure: pupil profiles, parent/guardian directory, parent-to-pupil linkage with relationship + primary-contact + pickup flags, and per-session enrolment with a withdrawal lifecycle. **Sprint 4** lands attendance: a daily class register, per-subject session attendance off the timetable, the AttendanceStatus lookup, a submit/reopen lifecycle, and a per-class percentage summary. **Sprint 5** closes the academic loop: a per-(term, class, subject) gradebook of TermAssessments and AssessmentScores, a result computation pipeline that produces SubjectResults with grade bands and class positions, and per-(pupil, term) ReportCards with affective and psychomotor ratings, attendance roll-up, and a publish/unpublish lifecycle. **Sprint 5b** wires up pupil photographs: a dedicated upload pipeline backed by a reusable `StudentAvatar` Razor component, with the photo (or a coloured initials tile fallback) shown next to every pupil row across the Students, Enrolments, daily- and subject-attendance, score-sheet, and report-card pages. **Sprint 6** lays the financial spine: per-(term, class level) `FeeSchedule`s with line items, one-click invoice issuance to every actively-enrolled pupil, multi-allocation payments with auto-allocate, refund flow, and a bursar dashboard summarising invoiced, collected and outstanding amounts.
+Eight sprints have shipped. **Sprint 1** delivered the authentication & authorization foundation: user accounts, role-based access control, login/logout, activation/deactivation, and the SuperAdmin user-management screens. **Sprint 2** built the academic domain on top of that foundation: sessions, terms, class arms, subjects, timetable periods, and a click-to-edit weekly timetable grid. **Sprint 3** plugged students and parents into that academic structure: pupil profiles, parent/guardian directory, parent-to-pupil linkage with relationship + primary-contact + pickup flags, and per-session enrolment with a withdrawal lifecycle. **Sprint 4** lands attendance: a daily class register, per-subject session attendance off the timetable, the AttendanceStatus lookup, a submit/reopen lifecycle, and a per-class percentage summary. **Sprint 5** closes the academic loop: a per-(term, class, subject) gradebook of TermAssessments and AssessmentScores, a result computation pipeline that produces SubjectResults with grade bands and class positions, and per-(pupil, term) ReportCards with affective and psychomotor ratings, attendance roll-up, and a publish/unpublish lifecycle. **Sprint 5b** wires up pupil photographs: a dedicated upload pipeline backed by a reusable `StudentAvatar` Razor component, with the photo (or a coloured initials tile fallback) shown next to every pupil row across the Students, Enrolments, daily- and subject-attendance, score-sheet, and report-card pages. **Sprint 6** lays the financial spine: per-(term, class level) `FeeSchedule`s with line items, one-click invoice issuance to every actively-enrolled pupil, multi-allocation payments with auto-allocate, refund flow, and a bursar dashboard summarising invoiced, collected and outstanding amounts. **Sprint 7** turns the storeroom on: a `StoreItem` catalog tracked by `ItemCategory` and `UnitOfMeasure`, a movement-log of `StockMovement` rows (purchases, issuances, openings, write-offs, adjustments) typed by a directional `StockMovementType` lookup, a `Supplier` directory, a low-stock dashboard, and audit-safe reversal that undoes an entry's effect on `QuantityOnHand` when soft-deleted.
 
 Implementation walk-throughs for each sprint live at the repo root:
 
@@ -13,6 +13,7 @@ Implementation walk-throughs for each sprint live at the repo root:
 - `Sprint 5 - Implementation Guide.pdf`
 - `Sprint 5b - Implementation Guide.docx`
 - `Sprint 6 - Implementation Guide.docx`
+- `Sprint 7 - Implementation Guide.docx`
 
 ---
 
@@ -152,6 +153,29 @@ Implementation walk-throughs for each sprint live at the repo root:
   - `FeeCategories` (with `IsMandatoryByDefault` flag), `PaymentMethods` (with `RequiresReference` flag), `InvoiceStatuses`, `PaymentStatuses` — each seeded on startup; services key off `Code` so rows can be renamed without breaking logic
 - **Pages added** (`/fees`, `/fees/{id}`, `/invoices`, `/invoices/issue`, `/invoices/{id}`, `/payments`, `/payments/new`, `/payments/{id}`, `/finance`) — all gated to **SuperAdmin** + **HeadTeacher** + **SchoolBursar**. The previously-disabled Finance navigation placeholder is now a fully realised workspace.
 
+## Sprint 7 — Store & inventory management ✅
+
+- **Catalog**
+  - **StoreItem** with name, optional SKU, `ItemCategory`, `UnitOfMeasure`, cached `QuantityOnHand`, `ReorderLevel`, `LastUnitCost`, and active flag
+  - Filtered unique index on `Sku` (only enforced when an item has one) so most items can leave SKU blank while imported goods can carry a barcode
+  - Quantity stored at `decimal(14,3)` so kilograms and litres are tracked with three-decimal precision; money fields stay at `decimal(12,2)`
+  - Create-with-opening-balance shortcut on `/store/items/new` — the same `SaveChanges` writes the item *and* an `OPENING` `StockMovement` so day-one stock is a proper audit row, not a magic seed
+- **Movement log**
+  - **StockMovement** with sequential `NPS/STK/<year>/<seq>` numbering, `MovedOn` date, `Quantity`, optional `UnitCost` and computed `TotalCost`, free-text reference and notes
+  - Three optional counter-party slots — `ReceivedFromSupplierId`, `IssuedToStudentId`, `IssuedToSchoolClassId`, `IssuedToUserId` — with service-level **at-most-one-recipient** validation so a row never claims a parcel went to a supplier *and* a student
+  - Inbound rows refresh `LastUnitCost` so reorder pricing reflects the most recent purchase
+  - Outbound rows refuse to dispatch more than `QuantityOnHand`, refuse to record without a recipient (or an explicit `WRITEOFF`/`ADJ_OUT` reason), and decrement the cached running balance inside the same `SaveChanges`
+  - Soft-delete on a movement **reverses** `Direction × Quantity` against the item's on-hand and *then* removes the row — clean undo semantics for the inevitable typo
+- **Suppliers**
+  - **Supplier** directory with contact name, primary phone, email, address, notes, active flag, plus computed counts of `PurchaseCount` and `TotalPurchased`
+  - Soft-delete refused while any purchase rows still point at the supplier — protects historical movement attribution
+- **Store dashboard**
+  - Items in stock vs items below reorder level, total stock value (Σ on-hand × last unit cost), recent inbound / outbound counts for the trailing 30 days
+  - Low-stock list ordered by deficit, plus the last ten movements with linked counter-party
+- **Lookup tables (no enums)**
+  - `ItemCategories` (10 seeded: BOOK, UNIF, STAT, SPRT, CLN, FOOD, FURN, ICT, MED, OTH), `UnitsOfMeasure` (10 seeded: EA, PC, PK, BOX, CTN, SET, BAG, KG, L, M), `StockMovementTypes` (7 seeded: OPENING +1, PURCHASE +1, RETURN +1, ADJ_IN +1, ISSUE -1, WRITEOFF -1, ADJ_OUT -1) — services key off `Code` and the `Direction` column drives every running-balance calculation, so types can be renamed without breaking logic
+- **Pages added** (`/store`, `/store/items`, `/store/items/new`, `/store/items/{id}`, `/store/movements`, `/store/movements/new`, `/store/suppliers`) — all gated to **SuperAdmin** + **HeadTeacher** + **SchoolStoreKeeper**. The previously-disabled Store & Inventory navigation placeholder is now a fully realised workspace.
+
 ## Cross-cutting (every sprint)
 
 - **Beautiful, inviting UI**
@@ -159,7 +183,7 @@ Implementation walk-throughs for each sprint live at the repo root:
   - Radzen Blazor components (DataGrid, Dialog, Notification, Layout, Sidebar, Forms)
   - Responsive layout
 - **Data integrity**
-  - No enums; every lookup (roles, titles, genders, term types, class levels, week days, relationships, enrolment statuses, blood groups, marital statuses, attendance statuses, assessment types, grade bands, affective traits, psychomotor skills, trait ratings, fee categories, payment methods, invoice statuses, payment statuses, …) is a first-class table
+  - No enums; every lookup (roles, titles, genders, term types, class levels, week days, relationships, enrolment statuses, blood groups, marital statuses, attendance statuses, assessment types, grade bands, affective traits, psychomotor skills, trait ratings, fee categories, payment methods, invoice statuses, payment statuses, item categories, units of measure, stock movement types, …) is a first-class table
   - Soft delete for all entities, enforced globally via EF Core query filters
   - Auditing (CreatedOn/By, ModifiedOn/By, DeletedOn/By) applied automatically in `SaveChanges`
 
@@ -189,7 +213,8 @@ NaijaPrimeSchool/
 │   │   ├── Family/                              # Student, Parent, StudentParent, Enrolment + lookups (sprint 3)
 │   │   ├── Attendance/                          # Daily/Subject registers + AttendanceStatus lookup (sprint 4)
 │   │   ├── Results/                             # TermAssessment, SubjectResult, ReportCard + lookups (sprint 5)
-│   │   └── Finance/                             # FeeSchedule, Invoice, Payment + lookups (sprint 6)
+│   │   ├── Finance/                             # FeeSchedule, Invoice, Payment + lookups (sprint 6)
+│   │   └── Inventory/                           # Supplier, StoreItem, StockMovement + lookups (sprint 7)
 │   ├── NaijaPrimeSchool.Application/            # DTOs, service contracts, shared abstractions
 │   │   ├── Common/                              # ICurrentUser, OperationResult
 │   │   ├── Users/                               # IUserService, ILookupService, DTOs (sprint 1)
@@ -197,7 +222,8 @@ NaijaPrimeSchool/
 │   │   ├── Family/                              # IStudentService, IParentService, IEnrolmentService, DTOs (sprint 3)
 │   │   ├── Attendance/                          # IDailyAttendanceService, ISubjectAttendanceService, DTOs (sprint 4)
 │   │   ├── Results/                             # IAssessmentService, IResultService, IReportCardService, DTOs (sprint 5)
-│   │   └── Finance/                             # IFeeScheduleService, IInvoiceService, IPaymentService, DTOs (sprint 6)
+│   │   ├── Finance/                             # IFeeScheduleService, IInvoiceService, IPaymentService, DTOs (sprint 6)
+│   │   └── Inventory/                           # ISupplierService, IStoreItemService, IStockMovementService, DTOs (sprint 7)
 │   ├── NaijaPrimeSchool.Infrastructure/         # EF Core DbContext, Identity stores, service impls, seed, migrations
 │   ├── NaijaPrimeSchool.Web/                    # Blazor server host (auth endpoints, layout, pages, Program.cs)
 │   │   └── Components/Pages/
@@ -206,7 +232,8 @@ NaijaPrimeSchool/
 │   │       ├── Family/                          # Students, Parents, Enrolments (sprint 3)
 │   │       ├── Attendance/                      # Daily, Subject and Summary attendance pages (sprint 4)
 │   │       ├── Results/                         # Assessments, Score sheet, Results, Report cards (sprint 5)
-│   │       └── Finance/                         # Fee schedules, Invoices, Payments, Bursar dashboard (sprint 6)
+│   │       ├── Finance/                         # Fee schedules, Invoices, Payments, Bursar dashboard (sprint 6)
+│   │       └── Inventory/                       # Store dashboard, Catalog, Movements, Suppliers (sprint 7)
 │   └── NaijaPrimeSchool.Web.Client/             # Blazor WebAssembly client (Auto interactivity)
 ├── tools/                                       # Scripts (e.g. sprint guide generators)
 └── NaijaPrimeSchool.slnx
@@ -386,12 +413,19 @@ User management screens are gated behind the `ManageUsers` policy, which require
 | `src/NaijaPrimeSchool.Infrastructure/Services/InvoiceService.cs` | Issue from schedule, set discounts, cancel, ledger, status recompute |
 | `src/NaijaPrimeSchool.Infrastructure/Services/PaymentService.cs` | Record, refund, bursar-dashboard summary |
 | `src/NaijaPrimeSchool.Web/Components/Pages/Finance/` | Fee schedules, invoices, payments, bursar dashboard |
+| `src/NaijaPrimeSchool.Domain/Inventory/` | Supplier, StoreItem, StockMovement + ItemCategory / UnitOfMeasure / StockMovementType lookups (sprint 7) |
+| `src/NaijaPrimeSchool.Application/Inventory/` | I*Service contracts and DTOs for suppliers, store items, stock movements, store dashboard |
+| `src/NaijaPrimeSchool.Infrastructure/Services/SupplierService.cs` | Supplier CRUD with purchase-history guard |
+| `src/NaijaPrimeSchool.Infrastructure/Services/StoreItemService.cs` | Catalog CRUD + create-with-opening-balance shortcut |
+| `src/NaijaPrimeSchool.Infrastructure/Services/StockMovementService.cs` | Record / soft-delete movements, running balance, NPS/STK numbering, dashboard rollups |
+| `src/NaijaPrimeSchool.Web/Components/Pages/Inventory/` | Store dashboard, catalog, item detail, movements, record movement, suppliers |
 | `tools/generate_sprint2_guide.py` | Generator for `Sprint 2 - Implementation Guide.docx` |
 | `tools/generate_sprint3_guide.py` | Generator for `Sprint 3 - Implementation Guide.docx` |
 | `tools/generate_sprint4_guide.py` | Generator for `Sprint 4 - Implementation Guide.docx` |
 | `tools/generate_sprint5_guide.py` | Generator for `Sprint 5 - Implementation Guide.docx` |
 | `tools/generate_sprint5b_guide.py` | Generator for `Sprint 5b - Implementation Guide.docx` |
 | `tools/generate_sprint6_guide.py` | Generator for `Sprint 6 - Implementation Guide.docx` |
+| `tools/generate_sprint7_guide.py` | Generator for `Sprint 7 - Implementation Guide.docx` |
 
 ---
 
@@ -406,10 +440,10 @@ Delivered:
 - ✅ **Sprint 5** — Assessments, results & report cards (gradebook, weighted compute, grade bands, term cards)
 - ✅ **Sprint 5b** — Student photographs (upload pipeline, reusable avatar component, photos shown across every pupil-facing page)
 - ✅ **Sprint 6** — Fees, invoices, receipts & bursar workflows (fee schedules, invoice issuance, multi-allocation payments with refund, bursar dashboard)
+- ✅ **Sprint 7** — Store & inventory management for the storekeeper (catalog, supplier directory, movement log with NPS/STK numbering, reversible soft-delete, low-stock dashboard)
 
 Planned for upcoming sprints:
 
-- Sprint 7 — Store & inventory management for the storekeeper
 - Sprint 8 — Parent and student portals
 - Notifications (email / SMS)
 - Audit log viewer

@@ -1,0 +1,181 @@
+@page "/store"
+@attribute [Authorize(Roles = $"{Roles.SuperAdmin},{Roles.HeadTeacher},{Roles.SchoolStoreKeeper}")]
+@rendermode InteractiveServer
+
+@inject IStockMovementService MovementService
+@inject NavigationManager Nav
+
+<PageTitle>Store dashboard · Naija Prime School</PageTitle>
+
+<div class="nps-page-header">
+    <div>
+        <h1>Store dashboard</h1>
+        <p>Items on hand, low-stock alerts, and a snapshot of stock movements this month.</p>
+    </div>
+    <div class="nps-page-actions">
+        <RadzenButton Text="Record movement" Icon="add" ButtonStyle="ButtonStyle.Primary"
+                      Click="@(() => Nav.NavigateTo("/store/movements/new"))" />
+    </div>
+</div>
+
+@if (loading || summary is null)
+{
+    <p>Loading dashboard...</p>
+}
+else
+{
+    <RadzenCard class="nps-card" Style="margin-bottom: 1rem;">
+        <div class="nps-stat-grid">
+            <div class="nps-stat-card">
+                <div class="nps-stat-icon"><RadzenIcon Icon="inventory_2" /></div>
+                <div>
+                    <div class="nps-stat-label">Items in catalog</div>
+                    <div class="nps-stat-value">@summary.ActiveItems / @summary.TotalItems</div>
+                </div>
+            </div>
+            <div class="nps-stat-card">
+                <div class="nps-stat-icon" style="background: #fde2e2; color: #d64545;">
+                    <RadzenIcon Icon="warning" />
+                </div>
+                <div>
+                    <div class="nps-stat-label">Below reorder level</div>
+                    <div class="nps-stat-value">@summary.ItemsBelowReorder</div>
+                </div>
+            </div>
+            <div class="nps-stat-card">
+                <div class="nps-stat-icon"><RadzenIcon Icon="account_balance_wallet" /></div>
+                <div>
+                    <div class="nps-stat-label">Stock value</div>
+                    <div class="nps-stat-value">@summary.StockValue.ToString("N2")</div>
+                </div>
+            </div>
+            <div class="nps-stat-card">
+                <div class="nps-stat-icon"><RadzenIcon Icon="trending_up" /></div>
+                <div>
+                    <div class="nps-stat-label">This month: in / out</div>
+                    <div class="nps-stat-value">@summary.InboundThisMonth / @summary.OutboundThisMonth</div>
+                </div>
+            </div>
+        </div>
+    </RadzenCard>
+
+    <div class="nps-form-grid">
+        <RadzenCard class="nps-card">
+            <h3 style="margin: 0 0 1rem;">Low stock — needs replenishing</h3>
+            @if (summary.LowStockItems.Count == 0)
+            {
+                <p style="color: var(--nps-ink-500);">Every item is currently above its reorder level.</p>
+            }
+            else
+            {
+                <RadzenDataGrid TItem="StoreItemDto" Data="@summary.LowStockItems" AllowPaging="false">
+                    <Columns>
+                        <RadzenDataGridColumn TItem="StoreItemDto" Title="Item">
+                            <Template Context="i">
+                                <strong>@i.Name</strong>
+                                @if (!string.IsNullOrEmpty(i.Sku))
+                                {
+                                    <br />
+                                    <small style="color: var(--nps-ink-500);">SKU @i.Sku</small>
+                                }
+                            </Template>
+                        </RadzenDataGridColumn>
+                        <RadzenDataGridColumn TItem="StoreItemDto" Title="On hand" Width="120px">
+                            <Template Context="i">
+                                <strong>@i.QuantityOnHand.ToString("N2")</strong> @i.UnitOfMeasureCode
+                            </Template>
+                        </RadzenDataGridColumn>
+                        <RadzenDataGridColumn TItem="StoreItemDto" Title="Reorder at" Width="120px">
+                            <Template Context="i">@i.ReorderLevel.ToString("N2")</Template>
+                        </RadzenDataGridColumn>
+                        <RadzenDataGridColumn TItem="StoreItemDto" Title="Open" Width="90px" Sortable="false"
+                                              TextAlign="TextAlign.Right">
+                            <Template Context="i">
+                                <RadzenButton Icon="open_in_new" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                              ButtonStyle="ButtonStyle.Light"
+                                              Click="@(() => Nav.NavigateTo($"/store/items/{i.Id}"))" />
+                            </Template>
+                        </RadzenDataGridColumn>
+                    </Columns>
+                </RadzenDataGrid>
+            }
+        </RadzenCard>
+        <RadzenCard class="nps-card">
+            <h3 style="margin: 0 0 1rem;">Stock value by category</h3>
+            @if (summary.ByCategory.Count == 0)
+            {
+                <p style="color: var(--nps-ink-500);">No items yet.</p>
+            }
+            else
+            {
+                <RadzenDataGrid TItem="CategoryStockDto" Data="@summary.ByCategory" AllowPaging="false">
+                    <Columns>
+                        <RadzenDataGridColumn TItem="CategoryStockDto" Title="Category" Property="ItemCategoryName" />
+                        <RadzenDataGridColumn TItem="CategoryStockDto" Title="Items" Width="100px" Property="ItemCount" />
+                        <RadzenDataGridColumn TItem="CategoryStockDto" Title="Value" Width="160px">
+                            <Template Context="c"><strong>@c.StockValue.ToString("N2")</strong></Template>
+                        </RadzenDataGridColumn>
+                    </Columns>
+                </RadzenDataGrid>
+            }
+        </RadzenCard>
+    </div>
+
+    <RadzenCard class="nps-card" Style="margin-top: 1rem;">
+        <h3 style="margin: 0 0 1rem;">Recent movements</h3>
+        @if (summary.RecentMovements.Count == 0)
+        {
+            <p style="color: var(--nps-ink-500);">No movements recorded yet.</p>
+        }
+        else
+        {
+            <RadzenDataGrid TItem="StockMovementDto" Data="@summary.RecentMovements" AllowPaging="false">
+                <Columns>
+                    <RadzenDataGridColumn TItem="StockMovementDto" Title="Movement">
+                        <Template Context="m">
+                            <strong>@m.MovementNumber</strong>
+                            <br />
+                            <small style="color: var(--nps-ink-500);">@m.MovedOn.ToString("d MMM yyyy")</small>
+                        </Template>
+                    </RadzenDataGridColumn>
+                    <RadzenDataGridColumn TItem="StockMovementDto" Title="Item">
+                        <Template Context="m">
+                            <strong>@m.StoreItemName</strong>
+                            @if (!string.IsNullOrEmpty(m.StoreItemSku))
+                            {
+                                <br />
+                                <small style="color: var(--nps-ink-500);">SKU @m.StoreItemSku</small>
+                            }
+                        </Template>
+                    </RadzenDataGridColumn>
+                    <RadzenDataGridColumn TItem="StockMovementDto" Title="Type" Width="140px">
+                        <Template Context="m">
+                            <RadzenBadge Text="@m.StockMovementTypeName"
+                                         BadgeStyle="@(m.Direction == +1 ? BadgeStyle.Success : BadgeStyle.Warning)"
+                                         Variant="Variant.Flat" />
+                        </Template>
+                    </RadzenDataGridColumn>
+                    <RadzenDataGridColumn TItem="StockMovementDto" Title="Quantity" Width="140px">
+                        <Template Context="m">
+                            <strong>
+                                @(m.Direction == +1 ? "+" : "−")@m.Quantity.ToString("N2")
+                            </strong> @m.UnitOfMeasureCode
+                        </Template>
+                    </RadzenDataGridColumn>
+                </Columns>
+            </RadzenDataGrid>
+        }
+    </RadzenCard>
+}
+
+@code {
+    private StoreSummaryDto? summary;
+    private bool loading;
+
+    protected override async Task OnInitializedAsync()
+    {
+        loading = true;
+        try { summary = await MovementService.GetStoreSummaryAsync(); }
+        finally { loading = false; }
+    }
+}

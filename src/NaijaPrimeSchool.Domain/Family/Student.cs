@@ -2,6 +2,7 @@ using NaijaPrimeSchool.Domain.Attendance;
 using NaijaPrimeSchool.Domain.Common;
 using NaijaPrimeSchool.Domain.Finance;
 using NaijaPrimeSchool.Domain.Identity;
+using NaijaPrimeSchool.Domain.Inventory;
 using NaijaPrimeSchool.Domain.Results;
 
 namespace NaijaPrimeSchool.Domain.Family;
@@ -43,6 +44,7 @@ public class Student : BaseEntity
     public ICollection<ReportCard> ReportCards { get; set; } = [];
     public ICollection<Invoice> Invoices { get; set; } = [];
     public ICollection<Payment> Payments { get; set; } = [];
+    public ICollection<StockMovement> StockIssuances { get; set; } = [];
 
     public string FullName =>
         string.IsNullOrWhiteSpace(MiddleName)
