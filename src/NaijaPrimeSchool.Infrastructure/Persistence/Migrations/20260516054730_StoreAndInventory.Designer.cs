@@ -4058,11 +4058,13 @@ namespace NaijaPrimeSchool.Infrastructure.Persistence.Migrations
 
                     b.HasOne("NaijaPrimeSchool.Domain.Identity.ApplicationUser", "IssuedToUser")
                         .WithMany()
-                        .HasForeignKey("IssuedToUserId");
+                        .HasForeignKey("IssuedToUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("NaijaPrimeSchool.Domain.Identity.ApplicationUser", "PerformedBy")
                         .WithMany()
-                        .HasForeignKey("PerformedById");
+                        .HasForeignKey("PerformedById")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("NaijaPrimeSchool.Domain.Inventory.Supplier", "ReceivedFromSupplier")
                         .WithMany("Purchases")
