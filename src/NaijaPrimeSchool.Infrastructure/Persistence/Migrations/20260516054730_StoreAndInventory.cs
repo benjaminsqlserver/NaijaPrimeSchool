@@ -203,14 +203,12 @@ namespace NaijaPrimeSchool.Infrastructure.Persistence.Migrations
                         name: "FK_StockMovements_Users_IssuedToUserId",
                         column: x => x.IssuedToUserId,
                         principalTable: "Users",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.SetNull);
+                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_StockMovements_Users_PerformedById",
                         column: x => x.PerformedById,
                         principalTable: "Users",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.SetNull);
+                        principalColumn: "Id");
                 });
 
             migrationBuilder.CreateIndex(

@@ -1130,13 +1130,17 @@ public class ApplicationDbContext(
                 .HasForeignKey(m => m.IssuedToSchoolClassId)
                 .OnDelete(DeleteBehavior.SetNull);
 
+            // Both FKs land on Users. SQL Server refuses more than one
+            // cascade/SetNull path from a single child table to the same
+            // parent, so these are Restrict. Users are soft-deleted in this
+            // app, so the FK rule never actually fires.
             b.HasOne(m => m.IssuedToUser).WithMany()
                 .HasForeignKey(m => m.IssuedToUserId)
-                .OnDelete(DeleteBehavior.SetNull);
+                .OnDelete(DeleteBehavior.Restrict);
 
             b.HasOne(m => m.PerformedBy).WithMany()
                 .HasForeignKey(m => m.PerformedById)
-                .OnDelete(DeleteBehavior.SetNull);
+                .OnDelete(DeleteBehavior.Restrict);
 
             b.HasIndex(m => m.MovementNumber).IsUnique();
             b.HasIndex(m => new { m.StoreItemId, m.MovedOn });
