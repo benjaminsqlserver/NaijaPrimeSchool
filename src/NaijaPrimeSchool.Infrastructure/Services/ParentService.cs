@@ -192,18 +192,40 @@ public class ParentService(
 
     public async Task<OperationResult> SoftDeleteAsync(Guid id, CancellationToken ct = default)
     {
-        var parent = await db.Parents
-            .Include(p => p.StudentLinks)
-            .FirstOrDefaultAsync(p => p.Id == id, ct);
-
+        var parent = await db.Parents.FirstOrDefaultAsync(p => p.Id == id, ct);
         if (parent is null) return OperationResult.Failure("Parent not found.");
 
-        if (parent.StudentLinks.Count > 0)
+        // Count active links via a fresh database query rather than the
+        // Parent.StudentLinks navigation. EF Core relationship fix-up
+        // populates that navigation with every StudentParent currently in
+        // the change tracker that matches the FK — including soft-deleted
+        // rows that an earlier unlink in the same circuit marked
+        // IsDeleted = true. The global query filter only affects new
+        // SELECTs, not the in-memory graph, so the navigation count would
+        // stay > 0 after a successful unlink and block this delete.
+        var activeLinks = await db.StudentParents
+            .CountAsync(l => l.ParentId == id, ct);
+
+        if (activeLinks > 0)
             return OperationResult.Failure(
-                "Cannot delete a parent who is still linked to a student. Unlink them first.");
+                $"Cannot delete this parent because {activeLinks} active student link(s) remain. Unlink them first.");
 
         db.Parents.Remove(parent);
         await db.SaveChangesAsync(ct);
+
+        // Sprint 9 auto-provisions an ApplicationUser when a parent is
+        // created. Mirror that on the way out so a deleted parent cannot
+        // sign in to the portal and hit the "we can't find your record"
+        // fallback card forever.
+        if (parent.UserId is { } userId)
+        {
+            var user = await userManager.FindByIdAsync(userId.ToString());
+            if (user is not null)
+            {
+                await userManager.DeleteAsync(user);
+            }
+        }
+
         return OperationResult.Success();
     }
 
