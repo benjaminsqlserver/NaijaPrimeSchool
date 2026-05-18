@@ -1,0 +1,67 @@
+@page "/portal/student/profile"
+@attribute [Authorize(Roles = $"{Roles.Student},{Roles.SuperAdmin},{Roles.HeadTeacher}")]
+@rendermode InteractiveServer
+
+@inject IPortalService PortalService
+@inject IStudentService StudentService
+@inject NavigationManager Nav
+
+<PageTitle>My profile · Naija Prime School</PageTitle>
+
+<div class="nps-page-header">
+    <div>
+        <h1>My profile</h1>
+        <p>Read-only view of your demographic and admission details. Contact the school office if anything is wrong.</p>
+    </div>
+    <div class="nps-page-actions">
+        <RadzenButton Text="Back to portal" Icon="arrow_back" Variant="Variant.Flat" ButtonStyle="ButtonStyle.Light"
+                      Click="@(() => Nav.NavigateTo("/portal/student"))" />
+    </div>
+</div>
+
+@if (loading)
+{
+    <RadzenCard class="nps-card"><p>Loading...</p></RadzenCard>
+}
+else if (student is null)
+{
+    <RadzenCard class="nps-card"><h3>We can't find your student record.</h3></RadzenCard>
+}
+else
+{
+    <RadzenCard class="nps-card">
+        <div style="display:flex; gap:1rem; align-items:center; margin-bottom:1rem;">
+            <StudentAvatar PhotoUrl="@student.PhotoUrl" FirstName="@student.FirstName" LastName="@student.LastName" Size="large" />
+            <div>
+                <h2 style="margin:0;">@student.FullName</h2>
+                <p style="margin:0; color: var(--nps-ink-500);">@student.AdmissionNumber</p>
+            </div>
+        </div>
+
+        <div class="nps-readonly-grid">
+            <div><small>Date of birth</small><strong>@student.DateOfBirth.ToString("dd MMM yyyy")</strong></div>
+            <div><small>Gender</small><strong>@(student.GenderName ?? "—")</strong></div>
+            <div><small>Blood group</small><strong>@(student.BloodGroupName ?? "—")</strong></div>
+            <div><small>Admission date</small><strong>@student.AdmissionDate.ToString("dd MMM yyyy")</strong></div>
+            <div><small>State of origin</small><strong>@(student.StateOfOrigin ?? "—")</strong></div>
+            <div><small>Residential address</small><strong>@(student.ResidentialAddress ?? "—")</strong></div>
+            <div><small>Allergies</small><strong>@(student.Allergies ?? "—")</strong></div>
+            <div><small>Medical notes</small><strong>@(student.MedicalNotes ?? "—")</strong></div>
+        </div>
+    </RadzenCard>
+}
+
+@code {
+    private StudentDto? student;
+    private bool loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var studentId = await PortalService.ResolveStudentIdForCurrentUserAsync();
+        if (studentId is not null)
+        {
+            student = await StudentService.GetByIdAsync(studentId.Value);
+        }
+        loading = false;
+    }
+}

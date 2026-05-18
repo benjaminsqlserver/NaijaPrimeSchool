@@ -1,0 +1,111 @@
+@page "/portal/student"
+@attribute [Authorize(Roles = $"{Roles.Student},{Roles.SuperAdmin},{Roles.HeadTeacher}")]
+@rendermode InteractiveServer
+
+@inject IPortalService PortalService
+@inject NavigationManager Nav
+
+<PageTitle>Student portal · Naija Prime School</PageTitle>
+
+<div class="nps-page-header">
+    <div>
+        <h1>Student portal</h1>
+        <p>Your timetable for today, your attendance, results and fee balance.</p>
+    </div>
+</div>
+
+@if (loading)
+{
+    <RadzenCard class="nps-card"><p>Loading...</p></RadzenCard>
+}
+else if (dashboard is null)
+{
+    <RadzenCard class="nps-card">
+        <h3>We can't find your student record.</h3>
+        <p>
+            This area is for pupils whose Student profile is linked to a login. Ask the school office
+            to link your account, or sign in with the Student role.
+        </p>
+    </RadzenCard>
+}
+else
+{
+    <div class="nps-stat-grid">
+        <RadzenCard class="nps-stat-card">
+            <small>Class</small>
+            <strong>@(dashboard.CurrentSchoolClassName ?? "—")</strong>
+        </RadzenCard>
+        <RadzenCard class="nps-stat-card">
+            <small>Outstanding fees</small>
+            <strong>@dashboard.OutstandingBalance.ToString("N2")</strong>
+        </RadzenCard>
+        <RadzenCard class="nps-stat-card">
+            <small>Attendance</small>
+            <strong>@(dashboard.LatestAttendancePercentage is double p ? p.ToString("F1") + "%" : "—")</strong>
+        </RadzenCard>
+        <RadzenCard class="nps-stat-card">
+            <small>Report cards</small>
+            <strong>@dashboard.PublishedReportCardCount</strong>
+        </RadzenCard>
+        <RadzenCard class="nps-stat-card">
+            <small>Unread announcements</small>
+            <strong>@dashboard.UnreadAnnouncementCount</strong>
+        </RadzenCard>
+    </div>
+
+    <div class="nps-portal-row" style="margin-top:1rem;">
+        <RadzenCard class="nps-card" Style="flex: 1 1 0;">
+            <h3>Today's timetable</h3>
+            @if (dashboard.TodayLessons.Count == 0)
+            {
+                <p style="color: var(--nps-ink-500);">
+                    No lessons scheduled for today (or today is a weekend).
+                </p>
+            }
+            else
+            {
+                <RadzenDataGrid TItem="UpcomingLessonDto" Data="@dashboard.TodayLessons" AllowPaging="false">
+                    <Columns>
+                        <RadzenDataGridColumn TItem="UpcomingLessonDto" Title="Period" Property="PeriodName" />
+                        <RadzenDataGridColumn TItem="UpcomingLessonDto" Title="Time" Width="160px">
+                            <Template Context="t">
+                                @(t.StartsAt.HasValue ? t.StartsAt.Value.ToString("HH:mm") : "—")
+                                @(t.EndsAt.HasValue ? "–" + t.EndsAt.Value.ToString("HH:mm") : "")
+                            </Template>
+                        </RadzenDataGridColumn>
+                        <RadzenDataGridColumn TItem="UpcomingLessonDto" Title="Subject">
+                            <Template Context="t">@t.SubjectName <small>(@t.SubjectCode)</small></Template>
+                        </RadzenDataGridColumn>
+                        <RadzenDataGridColumn TItem="UpcomingLessonDto" Title="Teacher" Property="TeacherName" />
+                        <RadzenDataGridColumn TItem="UpcomingLessonDto" Title="Room" Width="120px" Property="Room" />
+                    </Columns>
+                </RadzenDataGrid>
+            }
+        </RadzenCard>
+        <RadzenCard class="nps-card" Style="flex: 0 1 320px;">
+            <h3>Shortcuts</h3>
+            <div class="nps-shortcuts">
+                <RadzenButton Text="My profile"      Icon="person"            ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat" Click="@(() => Nav.NavigateTo("/portal/student/profile"))" />
+                <RadzenButton Text="My results"      Icon="grading"           ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat" Click="@(() => Nav.NavigateTo("/portal/student/results"))" />
+                <RadzenButton Text="My attendance"   Icon="event_available"   ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat" Click="@(() => Nav.NavigateTo("/portal/student/attendance"))" />
+                <RadzenButton Text="My fees"         Icon="payments"          ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat" Click="@(() => Nav.NavigateTo("/portal/student/fees"))" />
+                <RadzenButton Text="Announcements"   Icon="campaign"          ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat" Click="@(() => Nav.NavigateTo("/portal/announcements"))" />
+            </div>
+        </RadzenCard>
+    </div>
+}
+
+@code {
+    private StudentDashboardDto? dashboard;
+    private bool loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var studentId = await PortalService.ResolveStudentIdForCurrentUserAsync();
+        if (studentId is not null)
+        {
+            dashboard = await PortalService.GetStudentDashboardAsync(studentId.Value);
+        }
+        loading = false;
+    }
+}

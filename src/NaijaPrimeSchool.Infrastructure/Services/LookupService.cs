@@ -266,4 +266,16 @@ public class LookupService(
             })
             .ToListAsync(ct);
     }
+
+    public async Task<IReadOnlyList<LookupDto>> GetAnnouncementCategoriesAsync(CancellationToken ct = default) =>
+        await db.AnnouncementCategories
+            .OrderBy(c => c.DisplayOrder)
+            .Select(c => new LookupDto { Id = c.Id, Name = c.Name, Code = c.Code })
+            .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<LookupDto>> GetAnnouncementAudiencesAsync(CancellationToken ct = default) =>
+        await db.AnnouncementAudiences
+            .OrderBy(a => a.DisplayOrder)
+            .Select(a => new LookupDto { Id = a.Id, Name = a.Name, Code = a.Code })
+            .ToListAsync(ct);
 }

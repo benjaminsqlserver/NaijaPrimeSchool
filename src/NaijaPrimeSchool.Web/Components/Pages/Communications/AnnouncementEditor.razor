@@ -1,0 +1,198 @@
+@page "/announcements/new"
+@page "/announcements/{Id:guid}"
+@attribute [Authorize(Roles = $"{Roles.SuperAdmin},{Roles.HeadTeacher}")]
+@rendermode InteractiveServer
+
+@inject IAnnouncementService AnnouncementService
+@inject ILookupService Lookups
+@inject NavigationManager Nav
+@inject NotificationService Notification
+
+<PageTitle>@(IsNew ? "New announcement" : "Edit announcement") · Naija Prime School</PageTitle>
+
+<div class="nps-page-header">
+    <div>
+        <h1>@(IsNew ? "New announcement" : "Edit announcement")</h1>
+        <p>@(IsNew ? "Write the message, pick an audience, and publish to share with portal users."
+                   : "Update the message or republish.")</p>
+    </div>
+    <div class="nps-page-actions">
+        <RadzenButton Text="Back" Icon="arrow_back" Variant="Variant.Flat" ButtonStyle="ButtonStyle.Light"
+                      Click="@(() => Nav.NavigateTo("/announcements"))" />
+    </div>
+</div>
+
+@if (loading)
+{
+    <RadzenCard class="nps-card"><p>Loading...</p></RadzenCard>
+}
+else
+{
+    <RadzenCard class="nps-card">
+        <div class="nps-form-grid">
+            <div class="nps-field" style="grid-column: 1 / -1;">
+                <label>Title</label>
+                <RadzenTextBox @bind-Value="title" MaxLength="200" Placeholder="Short, scannable title" />
+            </div>
+
+            <div class="nps-field">
+                <label>Category</label>
+                <RadzenDropDown TValue="Guid" Data="@categories" TextProperty="Name" ValueProperty="Id" @bind-Value="categoryId" />
+            </div>
+
+            <div class="nps-field">
+                <label>Audience</label>
+                <RadzenDropDown TValue="Guid" Data="@audiences" TextProperty="Name" ValueProperty="Id"
+                                @bind-Value="audienceId" Change="@(_ => OnAudienceChanged())" />
+            </div>
+
+            @if (selectedAudienceRequiresClass)
+            {
+                <div class="nps-field">
+                    <label>Target class</label>
+                    <RadzenDropDown TValue="Guid?" Data="@classes" TextProperty="Name" ValueProperty="Id"
+                                    @bind-Value="targetClassId" AllowClear="true" Placeholder="Pick a class" />
+                </div>
+            }
+
+            <div class="nps-field">
+                <label>Expires on (optional)</label>
+                <RadzenDatePicker TValue="DateOnly?" @bind-Value="expiresOn" DateFormat="dd MMM yyyy" />
+            </div>
+
+            <div class="nps-field" style="align-self:end;">
+                <label>Pin to top</label>
+                <RadzenSwitch @bind-Value="isPinned" />
+            </div>
+
+            <div class="nps-field" style="grid-column: 1 / -1;">
+                <label>Body</label>
+                <RadzenTextArea @bind-Value="body" Rows="8" Style="width:100%;" />
+            </div>
+        </div>
+
+        <div class="nps-form-actions" style="margin-top:1rem; display:flex; gap:0.5rem; justify-content:flex-end;">
+            @if (IsNew)
+            {
+                <RadzenButton Text="Save as draft" Icon="save" Variant="Variant.Flat" ButtonStyle="ButtonStyle.Light"
+                              Click="@(() => SaveAsync(publish: false))" />
+                <RadzenButton Text="Publish now" Icon="publish" ButtonStyle="ButtonStyle.Primary"
+                              Click="@(() => SaveAsync(publish: true))" />
+            }
+            else
+            {
+                <RadzenButton Text="Save changes" Icon="save" ButtonStyle="ButtonStyle.Primary"
+                              Click="@(() => SaveAsync(publish: false))" />
+            }
+        </div>
+    </RadzenCard>
+}
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+
+    private bool IsNew => Id is null;
+    private bool loading = true;
+
+    private string title = string.Empty;
+    private string body = string.Empty;
+    private Guid categoryId;
+    private Guid audienceId;
+    private Guid? targetClassId;
+    private DateOnly? expiresOn;
+    private bool isPinned;
+    private bool selectedAudienceRequiresClass;
+
+    private IReadOnlyList<LookupDto> categories = [];
+    private IReadOnlyList<LookupDto> audiences = [];
+    private IReadOnlyList<LookupDto> classes = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        categories = await Lookups.GetAnnouncementCategoriesAsync();
+        audiences = await Lookups.GetAnnouncementAudiencesAsync();
+        classes = await Lookups.GetClassesForSessionAsync();
+
+        if (categories.Count > 0) categoryId = categories[0].Id;
+        if (audiences.Count > 0) audienceId = audiences[0].Id;
+
+        if (Id is { } id)
+        {
+            var a = await AnnouncementService.GetByIdAsync(id);
+            if (a is not null)
+            {
+                title = a.Title;
+                body = a.Body;
+                categoryId = a.CategoryId;
+                audienceId = a.AudienceId;
+                targetClassId = a.TargetSchoolClassId;
+                expiresOn = a.ExpiresOn;
+                isPinned = a.IsPinned;
+            }
+        }
+
+        OnAudienceChanged();
+        loading = false;
+    }
+
+    private void OnAudienceChanged()
+    {
+        var a = audiences.FirstOrDefault(x => x.Id == audienceId);
+        // Audience.RequiresTargetClass isn't on LookupDto, but the Code is —
+        // the seed sets "CLASS" for Specific Class.
+        selectedAudienceRequiresClass = a?.Code == "CLASS";
+        if (!selectedAudienceRequiresClass) targetClassId = null;
+    }
+
+    private async Task SaveAsync(bool publish)
+    {
+        if (IsNew)
+        {
+            var result = await AnnouncementService.CreateAsync(new CreateAnnouncementRequest
+            {
+                Title = title,
+                Body = body,
+                CategoryId = categoryId,
+                AudienceId = audienceId,
+                TargetSchoolClassId = targetClassId,
+                ExpiresOn = expiresOn,
+                IsPinned = isPinned,
+                PublishImmediately = publish,
+            });
+            if (result.Succeeded)
+            {
+                Notification.Notify(new NotificationMessage { Severity = NotificationSeverity.Success, Summary = publish ? "Published" : "Saved" });
+                Nav.NavigateTo("/announcements");
+            }
+            else { ShowErrors(result.Errors); }
+        }
+        else
+        {
+            var result = await AnnouncementService.UpdateAsync(new UpdateAnnouncementRequest
+            {
+                Id = Id!.Value,
+                Title = title,
+                Body = body,
+                CategoryId = categoryId,
+                AudienceId = audienceId,
+                TargetSchoolClassId = targetClassId,
+                ExpiresOn = expiresOn,
+                IsPinned = isPinned,
+            });
+            if (result.Succeeded)
+            {
+                Notification.Notify(new NotificationMessage { Severity = NotificationSeverity.Success, Summary = "Saved" });
+                Nav.NavigateTo("/announcements");
+            }
+            else { ShowErrors(result.Errors); }
+        }
+    }
+
+    private void ShowErrors(IReadOnlyList<string> errors)
+    {
+        foreach (var e in errors)
+        {
+            Notification.Notify(new NotificationMessage { Severity = NotificationSeverity.Error, Summary = "Error", Detail = e });
+        }
+    }
+}

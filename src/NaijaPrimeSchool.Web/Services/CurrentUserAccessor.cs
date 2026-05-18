@@ -19,4 +19,14 @@ public sealed class CurrentUserAccessor(IHttpContextAccessor httpContextAccessor
 
     public bool IsAuthenticated =>
         httpContextAccessor.HttpContext?.User.Identity?.IsAuthenticated == true;
+
+    public IReadOnlyList<string> Roles =>
+        httpContextAccessor.HttpContext?.User
+            .FindAll(ClaimTypes.Role)
+            .Select(c => c.Value)
+            .ToArray()
+            ?? [];
+
+    public bool IsInRole(string role) =>
+        httpContextAccessor.HttpContext?.User.IsInRole(role) == true;
 }

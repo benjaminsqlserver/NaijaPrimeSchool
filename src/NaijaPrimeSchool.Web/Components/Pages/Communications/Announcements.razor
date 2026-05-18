@@ -1,0 +1,187 @@
+@page "/announcements"
+@attribute [Authorize(Roles = $"{Roles.SuperAdmin},{Roles.HeadTeacher}")]
+@rendermode InteractiveServer
+
+@inject IAnnouncementService AnnouncementService
+@inject ILookupService Lookups
+@inject NavigationManager Nav
+@inject NotificationService Notification
+
+<PageTitle>Announcements · Naija Prime School</PageTitle>
+
+<div class="nps-page-header">
+    <div>
+        <h1>Announcements</h1>
+        <p>Broadcast notices to parents, students, or a specific class. Publish to make them visible in the portals.</p>
+    </div>
+    <div class="nps-page-actions">
+        <RadzenButton Text="New announcement" Icon="add" ButtonStyle="ButtonStyle.Primary"
+                      Click="@(() => Nav.NavigateTo("/announcements/new"))" />
+    </div>
+</div>
+
+<RadzenCard class="nps-card" Style="margin-bottom:1rem;">
+    <div class="nps-filter-bar">
+        <div class="nps-field">
+            <label>Search</label>
+            <RadzenTextBox @bind-Value="search" Placeholder="Title or body"
+                           Change="@(_ => LoadAsync())" Style="min-width: 280px;" />
+        </div>
+        <div class="nps-field">
+            <label>Category</label>
+            <RadzenDropDown TValue="Guid?" Data="@categories" TextProperty="Name" ValueProperty="Id"
+                            @bind-Value="categoryId" AllowClear="true" Placeholder="All"
+                            Change="@(_ => LoadAsync())" Style="min-width: 180px;" />
+        </div>
+        <div class="nps-field">
+            <label>Audience</label>
+            <RadzenDropDown TValue="Guid?" Data="@audiences" TextProperty="Name" ValueProperty="Id"
+                            @bind-Value="audienceId" AllowClear="true" Placeholder="All"
+                            Change="@(_ => LoadAsync())" Style="min-width: 180px;" />
+        </div>
+        <div class="nps-field">
+            <label>Published</label>
+            <RadzenDropDown TValue="bool?" Data="@statusOptions" TextProperty="Text" ValueProperty="Value"
+                            @bind-Value="isPublished" AllowClear="true" Placeholder="All"
+                            Change="@(_ => LoadAsync())" Style="min-width: 160px;" />
+        </div>
+    </div>
+</RadzenCard>
+
+<RadzenCard class="nps-card">
+    <RadzenDataGrid TItem="AnnouncementDto" Data="@rows" IsLoading="@loading" AllowPaging="true" PageSize="20"
+                    EmptyText="No announcements match your filters.">
+        <Columns>
+            <RadzenDataGridColumn TItem="AnnouncementDto" Title="Title">
+                <Template Context="a">
+                    @if (a.IsPinned) { <RadzenIcon Icon="push_pin" Style="font-size:14px;" /> }
+                    <strong>@a.Title</strong>
+                    <br /><small style="color: var(--nps-ink-500);">@a.CategoryName · @a.AudienceName @(a.TargetSchoolClassName is null ? "" : "· " + a.TargetSchoolClassName)</small>
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="AnnouncementDto" Title="Published" Width="180px">
+                <Template Context="a">
+                    @if (a.IsPublished)
+                    {
+                        <RadzenBadge Text="Published" BadgeStyle="BadgeStyle.Success" Variant="Variant.Flat" />
+                        <br /><small>@a.PublishedOn?.ToString("dd MMM yyyy")</small>
+                    }
+                    else
+                    {
+                        <RadzenBadge Text="Draft" BadgeStyle="BadgeStyle.Secondary" Variant="Variant.Flat" />
+                    }
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="AnnouncementDto" Title="Expires" Width="140px">
+                <Template Context="a">
+                    @if (a.ExpiresOn is { } e)
+                    {
+                        if (a.IsExpired) { <RadzenBadge Text="@e.ToString("dd MMM yyyy")" BadgeStyle="BadgeStyle.Danger" Variant="Variant.Flat" /> }
+                        else { @e.ToString("dd MMM yyyy") }
+                    }
+                    else { <span style="color: var(--nps-ink-500);">—</span> }
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="AnnouncementDto" Title="Reads" Width="100px" Property="ReadCount" />
+            <RadzenDataGridColumn TItem="AnnouncementDto" Title="Actions" Width="200px" Sortable="false" TextAlign="TextAlign.Right">
+                <Template Context="a">
+                    <div class="nps-inline-actions">
+                        <RadzenButton Icon="edit" Size="ButtonSize.Small" Variant="Variant.Flat" ButtonStyle="ButtonStyle.Light"
+                                      Click="@(() => Nav.NavigateTo($"/announcements/{a.Id}"))" />
+                        @if (a.IsPublished)
+                        {
+                            <RadzenButton Icon="unpublished" Size="ButtonSize.Small" Variant="Variant.Flat" ButtonStyle="ButtonStyle.Warning"
+                                          Click="@(() => UnpublishAsync(a))" title="Unpublish" />
+                        }
+                        else
+                        {
+                            <RadzenButton Icon="publish" Size="ButtonSize.Small" Variant="Variant.Flat" ButtonStyle="ButtonStyle.Success"
+                                          Click="@(() => PublishAsync(a))" title="Publish" />
+                        }
+                        <RadzenButton Icon="delete" Size="ButtonSize.Small" Variant="Variant.Flat" ButtonStyle="ButtonStyle.Danger"
+                                      Click="@(() => DeleteAsync(a))" />
+                    </div>
+                </Template>
+            </RadzenDataGridColumn>
+        </Columns>
+    </RadzenDataGrid>
+</RadzenCard>
+
+@code {
+    private IReadOnlyList<AnnouncementDto> rows = [];
+    private IReadOnlyList<LookupDto> categories = [];
+    private IReadOnlyList<LookupDto> audiences = [];
+    private string? search;
+    private Guid? categoryId;
+    private Guid? audienceId;
+    private bool? isPublished;
+    private bool loading = true;
+
+    private (string Text, bool? Value)[] statusOptions =
+    [
+        ("Published", true),
+        ("Draft",     false),
+    ];
+
+    protected override async Task OnInitializedAsync()
+    {
+        categories = await Lookups.GetAnnouncementCategoriesAsync();
+        audiences = await Lookups.GetAnnouncementAudiencesAsync();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        rows = await AnnouncementService.ListAsync(new AnnouncementFilter
+        {
+            Search = search,
+            CategoryId = categoryId,
+            AudienceId = audienceId,
+            IsPublished = isPublished,
+            IncludeExpired = true,
+        });
+        loading = false;
+    }
+
+    private async Task PublishAsync(AnnouncementDto a)
+    {
+        var result = await AnnouncementService.PublishAsync(a.Id);
+        if (result.Succeeded)
+        {
+            Notification.Notify(new NotificationMessage { Severity = NotificationSeverity.Success, Summary = "Published" });
+            await LoadAsync();
+        }
+        else { ShowErrors(result.Errors); }
+    }
+
+    private async Task UnpublishAsync(AnnouncementDto a)
+    {
+        var result = await AnnouncementService.UnpublishAsync(a.Id);
+        if (result.Succeeded)
+        {
+            Notification.Notify(new NotificationMessage { Severity = NotificationSeverity.Success, Summary = "Unpublished" });
+            await LoadAsync();
+        }
+        else { ShowErrors(result.Errors); }
+    }
+
+    private async Task DeleteAsync(AnnouncementDto a)
+    {
+        var result = await AnnouncementService.SoftDeleteAsync(a.Id);
+        if (result.Succeeded)
+        {
+            Notification.Notify(new NotificationMessage { Severity = NotificationSeverity.Success, Summary = "Deleted" });
+            await LoadAsync();
+        }
+        else { ShowErrors(result.Errors); }
+    }
+
+    private void ShowErrors(IReadOnlyList<string> errors)
+    {
+        foreach (var e in errors)
+        {
+            Notification.Notify(new NotificationMessage { Severity = NotificationSeverity.Error, Summary = "Error", Detail = e });
+        }
+    }
+}

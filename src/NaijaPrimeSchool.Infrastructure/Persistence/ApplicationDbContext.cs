@@ -7,6 +7,7 @@ using NaijaPrimeSchool.Application.Common;
 using NaijaPrimeSchool.Domain.Academics;
 using NaijaPrimeSchool.Domain.Attendance;
 using NaijaPrimeSchool.Domain.Common;
+using NaijaPrimeSchool.Domain.Communications;
 using NaijaPrimeSchool.Domain.Family;
 using NaijaPrimeSchool.Domain.Finance;
 using NaijaPrimeSchool.Domain.Identity;
@@ -85,6 +86,11 @@ public class ApplicationDbContext(
     public DbSet<Supplier> Suppliers => Set<Supplier>();
     public DbSet<StoreItem> StoreItems => Set<StoreItem>();
     public DbSet<StockMovement> StockMovements => Set<StockMovement>();
+
+    public DbSet<AnnouncementCategory> AnnouncementCategories => Set<AnnouncementCategory>();
+    public DbSet<AnnouncementAudience> AnnouncementAudiences => Set<AnnouncementAudience>();
+    public DbSet<Announcement> Announcements => Set<Announcement>();
+    public DbSet<AnnouncementRead> AnnouncementReads => Set<AnnouncementRead>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -170,6 +176,7 @@ public class ApplicationDbContext(
         ConfigureResults(builder);
         ConfigureFinance(builder);
         ConfigureInventory(builder);
+        ConfigureCommunications(builder);
     }
 
     private static void ConfigureAcademics(ModelBuilder builder)
@@ -1147,6 +1154,80 @@ public class ApplicationDbContext(
             b.HasIndex(m => m.MovedOn);
             b.HasIndex(m => m.IsDeleted);
             b.HasQueryFilter(m => !m.IsDeleted);
+        });
+    }
+
+    private static void ConfigureCommunications(ModelBuilder builder)
+    {
+        ConfigureLookup<AnnouncementCategory>(builder, "AnnouncementCategories", extra: b =>
+        {
+            b.Property(c => c.Name).HasMaxLength(60).IsRequired();
+            b.Property(c => c.Code).HasMaxLength(20).IsRequired();
+            b.HasIndex(c => c.Name).IsUnique();
+            b.HasIndex(c => c.Code).IsUnique();
+        });
+
+        ConfigureLookup<AnnouncementAudience>(builder, "AnnouncementAudiences", extra: b =>
+        {
+            b.Property(a => a.Name).HasMaxLength(40).IsRequired();
+            b.Property(a => a.Code).HasMaxLength(20).IsRequired();
+            b.HasIndex(a => a.Name).IsUnique();
+            b.HasIndex(a => a.Code).IsUnique();
+        });
+
+        builder.Entity<Announcement>(b =>
+        {
+            b.ToTable("Announcements");
+            b.HasKey(a => a.Id);
+            b.Property(a => a.Title).HasMaxLength(200).IsRequired();
+            b.Property(a => a.Body).HasMaxLength(4000).IsRequired();
+            b.Property(a => a.CreatedBy).HasMaxLength(100);
+            b.Property(a => a.ModifiedBy).HasMaxLength(100);
+            b.Property(a => a.DeletedBy).HasMaxLength(100);
+
+            b.HasOne(a => a.AnnouncementCategory).WithMany(c => c.Announcements)
+                .HasForeignKey(a => a.AnnouncementCategoryId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasOne(a => a.AnnouncementAudience).WithMany(au => au.Announcements)
+                .HasForeignKey(a => a.AnnouncementAudienceId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasOne(a => a.TargetSchoolClass).WithMany()
+                .HasForeignKey(a => a.TargetSchoolClassId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            b.HasOne(a => a.PostedBy).WithMany()
+                .HasForeignKey(a => a.PostedById)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            b.HasIndex(a => a.PublishedOn);
+            b.HasIndex(a => a.ExpiresOn);
+            b.HasIndex(a => a.IsPublished);
+            b.HasIndex(a => a.IsDeleted);
+            b.HasQueryFilter(a => !a.IsDeleted);
+        });
+
+        builder.Entity<AnnouncementRead>(b =>
+        {
+            b.ToTable("AnnouncementReads");
+            b.HasKey(r => r.Id);
+            b.Property(r => r.CreatedBy).HasMaxLength(100);
+            b.Property(r => r.ModifiedBy).HasMaxLength(100);
+            b.Property(r => r.DeletedBy).HasMaxLength(100);
+
+            b.HasOne(r => r.Announcement).WithMany(a => a.Reads)
+                .HasForeignKey(r => r.AnnouncementId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            b.HasOne(r => r.User).WithMany()
+                .HasForeignKey(r => r.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // One read row per (announcement, user); composite unique.
+            b.HasIndex(r => new { r.AnnouncementId, r.UserId }).IsUnique();
+            b.HasIndex(r => r.IsDeleted);
+            b.HasQueryFilter(r => !r.IsDeleted);
         });
     }
 
