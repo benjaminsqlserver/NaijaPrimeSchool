@@ -62,8 +62,9 @@
                 <RadzenTextBox @bind-Value="form.AlternatePhone" />
             </div>
             <div class="nps-field nps-span-2">
-                <label>Email</label>
+                <label>Email *</label>
                 <RadzenTextBox @bind-Value="form.Email" Placeholder="parent@example.com" />
+                <ValidationMessage For="() => form.Email" />
             </div>
             <div class="nps-field nps-span-2">
                 <label>Residential address</label>
@@ -76,6 +77,27 @@
             <div class="nps-field">
                 <label>Employer</label>
                 <RadzenTextBox @bind-Value="form.Employer" />
+            </div>
+        </div>
+
+        <h3 style="margin: 1.5rem 0 1rem;">Portal sign-in</h3>
+        <p style="color: var(--nps-ink-500); margin-top:-0.5rem; margin-bottom: 1rem;">
+            A user account is created automatically for this parent in the Parent role. Share these
+            credentials with them so they can sign in to the parent portal.
+        </p>
+        <div class="nps-form-grid">
+            <div class="nps-field">
+                <label>Username *</label>
+                <RadzenTextBox @bind-Value="form.UserName" Placeholder="e.g. jane.doe" />
+                <ValidationMessage For="() => form.UserName" />
+            </div>
+            <div class="nps-field">
+                <label>Initial password *</label>
+                <RadzenPassword @bind-Value="form.Password" />
+                <ValidationMessage For="() => form.Password" />
+                <small style="color: var(--nps-ink-500); margin-top: 0.25rem;">
+                    Must be at least 8 characters with an uppercase, lowercase, digit and a special character.
+                </small>
             </div>
         </div>
         <div class="nps-form-actions">
@@ -118,8 +140,8 @@
         [System.ComponentModel.DataAnnotations.StringLength(30)]
         public string? AlternatePhone { get; set; }
 
-        [System.ComponentModel.DataAnnotations.EmailAddress, System.ComponentModel.DataAnnotations.StringLength(256)]
-        public string? Email { get; set; }
+        [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.EmailAddress, System.ComponentModel.DataAnnotations.StringLength(256)]
+        public string Email { get; set; } = string.Empty;
 
         [System.ComponentModel.DataAnnotations.StringLength(300)]
         public string? ResidentialAddress { get; set; }
@@ -129,6 +151,13 @@
 
         [System.ComponentModel.DataAnnotations.StringLength(120)]
         public string? Employer { get; set; }
+
+        [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(64, MinimumLength = 3)]
+        public string UserName { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(100, MinimumLength = 8)]
+        [System.ComponentModel.DataAnnotations.DataType(System.ComponentModel.DataAnnotations.DataType.Password)]
+        public string Password { get; set; } = string.Empty;
     }
 
     protected override async Task OnInitializedAsync()
@@ -157,6 +186,8 @@
                 ResidentialAddress = form.ResidentialAddress,
                 Occupation = form.Occupation,
                 Employer = form.Employer,
+                UserName = form.UserName,
+                Password = form.Password,
             });
 
             if (result.Succeeded)

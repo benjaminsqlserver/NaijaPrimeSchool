@@ -78,6 +78,16 @@ public class CreateStudentRequest
     public bool IsActive { get; set; } = true;
 
     public Guid? InitialClassId { get; set; }
+
+    [Required, StringLength(64, MinimumLength = 3)]
+    public string UserName { get; set; } = string.Empty;
+
+    [Required, EmailAddress, StringLength(256)]
+    public string Email { get; set; } = string.Empty;
+
+    [Required, StringLength(100, MinimumLength = 8)]
+    [DataType(DataType.Password)]
+    public string Password { get; set; } = string.Empty;
 }
 
 public class UpdateStudentRequest

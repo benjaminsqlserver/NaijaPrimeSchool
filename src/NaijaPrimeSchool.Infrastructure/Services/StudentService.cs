@@ -1,14 +1,19 @@
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using NaijaPrimeSchool.Application.Common;
 using NaijaPrimeSchool.Application.Family;
 using NaijaPrimeSchool.Application.Family.Dtos;
 using NaijaPrimeSchool.Application.Users.Dtos;
 using NaijaPrimeSchool.Domain.Family;
+using NaijaPrimeSchool.Domain.Identity;
 using NaijaPrimeSchool.Infrastructure.Persistence;
 
 namespace NaijaPrimeSchool.Infrastructure.Services;
 
-public class StudentService(ApplicationDbContext db) : IStudentService
+public class StudentService(
+    ApplicationDbContext db,
+    UserManager<ApplicationUser> userManager,
+    ICurrentUser currentUser) : IStudentService
 {
     public async Task<PagedResult<StudentDto>> ListAsync(StudentListFilter filter, CancellationToken ct = default)
     {
@@ -171,6 +176,38 @@ public class StudentService(ApplicationDbContext db) : IStudentService
             && !await db.SchoolClasses.AnyAsync(c => c.Id == request.InitialClassId.Value, ct))
             return OperationResult<Guid>.Failure("Selected class does not exist.");
 
+        if (await userManager.FindByNameAsync(request.UserName) is not null)
+            return OperationResult<Guid>.Failure($"Username '{request.UserName}' is already taken.");
+
+        if (await userManager.FindByEmailAsync(request.Email) is not null)
+            return OperationResult<Guid>.Failure($"Email '{request.Email}' is already in use.");
+
+        var user = new ApplicationUser
+        {
+            UserName = request.UserName.Trim(),
+            Email = request.Email.Trim(),
+            EmailConfirmed = true,
+            FirstName = request.FirstName.Trim(),
+            LastName = request.LastName.Trim(),
+            MiddleName = string.IsNullOrWhiteSpace(request.MiddleName) ? null : request.MiddleName.Trim(),
+            GenderId = request.GenderId,
+            DateOfBirth = request.DateOfBirth.ToDateTime(TimeOnly.MinValue),
+            Address = request.ResidentialAddress,
+            IsActive = request.IsActive,
+            CreatedBy = currentUser.UserName ?? "system",
+        };
+
+        var created = await userManager.CreateAsync(user, request.Password);
+        if (!created.Succeeded)
+            return OperationResult<Guid>.Failure(created.Errors.Select(e => e.Description));
+
+        var addRole = await userManager.AddToRoleAsync(user, Roles.Student);
+        if (!addRole.Succeeded)
+        {
+            await userManager.DeleteAsync(user);
+            return OperationResult<Guid>.Failure(addRole.Errors.Select(e => e.Description));
+        }
+
         var student = new Student
         {
             AdmissionNumber = request.AdmissionNumber.Trim(),
@@ -187,6 +224,7 @@ public class StudentService(ApplicationDbContext db) : IStudentService
             Allergies = request.Allergies,
             MedicalNotes = request.MedicalNotes,
             IsActive = request.IsActive,
+            UserId = user.Id,
         };
 
         db.Students.Add(student);
