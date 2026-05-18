@@ -2,7 +2,7 @@
 
 A modern school management system for Nigerian primary schools, built with **.NET 10**, **Blazor Auto**, **Clean Architecture**, **SQL Server**, and **Radzen Blazor Components**.
 
-Eight sprints have shipped. **Sprint 1** delivered the authentication & authorization foundation: user accounts, role-based access control, login/logout, activation/deactivation, and the SuperAdmin user-management screens. **Sprint 2** built the academic domain on top of that foundation: sessions, terms, class arms, subjects, timetable periods, and a click-to-edit weekly timetable grid. **Sprint 3** plugged students and parents into that academic structure: pupil profiles, parent/guardian directory, parent-to-pupil linkage with relationship + primary-contact + pickup flags, and per-session enrolment with a withdrawal lifecycle. **Sprint 4** lands attendance: a daily class register, per-subject session attendance off the timetable, the AttendanceStatus lookup, a submit/reopen lifecycle, and a per-class percentage summary. **Sprint 5** closes the academic loop: a per-(term, class, subject) gradebook of TermAssessments and AssessmentScores, a result computation pipeline that produces SubjectResults with grade bands and class positions, and per-(pupil, term) ReportCards with affective and psychomotor ratings, attendance roll-up, and a publish/unpublish lifecycle. **Sprint 5b** wires up pupil photographs: a dedicated upload pipeline backed by a reusable `StudentAvatar` Razor component, with the photo (or a coloured initials tile fallback) shown next to every pupil row across the Students, Enrolments, daily- and subject-attendance, score-sheet, and report-card pages. **Sprint 6** lays the financial spine: per-(term, class level) `FeeSchedule`s with line items, one-click invoice issuance to every actively-enrolled pupil, multi-allocation payments with auto-allocate, refund flow, and a bursar dashboard summarising invoiced, collected and outstanding amounts. **Sprint 7** turns the storeroom on: a `StoreItem` catalog tracked by `ItemCategory` and `UnitOfMeasure`, a movement-log of `StockMovement` rows (purchases, issuances, openings, write-offs, adjustments) typed by a directional `StockMovementType` lookup, a `Supplier` directory, a low-stock dashboard, and audit-safe reversal that undoes an entry's effect on `QuantityOnHand` when soft-deleted.
+Eight sprints have shipped. **Sprint 1** delivered the authentication & authorization foundation: user accounts, role-based access control, login/logout, activation/deactivation, and the SuperAdmin user-management screens. **Sprint 2** built the academic domain on top of that foundation: sessions, terms, class arms, subjects, timetable periods, and a click-to-edit weekly timetable grid. **Sprint 3** plugged students and parents into that academic structure: pupil profiles, parent/guardian directory, parent-to-pupil linkage with relationship + primary-contact + pickup flags, and per-session enrolment with a withdrawal lifecycle. **Sprint 4** lands attendance: a daily class register, per-subject session attendance off the timetable, the AttendanceStatus lookup, a submit/reopen lifecycle, and a per-class percentage summary. **Sprint 5** closes the academic loop: a per-(term, class, subject) gradebook of TermAssessments and AssessmentScores, a result computation pipeline that produces SubjectResults with grade bands and class positions, and per-(pupil, term) ReportCards with affective and psychomotor ratings, attendance roll-up, and a publish/unpublish lifecycle. **Sprint 5b** wires up pupil photographs: a dedicated upload pipeline backed by a reusable `StudentAvatar` Razor component, with the photo (or a coloured initials tile fallback) shown next to every pupil row across the Students, Enrolments, daily- and subject-attendance, score-sheet, and report-card pages. **Sprint 6** lays the financial spine: per-(term, class level) `FeeSchedule`s with line items, one-click invoice issuance to every actively-enrolled pupil, multi-allocation payments with auto-allocate, refund flow, and a bursar dashboard summarising invoiced, collected and outstanding amounts. **Sprint 7** turns the storeroom on: a `StoreItem` catalog tracked by `ItemCategory` and `UnitOfMeasure`, a movement-log of `StockMovement` rows (purchases, issuances, openings, write-offs, adjustments) typed by a directional `StockMovementType` lookup, a `Supplier` directory, a low-stock dashboard, and audit-safe reversal that undoes an entry's effect on `QuantityOnHand` when soft-deleted. **Sprint 8** finally turns the system outward to the families: a parent portal listing every linked ward with class, outstanding balance, attendance percentage, and report-card count plus a tabbed ward-detail page; a student portal with today's timetable, attendance summary, results history, and fee ledger; and an announcements pipeline — `AnnouncementCategory`, `AnnouncementAudience` (Everyone / Parents / Students / Specific Class) and per-user `AnnouncementRead` tracking — that lets the head teacher broadcast scoped, expiring, pin-to-top notices into both portals with live unread counts.
 
 Implementation walk-throughs for each sprint live at the repo root:
 
@@ -14,6 +14,7 @@ Implementation walk-throughs for each sprint live at the repo root:
 - `Sprint 5b - Implementation Guide.docx`
 - `Sprint 6 - Implementation Guide.docx`
 - `Sprint 7 - Implementation Guide.docx`
+- `Sprint 8 - Implementation Guide.docx`
 
 ---
 
@@ -176,6 +177,33 @@ Implementation walk-throughs for each sprint live at the repo root:
   - `ItemCategories` (10 seeded: BOOK, UNIF, STAT, SPRT, CLN, FOOD, FURN, ICT, MED, OTH), `UnitsOfMeasure` (10 seeded: EA, PC, PK, BOX, CTN, SET, BAG, KG, L, M), `StockMovementTypes` (7 seeded: OPENING +1, PURCHASE +1, RETURN +1, ADJ_IN +1, ISSUE -1, WRITEOFF -1, ADJ_OUT -1) — services key off `Code` and the `Direction` column drives every running-balance calculation, so types can be renamed without breaking logic
 - **Pages added** (`/store`, `/store/items`, `/store/items/new`, `/store/items/{id}`, `/store/movements`, `/store/movements/new`, `/store/suppliers`) — all gated to **SuperAdmin** + **HeadTeacher** + **SchoolStoreKeeper**. The previously-disabled Store & Inventory navigation placeholder is now a fully realised workspace.
 
+## Sprint 8 — Parent & student portals + announcements ✅
+
+- **Announcements**
+  - **Announcement** entity with title, body, optional expiry date, optional pinned flag, publish/unpublish lifecycle and a soft-delete audit trail
+  - Scoped by an **AnnouncementAudience** lookup — Everyone, Parents, Students, or Specific Class (the only audience that requires a target `SchoolClass`)
+  - Typed by an **AnnouncementCategory** lookup — General, Academic, Finance, Events, Holiday, Health, Emergency
+  - Composer page at `/announcements/new` and edit page at `/announcements/{id}` — the audience dropdown drives a conditional class picker, and the admin grid filters by category / audience / publish status with an *Include expired* toggle
+- **Read tracking**
+  - **AnnouncementRead** row per (announcement, user) with a composite unique index, so clicking *Mark as read* twice is a no-op
+  - `CountUnreadForCurrentUserAsync` powers the live unread badge on both portals and re-uses the same visibility predicates as the feed (audience codes + relevant class ids + non-expired)
+- **Parent portal**
+  - `/portal/parent` opens on a ward grid — one card per linked pupil showing relationship, primary-contact flag, current class, outstanding balance, attendance percentage and published-report-card count
+  - `/portal/parent/wards/{id}` opens a tabbed detail with Overview, Report cards (deep-linking to the sprint-5 PDF), and Fees & invoices (the same `StudentLedger` the bursar uses, scoped to the pupil)
+  - Access guard (`CurrentUserCanViewStudentAsync`) checks the `StudentParent` linkage on every load — SuperAdmin and HeadTeacher pass unconditionally so the same pages double as admin previews
+- **Student portal**
+  - `/portal/student` dashboard with five stat tiles (class, outstanding fees, attendance percentage, published report cards, unread announcements) and a *Today's timetable* grid resolved from `TimetableEntries` for the pupil's current class and term
+  - Sub-pages at `/portal/student/profile` (read-only demographics), `/portal/student/results` (published report cards), `/portal/student/attendance` (term tally), and `/portal/student/fees` (invoice + payment ledger)
+- **Shared announcements feed**
+  - `/portal/announcements` renders the same list for both audiences — the service resolves audience codes from `ICurrentUser.Roles` plus the relevant class ids (a parent gets their wards' classes; a student gets their own current class)
+  - Cards highlight unread rows with a coloured left border; *Back* routes to `/portal/parent` or `/portal/student` based on the signed-in role
+- **Identity plumbing**
+  - `ICurrentUser` gains `Roles` and `IsInRole` so the announcement service can decide audience visibility without reaching into `ClaimsPrincipal`
+  - The school office links a login to a `Family.Parent` or `Family.Student` row by setting `UserId` on the entity — `PortalService.ResolveParentIdForCurrentUserAsync` and `ResolveStudentIdForCurrentUserAsync` walk that link on every portal load and render a friendly fallback card when no link exists
+- **Lookup tables (no enums)**
+  - `AnnouncementCategories` (7 seeded: GEN, ACAD, FIN, EVENT, HOL, HEALTH, EMERG), `AnnouncementAudiences` (4 seeded: ALL, PARENT, STUDENT, CLASS — the last with `RequiresTargetClass = true`) — services key off `Code` and the `RequiresTargetClass` flag drives editor/validator behaviour, so audience labels can be renamed without breaking logic
+- **Pages added** — admin: `/announcements`, `/announcements/new`, `/announcements/{id}` (gated to **SuperAdmin** + **HeadTeacher**). Parent portal: `/portal/parent`, `/portal/parent/wards/{id}` (gated to **Parent** + the two admin roles). Student portal: `/portal/student`, `/portal/student/profile`, `/portal/student/results`, `/portal/student/attendance`, `/portal/student/fees` (gated to **Student** + the two admin roles). Shared: `/portal/announcements` (gated to **Parent** + **Student** + the two admin roles). The previously-disabled *My Children* navigation placeholder is replaced with three new role-scoped panels.
+
 ## Cross-cutting (every sprint)
 
 - **Beautiful, inviting UI**
@@ -183,7 +211,7 @@ Implementation walk-throughs for each sprint live at the repo root:
   - Radzen Blazor components (DataGrid, Dialog, Notification, Layout, Sidebar, Forms)
   - Responsive layout
 - **Data integrity**
-  - No enums; every lookup (roles, titles, genders, term types, class levels, week days, relationships, enrolment statuses, blood groups, marital statuses, attendance statuses, assessment types, grade bands, affective traits, psychomotor skills, trait ratings, fee categories, payment methods, invoice statuses, payment statuses, item categories, units of measure, stock movement types, …) is a first-class table
+  - No enums; every lookup (roles, titles, genders, term types, class levels, week days, relationships, enrolment statuses, blood groups, marital statuses, attendance statuses, assessment types, grade bands, affective traits, psychomotor skills, trait ratings, fee categories, payment methods, invoice statuses, payment statuses, item categories, units of measure, stock movement types, announcement categories, announcement audiences, …) is a first-class table
   - Soft delete for all entities, enforced globally via EF Core query filters
   - Auditing (CreatedOn/By, ModifiedOn/By, DeletedOn/By) applied automatically in `SaveChanges`
 
@@ -214,7 +242,8 @@ NaijaPrimeSchool/
 │   │   ├── Attendance/                          # Daily/Subject registers + AttendanceStatus lookup (sprint 4)
 │   │   ├── Results/                             # TermAssessment, SubjectResult, ReportCard + lookups (sprint 5)
 │   │   ├── Finance/                             # FeeSchedule, Invoice, Payment + lookups (sprint 6)
-│   │   └── Inventory/                           # Supplier, StoreItem, StockMovement + lookups (sprint 7)
+│   │   ├── Inventory/                           # Supplier, StoreItem, StockMovement + lookups (sprint 7)
+│   │   └── Communications/                      # Announcement, AnnouncementRead + lookups (sprint 8)
 │   ├── NaijaPrimeSchool.Application/            # DTOs, service contracts, shared abstractions
 │   │   ├── Common/                              # ICurrentUser, OperationResult
 │   │   ├── Users/                               # IUserService, ILookupService, DTOs (sprint 1)
@@ -223,7 +252,9 @@ NaijaPrimeSchool/
 │   │   ├── Attendance/                          # IDailyAttendanceService, ISubjectAttendanceService, DTOs (sprint 4)
 │   │   ├── Results/                             # IAssessmentService, IResultService, IReportCardService, DTOs (sprint 5)
 │   │   ├── Finance/                             # IFeeScheduleService, IInvoiceService, IPaymentService, DTOs (sprint 6)
-│   │   └── Inventory/                           # ISupplierService, IStoreItemService, IStockMovementService, DTOs (sprint 7)
+│   │   ├── Inventory/                           # ISupplierService, IStoreItemService, IStockMovementService, DTOs (sprint 7)
+│   │   ├── Communications/                      # IAnnouncementService, DTOs (sprint 8)
+│   │   └── Portals/                             # IPortalService, DTOs (sprint 8)
 │   ├── NaijaPrimeSchool.Infrastructure/         # EF Core DbContext, Identity stores, service impls, seed, migrations
 │   ├── NaijaPrimeSchool.Web/                    # Blazor server host (auth endpoints, layout, pages, Program.cs)
 │   │   └── Components/Pages/
@@ -233,7 +264,9 @@ NaijaPrimeSchool/
 │   │       ├── Attendance/                      # Daily, Subject and Summary attendance pages (sprint 4)
 │   │       ├── Results/                         # Assessments, Score sheet, Results, Report cards (sprint 5)
 │   │       ├── Finance/                         # Fee schedules, Invoices, Payments, Bursar dashboard (sprint 6)
-│   │       └── Inventory/                       # Store dashboard, Catalog, Movements, Suppliers (sprint 7)
+│   │       ├── Inventory/                       # Store dashboard, Catalog, Movements, Suppliers (sprint 7)
+│   │       ├── Communications/                  # Announcements list + editor (sprint 8)
+│   │       └── Portals/                         # Parent + student portals, shared announcements feed (sprint 8)
 │   └── NaijaPrimeSchool.Web.Client/             # Blazor WebAssembly client (Auto interactivity)
 ├── tools/                                       # Scripts (e.g. sprint guide generators)
 └── NaijaPrimeSchool.slnx
@@ -419,6 +452,13 @@ User management screens are gated behind the `ManageUsers` policy, which require
 | `src/NaijaPrimeSchool.Infrastructure/Services/StoreItemService.cs` | Catalog CRUD + create-with-opening-balance shortcut |
 | `src/NaijaPrimeSchool.Infrastructure/Services/StockMovementService.cs` | Record / soft-delete movements, running balance, NPS/STK numbering, dashboard rollups |
 | `src/NaijaPrimeSchool.Web/Components/Pages/Inventory/` | Store dashboard, catalog, item detail, movements, record movement, suppliers |
+| `src/NaijaPrimeSchool.Domain/Communications/` | Announcement, AnnouncementRead + AnnouncementCategory / AnnouncementAudience lookups (sprint 8) |
+| `src/NaijaPrimeSchool.Application/Communications/` | IAnnouncementService contract and DTOs |
+| `src/NaijaPrimeSchool.Application/Portals/` | IPortalService contract and dashboard DTOs |
+| `src/NaijaPrimeSchool.Infrastructure/Services/AnnouncementService.cs` | Announcement CRUD, publish/unpublish, portal feed + per-user read tracking |
+| `src/NaijaPrimeSchool.Infrastructure/Services/PortalService.cs` | Parent + student dashboard façade with `CurrentUserCanViewStudentAsync` access guard |
+| `src/NaijaPrimeSchool.Web/Components/Pages/Communications/` | Announcements admin list + editor |
+| `src/NaijaPrimeSchool.Web/Components/Pages/Portals/` | Parent dashboard, ward detail, student dashboard + sub-pages, shared announcements feed |
 | `tools/generate_sprint2_guide.py` | Generator for `Sprint 2 - Implementation Guide.docx` |
 | `tools/generate_sprint3_guide.py` | Generator for `Sprint 3 - Implementation Guide.docx` |
 | `tools/generate_sprint4_guide.py` | Generator for `Sprint 4 - Implementation Guide.docx` |
@@ -426,6 +466,7 @@ User management screens are gated behind the `ManageUsers` policy, which require
 | `tools/generate_sprint5b_guide.py` | Generator for `Sprint 5b - Implementation Guide.docx` |
 | `tools/generate_sprint6_guide.py` | Generator for `Sprint 6 - Implementation Guide.docx` |
 | `tools/generate_sprint7_guide.py` | Generator for `Sprint 7 - Implementation Guide.docx` |
+| `tools/generate_sprint8_guide.py` | Generator for `Sprint 8 - Implementation Guide.docx` |
 
 ---
 
@@ -441,11 +482,13 @@ Delivered:
 - ✅ **Sprint 5b** — Student photographs (upload pipeline, reusable avatar component, photos shown across every pupil-facing page)
 - ✅ **Sprint 6** — Fees, invoices, receipts & bursar workflows (fee schedules, invoice issuance, multi-allocation payments with refund, bursar dashboard)
 - ✅ **Sprint 7** — Store & inventory management for the storekeeper (catalog, supplier directory, movement log with NPS/STK numbering, reversible soft-delete, low-stock dashboard)
+- ✅ **Sprint 8** — Parent & student portals + announcements (ward grid + tabbed detail, student dashboard with today's timetable, scoped announcements with per-user read tracking)
 
 Planned for upcoming sprints:
 
-- Sprint 8 — Parent and student portals
-- Notifications (email / SMS)
+- Notifications (email / SMS push of unread announcements)
+- Two-way messaging between school office and families
+- Online fee payment (gateway on top of the existing `PaymentService`)
 - Audit log viewer
 
 
