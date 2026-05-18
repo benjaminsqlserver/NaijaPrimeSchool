@@ -616,3 +616,150 @@ h1:focus {
 .nps-hidden-input {
     display: none !important;
 }
+
+/* ===================== Sprint 8 — Portals & announcements ===================== */
+.nps-portal-row {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    align-items: stretch;
+}
+
+.nps-shortcuts {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.nps-readonly-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 0.85rem 1.25rem;
+}
+
+.nps-readonly-grid > div {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    padding: 0.5rem 0.75rem;
+    background: var(--nps-surface-alt);
+    border: 1px solid var(--nps-ink-200);
+    border-radius: 10px;
+}
+
+.nps-readonly-grid small {
+    color: var(--nps-ink-500);
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.nps-readonly-grid strong {
+    font-size: 0.98rem;
+    word-break: break-word;
+}
+
+.nps-ward-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1rem;
+}
+
+.nps-ward-card {
+    border: 1px solid var(--nps-ink-200);
+    border-radius: 14px;
+    padding: 1rem;
+    background: var(--nps-surface-alt);
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.nps-ward-card__head {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+}
+
+.nps-ward-card__head strong {
+    display: block;
+}
+
+.nps-ward-card__head small {
+    display: block;
+    color: var(--nps-ink-500);
+    font-size: 0.8rem;
+}
+
+.nps-ward-card__stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem;
+}
+
+.nps-ward-card__stats > div {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    padding: 0.4rem 0.5rem;
+    background: #fff;
+    border: 1px solid var(--nps-ink-200);
+    border-radius: 8px;
+}
+
+.nps-ward-card__stats small {
+    color: var(--nps-ink-500);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.nps-ward-card__stats strong {
+    font-size: 0.95rem;
+}
+
+.nps-ward-card__actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.nps-announcement-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.nps-announcement {
+    border-left: 4px solid var(--nps-ink-200);
+}
+
+.nps-announcement.is-unread {
+    border-left-color: var(--nps-green-700, #0a8a4a);
+    background: #f5fbf7;
+}
+
+.nps-announcement.is-read {
+    opacity: 0.85;
+}
+
+.nps-announcement__head {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.nps-announcement__head h3 {
+    margin: 0.25rem 0;
+}
+
+.nps-announcement__body {
+    margin-top: 0.5rem;
+    line-height: 1.5;
+}
+
+.nps-announcement__actions {
+    margin-top: 0.75rem;
+    display: flex;
+    justify-content: flex-end;
+}

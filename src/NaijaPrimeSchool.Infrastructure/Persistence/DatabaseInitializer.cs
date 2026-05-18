@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NaijaPrimeSchool.Domain.Academics;
 using NaijaPrimeSchool.Domain.Attendance;
+using NaijaPrimeSchool.Domain.Communications;
 using NaijaPrimeSchool.Domain.Family;
 using NaijaPrimeSchool.Domain.Finance;
 using NaijaPrimeSchool.Domain.Inventory;
@@ -35,6 +36,7 @@ public static class DatabaseInitializer
         await SeedResultsLookupsAsync(db, ct);
         await SeedFinanceLookupsAsync(db, ct);
         await SeedInventoryLookupsAsync(db, ct);
+        await SeedCommunicationsLookupsAsync(db, ct);
         await SeedRolesAsync(sp, ct);
         await SeedSuperAdminAsync(sp, logger, ct);
     }
@@ -115,6 +117,57 @@ public static class DatabaseInitializer
                     Code = types[i].Code,
                     Direction = types[i].Direction,
                     DisplayOrder = i + 1,
+                });
+            }
+        }
+
+        await db.SaveChangesAsync(ct);
+    }
+
+    private static async Task SeedCommunicationsLookupsAsync(ApplicationDbContext db, CancellationToken ct)
+    {
+        if (!await db.AnnouncementCategories.IgnoreQueryFilters().AnyAsync(ct))
+        {
+            (string Name, string Code)[] categories =
+            [
+                ("General",   "GEN"),
+                ("Academic",  "ACAD"),
+                ("Finance",   "FIN"),
+                ("Events",    "EVENT"),
+                ("Holiday",   "HOL"),
+                ("Health",    "HEALTH"),
+                ("Emergency", "EMERG"),
+            ];
+            for (var i = 0; i < categories.Length; i++)
+            {
+                var c = categories[i];
+                db.AnnouncementCategories.Add(new AnnouncementCategory
+                {
+                    Name = c.Name,
+                    Code = c.Code,
+                    DisplayOrder = i + 1,
+                });
+            }
+        }
+
+        if (!await db.AnnouncementAudiences.IgnoreQueryFilters().AnyAsync(ct))
+        {
+            (string Name, string Code, bool RequiresTargetClass)[] audiences =
+            [
+                ("Everyone",       "ALL",      false),
+                ("Parents",        "PARENT",   false),
+                ("Students",       "STUDENT",  false),
+                ("Specific Class", "CLASS",    true),
+            ];
+            for (var i = 0; i < audiences.Length; i++)
+            {
+                var a = audiences[i];
+                db.AnnouncementAudiences.Add(new AnnouncementAudience
+                {
+                    Name = a.Name,
+                    Code = a.Code,
+                    DisplayOrder = i + 1,
+                    RequiresTargetClass = a.RequiresTargetClass,
                 });
             }
         }

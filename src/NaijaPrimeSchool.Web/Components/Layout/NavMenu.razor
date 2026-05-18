@@ -84,9 +84,34 @@
         </Authorized>
     </AuthorizeView>
 
-    <AuthorizeView Roles="@($"{Roles.Parent},{Roles.Student}")">
+    <AuthorizeView Roles="@($"{Roles.SuperAdmin},{Roles.HeadTeacher}")">
         <Authorized>
-            <RadzenPanelMenuItem Text="My Children" Icon="family_restroom" Disabled="true" />
+            <RadzenPanelMenuItem Text="Communications" Icon="campaign" Expanded="true">
+                <RadzenPanelMenuItem Text="Announcements" Icon="campaign" Path="/announcements" />
+                <RadzenPanelMenuItem Text="New announcement" Icon="add" Path="/announcements/new" />
+            </RadzenPanelMenuItem>
+        </Authorized>
+    </AuthorizeView>
+
+    <AuthorizeView Roles="@(Roles.Parent)">
+        <Authorized>
+            <RadzenPanelMenuItem Text="Parent portal" Icon="family_restroom" Expanded="true">
+                <RadzenPanelMenuItem Text="My wards" Icon="groups" Path="/portal/parent" />
+                <RadzenPanelMenuItem Text="Announcements" Icon="campaign" Path="/portal/announcements" />
+            </RadzenPanelMenuItem>
+        </Authorized>
+    </AuthorizeView>
+
+    <AuthorizeView Roles="@(Roles.Student)">
+        <Authorized>
+            <RadzenPanelMenuItem Text="Student portal" Icon="school" Expanded="true">
+                <RadzenPanelMenuItem Text="Today" Icon="today" Path="/portal/student" />
+                <RadzenPanelMenuItem Text="My profile" Icon="person" Path="/portal/student/profile" />
+                <RadzenPanelMenuItem Text="My results" Icon="grading" Path="/portal/student/results" />
+                <RadzenPanelMenuItem Text="My attendance" Icon="event_available" Path="/portal/student/attendance" />
+                <RadzenPanelMenuItem Text="My fees" Icon="payments" Path="/portal/student/fees" />
+                <RadzenPanelMenuItem Text="Announcements" Icon="campaign" Path="/portal/announcements" />
+            </RadzenPanelMenuItem>
         </Authorized>
     </AuthorizeView>
 </RadzenPanelMenu>

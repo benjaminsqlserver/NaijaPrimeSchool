@@ -1,0 +1,68 @@
+@page "/portal/student/attendance"
+@attribute [Authorize(Roles = $"{Roles.Student},{Roles.SuperAdmin},{Roles.HeadTeacher}")]
+@rendermode InteractiveServer
+
+@inject IPortalService PortalService
+@inject NavigationManager Nav
+
+<PageTitle>My attendance · Naija Prime School</PageTitle>
+
+<div class="nps-page-header">
+    <div>
+        <h1>My attendance</h1>
+        <p>Running tally of your daily attendance for the current term.</p>
+    </div>
+    <div class="nps-page-actions">
+        <RadzenButton Text="Back to portal" Icon="arrow_back" Variant="Variant.Flat" ButtonStyle="ButtonStyle.Light"
+                      Click="@(() => Nav.NavigateTo("/portal/student"))" />
+    </div>
+</div>
+
+@if (loading)
+{
+    <RadzenCard class="nps-card"><p>Loading...</p></RadzenCard>
+}
+else if (dashboard is null)
+{
+    <RadzenCard class="nps-card"><h3>We can't find your student record.</h3></RadzenCard>
+}
+else
+{
+    <div class="nps-stat-grid">
+        <RadzenCard class="nps-stat-card">
+            <small>Days counted</small>
+            <strong>@dashboard.DaysCounted</strong>
+        </RadzenCard>
+        <RadzenCard class="nps-stat-card">
+            <small>Present</small>
+            <strong>@dashboard.DaysPresent</strong>
+        </RadzenCard>
+        <RadzenCard class="nps-stat-card">
+            <small>Late</small>
+            <strong>@dashboard.DaysLate</strong>
+        </RadzenCard>
+        <RadzenCard class="nps-stat-card">
+            <small>Absent</small>
+            <strong>@dashboard.DaysAbsent</strong>
+        </RadzenCard>
+        <RadzenCard class="nps-stat-card">
+            <small>Percentage</small>
+            <strong>@(dashboard.LatestAttendancePercentage is double p ? p.ToString("F1") + "%" : "—")</strong>
+        </RadzenCard>
+    </div>
+}
+
+@code {
+    private StudentDashboardDto? dashboard;
+    private bool loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var studentId = await PortalService.ResolveStudentIdForCurrentUserAsync();
+        if (studentId is not null)
+        {
+            dashboard = await PortalService.GetStudentDashboardAsync(studentId.Value);
+        }
+        loading = false;
+    }
+}

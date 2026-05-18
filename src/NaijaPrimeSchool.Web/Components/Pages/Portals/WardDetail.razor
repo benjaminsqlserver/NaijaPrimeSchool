@@ -1,0 +1,165 @@
+@page "/portal/parent/wards/{StudentId:guid}"
+@attribute [Authorize(Roles = $"{Roles.Parent},{Roles.SuperAdmin},{Roles.HeadTeacher}")]
+@rendermode InteractiveServer
+
+@inject IPortalService PortalService
+@inject IStudentService StudentService
+@inject IInvoiceService InvoiceService
+@inject IReportCardService ReportCardService
+@inject IDailyAttendanceService DailyAttendanceService
+@inject NavigationManager Nav
+
+<PageTitle>Ward · Naija Prime School</PageTitle>
+
+@if (loading)
+{
+    <RadzenCard class="nps-card"><p>Loading...</p></RadzenCard>
+}
+else if (!authorized)
+{
+    <RadzenCard class="nps-card">
+        <h3>Not authorised</h3>
+        <p>This pupil is not linked to your parent profile.</p>
+        <RadzenButton Text="Back" Variant="Variant.Flat" Click="@(() => Nav.NavigateTo("/portal/parent"))" />
+    </RadzenCard>
+}
+else if (student is null)
+{
+    <RadzenCard class="nps-card"><h3>Pupil not found.</h3></RadzenCard>
+}
+else
+{
+    <div class="nps-page-header">
+        <div style="display:flex; gap:1rem; align-items:center;">
+            <StudentAvatar PhotoUrl="@student.PhotoUrl" FirstName="@student.FirstName" LastName="@student.LastName" Size="large" />
+            <div>
+                <h1 style="margin:0;">@student.FullName</h1>
+                <p style="margin:0;">@student.AdmissionNumber · @(dashboard?.CurrentSchoolClassName ?? "Unenrolled")</p>
+            </div>
+        </div>
+        <div class="nps-page-actions">
+            <RadzenButton Text="Back to portal" Icon="arrow_back" Variant="Variant.Flat" ButtonStyle="ButtonStyle.Light"
+                          Click="@(() => Nav.NavigateTo("/portal/parent"))" />
+        </div>
+    </div>
+
+    <RadzenTabs @bind-SelectedIndex="tabIndex">
+        <Tabs>
+            <RadzenTabsItem Text="Overview">
+                <div class="nps-stat-grid">
+                    <RadzenCard class="nps-stat-card">
+                        <small>Outstanding</small>
+                        <strong>@dashboard?.OutstandingBalance.ToString("N2")</strong>
+                    </RadzenCard>
+                    <RadzenCard class="nps-stat-card">
+                        <small>Attendance</small>
+                        <strong>@(dashboard?.LatestAttendancePercentage is double p ? p.ToString("F1") + "%" : "—")</strong>
+                    </RadzenCard>
+                    <RadzenCard class="nps-stat-card">
+                        <small>Report cards</small>
+                        <strong>@dashboard?.PublishedReportCardCount</strong>
+                    </RadzenCard>
+                    <RadzenCard class="nps-stat-card">
+                        <small>Days present</small>
+                        <strong>@(dashboard?.DaysPresent ?? 0) / @(dashboard?.DaysCounted ?? 0)</strong>
+                    </RadzenCard>
+                </div>
+            </RadzenTabsItem>
+
+            <RadzenTabsItem Text="Report cards">
+                @if (reportCards.Count == 0)
+                {
+                    <p style="color: var(--nps-ink-500);">No published report cards yet.</p>
+                }
+                else
+                {
+                    <RadzenDataGrid TItem="ReportCardDto" Data="@reportCards" PageSize="20" AllowPaging="true">
+                        <Columns>
+                            <RadzenDataGridColumn TItem="ReportCardDto" Title="Term" Property="TermName" />
+                            <RadzenDataGridColumn TItem="ReportCardDto" Title="Class" Property="SchoolClassName" />
+                            <RadzenDataGridColumn TItem="ReportCardDto" Title="Average" Width="120px">
+                                <Template Context="r"><strong>@r.AveragePercentage.ToString("F1")%</strong></Template>
+                            </RadzenDataGridColumn>
+                            <RadzenDataGridColumn TItem="ReportCardDto" Title="Position" Width="120px" Property="Position" />
+                            <RadzenDataGridColumn TItem="ReportCardDto" Title="" Width="120px" Sortable="false" TextAlign="TextAlign.Right">
+                                <Template Context="r">
+                                    <RadzenButton Icon="visibility" Size="ButtonSize.Small" Variant="Variant.Flat" ButtonStyle="ButtonStyle.Light"
+                                                  Click="@(() => Nav.NavigateTo($"/reports/{r.Id}"))" />
+                                </Template>
+                            </RadzenDataGridColumn>
+                        </Columns>
+                    </RadzenDataGrid>
+                }
+            </RadzenTabsItem>
+
+            <RadzenTabsItem Text="Fees & invoices">
+                @if (ledger is null)
+                {
+                    <p style="color: var(--nps-ink-500);">No invoices issued yet.</p>
+                }
+                else
+                {
+                    <div class="nps-stat-grid" style="margin-bottom:1rem;">
+                        <RadzenCard class="nps-stat-card"><small>Invoiced</small><strong>@ledger.TotalInvoiced.ToString("N2")</strong></RadzenCard>
+                        <RadzenCard class="nps-stat-card"><small>Paid</small><strong>@ledger.TotalPaid.ToString("N2")</strong></RadzenCard>
+                        <RadzenCard class="nps-stat-card"><small>Outstanding</small><strong>@ledger.OutstandingBalance.ToString("N2")</strong></RadzenCard>
+                    </div>
+                    <RadzenDataGrid TItem="InvoiceDto" Data="@ledger.Invoices" PageSize="15" AllowPaging="true">
+                        <Columns>
+                            <RadzenDataGridColumn TItem="InvoiceDto" Title="Number" Property="InvoiceNumber" />
+                            <RadzenDataGridColumn TItem="InvoiceDto" Title="Term" Property="TermName" />
+                            <RadzenDataGridColumn TItem="InvoiceDto" Title="Issued" Width="120px">
+                                <Template Context="i">@i.IssuedOn.ToString("dd MMM yyyy")</Template>
+                            </RadzenDataGridColumn>
+                            <RadzenDataGridColumn TItem="InvoiceDto" Title="Total" Width="120px">
+                                <Template Context="i">@i.AmountDue.ToString("N2")</Template>
+                            </RadzenDataGridColumn>
+                            <RadzenDataGridColumn TItem="InvoiceDto" Title="Balance" Width="120px">
+                                <Template Context="i"><strong>@i.Balance.ToString("N2")</strong></Template>
+                            </RadzenDataGridColumn>
+                            <RadzenDataGridColumn TItem="InvoiceDto" Title="Status" Width="140px">
+                                <Template Context="i"><RadzenBadge Text="@i.InvoiceStatusName" BadgeStyle="@StatusStyle(i.InvoiceStatusCode)" Variant="Variant.Flat" /></Template>
+                            </RadzenDataGridColumn>
+                        </Columns>
+                    </RadzenDataGrid>
+                }
+            </RadzenTabsItem>
+        </Tabs>
+    </RadzenTabs>
+}
+
+@code {
+    [Parameter] public Guid StudentId { get; set; }
+
+    private bool loading = true;
+    private bool authorized;
+    private StudentDto? student;
+    private StudentDashboardDto? dashboard;
+    private IReadOnlyList<ReportCardDto> reportCards = [];
+    private StudentLedgerDto? ledger;
+    private int tabIndex = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        authorized = await PortalService.CurrentUserCanViewStudentAsync(StudentId);
+        if (!authorized)
+        {
+            loading = false;
+            return;
+        }
+        student = await StudentService.GetByIdAsync(StudentId);
+        dashboard = await PortalService.GetStudentDashboardAsync(StudentId);
+        reportCards = await ReportCardService.ListAsync(new ReportCardFilter { StudentId = StudentId, IsPublished = true });
+        ledger = await InvoiceService.GetStudentLedgerAsync(StudentId);
+        loading = false;
+    }
+
+    private static BadgeStyle StatusStyle(string? code) => code switch
+    {
+        "PAID" => BadgeStyle.Success,
+        "PARTIAL" => BadgeStyle.Warning,
+        "OVERDUE" => BadgeStyle.Danger,
+        "CANCELLED" => BadgeStyle.Secondary,
+        _ => BadgeStyle.Info,
+    };
+}

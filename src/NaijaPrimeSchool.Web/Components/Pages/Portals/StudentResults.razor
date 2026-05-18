@@ -1,0 +1,72 @@
+@page "/portal/student/results"
+@attribute [Authorize(Roles = $"{Roles.Student},{Roles.SuperAdmin},{Roles.HeadTeacher}")]
+@rendermode InteractiveServer
+
+@inject IPortalService PortalService
+@inject IReportCardService ReportCardService
+@inject NavigationManager Nav
+
+<PageTitle>My results · Naija Prime School</PageTitle>
+
+<div class="nps-page-header">
+    <div>
+        <h1>My results</h1>
+        <p>Every published report card the school has issued for you.</p>
+    </div>
+    <div class="nps-page-actions">
+        <RadzenButton Text="Back to portal" Icon="arrow_back" Variant="Variant.Flat" ButtonStyle="ButtonStyle.Light"
+                      Click="@(() => Nav.NavigateTo("/portal/student"))" />
+    </div>
+</div>
+
+@if (loading)
+{
+    <RadzenCard class="nps-card"><p>Loading...</p></RadzenCard>
+}
+else if (reportCards.Count == 0)
+{
+    <RadzenCard class="nps-card">
+        <h3>No published report cards yet.</h3>
+        <p>Your teachers will publish your cards at the end of each term. Check back then.</p>
+    </RadzenCard>
+}
+else
+{
+    <RadzenCard class="nps-card">
+        <RadzenDataGrid TItem="ReportCardDto" Data="@reportCards" PageSize="20" AllowPaging="true">
+            <Columns>
+                <RadzenDataGridColumn TItem="ReportCardDto" Title="Term" Property="TermName" />
+                <RadzenDataGridColumn TItem="ReportCardDto" Title="Class" Property="SchoolClassName" />
+                <RadzenDataGridColumn TItem="ReportCardDto" Title="Average" Width="120px">
+                    <Template Context="r"><strong>@r.AveragePercentage.ToString("F1")%</strong></Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="ReportCardDto" Title="Position" Width="120px" Property="Position" />
+                <RadzenDataGridColumn TItem="ReportCardDto" Title="" Width="120px" Sortable="false" TextAlign="TextAlign.Right">
+                    <Template Context="r">
+                        <RadzenButton Icon="visibility" Size="ButtonSize.Small" Variant="Variant.Flat" ButtonStyle="ButtonStyle.Light"
+                                      Click="@(() => Nav.NavigateTo($"/reports/{r.Id}"))" />
+                    </Template>
+                </RadzenDataGridColumn>
+            </Columns>
+        </RadzenDataGrid>
+    </RadzenCard>
+}
+
+@code {
+    private IReadOnlyList<ReportCardDto> reportCards = [];
+    private bool loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var studentId = await PortalService.ResolveStudentIdForCurrentUserAsync();
+        if (studentId is not null)
+        {
+            reportCards = await ReportCardService.ListAsync(new ReportCardFilter
+            {
+                StudentId = studentId.Value,
+                IsPublished = true,
+            });
+        }
+        loading = false;
+    }
+}

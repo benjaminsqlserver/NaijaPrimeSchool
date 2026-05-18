@@ -1,0 +1,116 @@
+@page "/portal/parent"
+@attribute [Authorize(Roles = $"{Roles.Parent},{Roles.SuperAdmin},{Roles.HeadTeacher}")]
+@rendermode InteractiveServer
+
+@inject IPortalService PortalService
+@inject IAnnouncementService AnnouncementService
+@inject NavigationManager Nav
+
+<PageTitle>Parent portal · Naija Prime School</PageTitle>
+
+<div class="nps-page-header">
+    <div>
+        <h1>Parent portal</h1>
+        <p>Your wards, their attendance, results, and outstanding fees — all in one place.</p>
+    </div>
+</div>
+
+@if (loading)
+{
+    <RadzenCard class="nps-card"><p>Loading...</p></RadzenCard>
+}
+else if (dashboard is null)
+{
+    <RadzenCard class="nps-card">
+        <h3>We can't find your parent record.</h3>
+        <p>
+            This area is for parents whose Parent profile is linked to a login. Ask the school office
+            to link your account, or sign in with the Parent role.
+        </p>
+    </RadzenCard>
+}
+else
+{
+    <div class="nps-stat-grid">
+        <RadzenCard class="nps-stat-card">
+            <small>Wards</small>
+            <strong>@dashboard.Wards.Count</strong>
+        </RadzenCard>
+        <RadzenCard class="nps-stat-card">
+            <small>Total outstanding</small>
+            <strong>@dashboard.Wards.Sum(w => w.OutstandingBalance).ToString("N2")</strong>
+        </RadzenCard>
+        <RadzenCard class="nps-stat-card">
+            <small>Unread announcements</small>
+            <strong>@dashboard.UnreadAnnouncementCount</strong>
+        </RadzenCard>
+    </div>
+
+    <RadzenCard class="nps-card" Style="margin-top: 1rem;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+            <h3 style="margin:0;">My wards</h3>
+            <RadzenButton Text="View announcements" Icon="campaign" Variant="Variant.Flat"
+                          ButtonStyle="ButtonStyle.Light"
+                          Click="@(() => Nav.NavigateTo("/portal/announcements"))" />
+        </div>
+
+        @if (dashboard.Wards.Count == 0)
+        {
+            <p style="color: var(--nps-ink-500);">
+                No wards are linked to your account yet. The school office can link your pupils via
+                the Parents page.
+            </p>
+        }
+        else
+        {
+            <div class="nps-ward-grid">
+                @foreach (var w in dashboard.Wards)
+                {
+                    <RadzenCard class="nps-ward-card">
+                        <div class="nps-ward-card__head">
+                            <StudentAvatar PhotoUrl="@w.PhotoUrl" FirstName="@w.FirstName" LastName="@w.LastName" Size="medium" />
+                            <div>
+                                <strong>@w.FullName</strong>
+                                <small>@w.AdmissionNumber · @(w.CurrentSchoolClassName ?? "Unenrolled")</small>
+                                <small>@w.Relationship @(w.IsPrimaryContact ? "· primary" : "")</small>
+                            </div>
+                        </div>
+                        <div class="nps-ward-card__stats">
+                            <div>
+                                <small>Outstanding</small>
+                                <strong>@w.OutstandingBalance.ToString("N2")</strong>
+                            </div>
+                            <div>
+                                <small>Attendance</small>
+                                <strong>@(w.LatestAttendancePercentage.HasValue ? w.LatestAttendancePercentage.Value.ToString("F1") + "%" : "—")</strong>
+                            </div>
+                            <div>
+                                <small>Report cards</small>
+                                <strong>@w.PublishedReportCardCount</strong>
+                            </div>
+                        </div>
+                        <div class="nps-ward-card__actions">
+                            <RadzenButton Text="Open" Icon="arrow_forward" ButtonStyle="ButtonStyle.Primary" Size="ButtonSize.Small"
+                                          Click="@(() => Nav.NavigateTo($"/portal/parent/wards/{w.StudentId}"))" />
+                        </div>
+                    </RadzenCard>
+                }
+            </div>
+        }
+    </RadzenCard>
+}
+
+@code {
+    private ParentDashboardDto? dashboard;
+    private bool loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var parentId = await PortalService.ResolveParentIdForCurrentUserAsync();
+        if (parentId is not null)
+        {
+            dashboard = await PortalService.GetParentDashboardAsync(parentId.Value);
+        }
+        loading = false;
+    }
+}

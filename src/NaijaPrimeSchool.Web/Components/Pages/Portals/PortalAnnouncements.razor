@@ -1,0 +1,101 @@
+@page "/portal/announcements"
+@attribute [Authorize(Roles = $"{Roles.Parent},{Roles.Student},{Roles.SuperAdmin},{Roles.HeadTeacher}")]
+@rendermode InteractiveServer
+
+@inject IAnnouncementService AnnouncementService
+@inject NavigationManager Nav
+
+<PageTitle>Announcements · Naija Prime School</PageTitle>
+
+<div class="nps-page-header">
+    <div>
+        <h1>Announcements</h1>
+        <p>Notices the school has posted to your portal. Click a card to mark it as read.</p>
+    </div>
+    <div class="nps-page-actions">
+        <RadzenButton Text="Back" Icon="arrow_back" Variant="Variant.Flat" ButtonStyle="ButtonStyle.Light"
+                      Click="@(() => Nav.NavigateTo(BackUrl()))" />
+    </div>
+</div>
+
+@if (loading)
+{
+    <RadzenCard class="nps-card"><p>Loading...</p></RadzenCard>
+}
+else if (announcements.Count == 0)
+{
+    <RadzenCard class="nps-card">
+        <h3>No announcements right now.</h3>
+        <p>When the school posts a notice for you, it will appear here.</p>
+    </RadzenCard>
+}
+else
+{
+    <div class="nps-announcement-list">
+        @foreach (var a in announcements)
+        {
+            <RadzenCard class="@($"nps-card nps-announcement {(a.ReadByCurrentUser ? "is-read" : "is-unread")}")">
+                <div class="nps-announcement__head">
+                    <div>
+                        @if (a.IsPinned)
+                        {
+                            <RadzenBadge Text="Pinned" BadgeStyle="BadgeStyle.Warning" Variant="Variant.Flat" />
+                        }
+                        <RadzenBadge Text="@a.CategoryName" BadgeStyle="BadgeStyle.Info" Variant="Variant.Flat" />
+                        @if (!a.ReadByCurrentUser)
+                        {
+                            <RadzenBadge Text="New" BadgeStyle="BadgeStyle.Success" Variant="Variant.Flat" />
+                        }
+                        <h3 style="margin: 0.25rem 0;">@a.Title</h3>
+                        <small style="color: var(--nps-ink-500);">
+                            @(a.PostedByName ?? "School office") · @a.PublishedOn?.ToString("dd MMM yyyy")
+                            @(a.TargetSchoolClassName is null ? "" : " · " + a.TargetSchoolClassName)
+                        </small>
+                    </div>
+                </div>
+                <div class="nps-announcement__body">@((MarkupString)FormatBody(a.Body))</div>
+                @if (!a.ReadByCurrentUser)
+                {
+                    <div class="nps-announcement__actions">
+                        <RadzenButton Text="Mark as read" Icon="check" Size="ButtonSize.Small" Variant="Variant.Flat"
+                                      Click="@(() => MarkReadAsync(a))" />
+                    </div>
+                }
+            </RadzenCard>
+        }
+    </div>
+}
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = default!;
+    private IReadOnlyList<AnnouncementDto> announcements = [];
+    private bool loading = true;
+    private bool isParent;
+    private bool isStudent;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var user = (await AuthState).User;
+        isParent = user.IsInRole(Roles.Parent);
+        isStudent = user.IsInRole(Roles.Student);
+        announcements = await AnnouncementService.ListForCurrentUserAsync(50);
+        loading = false;
+    }
+
+    private string BackUrl() =>
+        isStudent ? "/portal/student" : (isParent ? "/portal/parent" : "/");
+
+    private async Task MarkReadAsync(AnnouncementDto a)
+    {
+        await AnnouncementService.MarkAsReadAsync(a.Id);
+        announcements = await AnnouncementService.ListForCurrentUserAsync(50);
+    }
+
+    private static string FormatBody(string body)
+    {
+        // Preserve paragraph breaks; escape angle brackets so we don't render
+        // raw HTML the user pasted into the body field.
+        var encoded = System.Net.WebUtility.HtmlEncode(body);
+        return encoded.Replace("\r\n", "\n").Replace("\n", "<br />");
+    }
+}

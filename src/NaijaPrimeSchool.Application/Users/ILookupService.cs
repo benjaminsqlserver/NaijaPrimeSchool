@@ -39,4 +39,7 @@ public interface ILookupService
     Task<IReadOnlyList<LookupDto>> GetStockMovementTypesAsync(CancellationToken ct = default);
     Task<IReadOnlyList<LookupDto>> GetActiveSuppliersAsync(CancellationToken ct = default);
     Task<IReadOnlyList<LookupDto>> GetStoreItemsAsync(string? searchTerm = null, CancellationToken ct = default);
+
+    Task<IReadOnlyList<LookupDto>> GetAnnouncementCategoriesAsync(CancellationToken ct = default);
+    Task<IReadOnlyList<LookupDto>> GetAnnouncementAudiencesAsync(CancellationToken ct = default);
 }

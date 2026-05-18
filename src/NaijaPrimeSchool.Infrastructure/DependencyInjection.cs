@@ -4,9 +4,11 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using NaijaPrimeSchool.Application.Academics;
 using NaijaPrimeSchool.Application.Attendance;
+using NaijaPrimeSchool.Application.Communications;
 using NaijaPrimeSchool.Application.Family;
 using NaijaPrimeSchool.Application.Finance;
 using NaijaPrimeSchool.Application.Inventory;
+using NaijaPrimeSchool.Application.Portals;
 using NaijaPrimeSchool.Application.Results;
 using NaijaPrimeSchool.Application.Users;
 using NaijaPrimeSchool.Domain.Identity;
@@ -82,6 +84,9 @@ public static class DependencyInjection
         services.AddScoped<ISupplierService, SupplierService>();
         services.AddScoped<IStoreItemService, StoreItemService>();
         services.AddScoped<IStockMovementService, StockMovementService>();
+
+        services.AddScoped<IAnnouncementService, AnnouncementService>();
+        services.AddScoped<IPortalService, PortalService>();
 
         return services;
     }

@@ -1,0 +1,105 @@
+@page "/portal/student/fees"
+@attribute [Authorize(Roles = $"{Roles.Student},{Roles.SuperAdmin},{Roles.HeadTeacher}")]
+@rendermode InteractiveServer
+
+@inject IPortalService PortalService
+@inject IInvoiceService InvoiceService
+@inject NavigationManager Nav
+
+<PageTitle>My fees · Naija Prime School</PageTitle>
+
+<div class="nps-page-header">
+    <div>
+        <h1>My fees</h1>
+        <p>Your invoice history and outstanding balance. Settle outstanding fees at the bursary.</p>
+    </div>
+    <div class="nps-page-actions">
+        <RadzenButton Text="Back to portal" Icon="arrow_back" Variant="Variant.Flat" ButtonStyle="ButtonStyle.Light"
+                      Click="@(() => Nav.NavigateTo("/portal/student"))" />
+    </div>
+</div>
+
+@if (loading)
+{
+    <RadzenCard class="nps-card"><p>Loading...</p></RadzenCard>
+}
+else if (ledger is null)
+{
+    <RadzenCard class="nps-card"><h3>No invoices have been issued to you yet.</h3></RadzenCard>
+}
+else
+{
+    <div class="nps-stat-grid">
+        <RadzenCard class="nps-stat-card"><small>Invoiced</small><strong>@ledger.TotalInvoiced.ToString("N2")</strong></RadzenCard>
+        <RadzenCard class="nps-stat-card"><small>Paid</small><strong>@ledger.TotalPaid.ToString("N2")</strong></RadzenCard>
+        <RadzenCard class="nps-stat-card"><small>Outstanding</small><strong>@ledger.OutstandingBalance.ToString("N2")</strong></RadzenCard>
+    </div>
+
+    <RadzenCard class="nps-card" Style="margin-top:1rem;">
+        <h3>Invoices</h3>
+        <RadzenDataGrid TItem="InvoiceDto" Data="@ledger.Invoices" PageSize="15" AllowPaging="true">
+            <Columns>
+                <RadzenDataGridColumn TItem="InvoiceDto" Title="Number" Property="InvoiceNumber" />
+                <RadzenDataGridColumn TItem="InvoiceDto" Title="Term" Property="TermName" />
+                <RadzenDataGridColumn TItem="InvoiceDto" Title="Issued" Width="120px">
+                    <Template Context="i">@i.IssuedOn.ToString("dd MMM yyyy")</Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="InvoiceDto" Title="Total" Width="120px">
+                    <Template Context="i">@i.AmountDue.ToString("N2")</Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="InvoiceDto" Title="Balance" Width="120px">
+                    <Template Context="i"><strong>@i.Balance.ToString("N2")</strong></Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="InvoiceDto" Title="Status" Width="140px">
+                    <Template Context="i"><RadzenBadge Text="@i.InvoiceStatusName" BadgeStyle="@StatusStyle(i.InvoiceStatusCode)" Variant="Variant.Flat" /></Template>
+                </RadzenDataGridColumn>
+            </Columns>
+        </RadzenDataGrid>
+    </RadzenCard>
+
+    @if (ledger.Payments.Count > 0)
+    {
+        <RadzenCard class="nps-card" Style="margin-top:1rem;">
+            <h3>Payments</h3>
+            <RadzenDataGrid TItem="PaymentDto" Data="@ledger.Payments" PageSize="15" AllowPaging="true">
+                <Columns>
+                    <RadzenDataGridColumn TItem="PaymentDto" Title="Receipt" Property="ReceiptNumber" />
+                    <RadzenDataGridColumn TItem="PaymentDto" Title="Date" Width="120px">
+                        <Template Context="p">@p.PaidOn.ToString("dd MMM yyyy")</Template>
+                    </RadzenDataGridColumn>
+                    <RadzenDataGridColumn TItem="PaymentDto" Title="Method" Property="PaymentMethodName" />
+                    <RadzenDataGridColumn TItem="PaymentDto" Title="Amount" Width="140px">
+                        <Template Context="p"><strong>@p.Amount.ToString("N2")</strong></Template>
+                    </RadzenDataGridColumn>
+                    <RadzenDataGridColumn TItem="PaymentDto" Title="Status" Width="140px">
+                        <Template Context="p"><RadzenBadge Text="@p.PaymentStatusName" Variant="Variant.Flat" /></Template>
+                    </RadzenDataGridColumn>
+                </Columns>
+            </RadzenDataGrid>
+        </RadzenCard>
+    }
+}
+
+@code {
+    private StudentLedgerDto? ledger;
+    private bool loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var studentId = await PortalService.ResolveStudentIdForCurrentUserAsync();
+        if (studentId is not null)
+        {
+            ledger = await InvoiceService.GetStudentLedgerAsync(studentId.Value);
+        }
+        loading = false;
+    }
+
+    private static BadgeStyle StatusStyle(string? code) => code switch
+    {
+        "PAID" => BadgeStyle.Success,
+        "PARTIAL" => BadgeStyle.Warning,
+        "OVERDUE" => BadgeStyle.Danger,
+        "CANCELLED" => BadgeStyle.Secondary,
+        _ => BadgeStyle.Info,
+    };
+}
