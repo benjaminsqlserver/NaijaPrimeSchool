@@ -103,6 +103,32 @@
             </div>
         </div>
 
+        <h3 style="margin: 1.5rem 0 1rem;">Portal sign-in</h3>
+        <p style="color: var(--nps-ink-500); margin-top:-0.5rem; margin-bottom: 1rem;">
+            A user account is created automatically for this pupil in the Student role. Older pupils
+            can use these credentials to sign in to the student portal.
+        </p>
+        <div class="nps-form-grid">
+            <div class="nps-field">
+                <label>Username *</label>
+                <RadzenTextBox @bind-Value="form.UserName" Placeholder="e.g. john.doe" />
+                <ValidationMessage For="() => form.UserName" />
+            </div>
+            <div class="nps-field">
+                <label>Email *</label>
+                <RadzenTextBox @bind-Value="form.Email" Placeholder="student@example.com" />
+                <ValidationMessage For="() => form.Email" />
+            </div>
+            <div class="nps-field nps-span-2">
+                <label>Initial password *</label>
+                <RadzenPassword @bind-Value="form.Password" />
+                <ValidationMessage For="() => form.Password" />
+                <small style="color: var(--nps-ink-500); margin-top: 0.25rem;">
+                    Must be at least 8 characters with an uppercase, lowercase, digit and a special character.
+                </small>
+            </div>
+        </div>
+
         <div class="nps-form-actions">
             <RadzenButton Text="Cancel" ButtonType="ButtonType.Button"
                           ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat"
@@ -155,6 +181,16 @@
         public string? MedicalNotes { get; set; }
 
         public Guid? InitialClassId { get; set; }
+
+        [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(64, MinimumLength = 3)]
+        public string UserName { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.EmailAddress, System.ComponentModel.DataAnnotations.StringLength(256)]
+        public string Email { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(100, MinimumLength = 8)]
+        [System.ComponentModel.DataAnnotations.DataType(System.ComponentModel.DataAnnotations.DataType.Password)]
+        public string Password { get; set; } = string.Empty;
     }
 
     protected override async Task OnInitializedAsync()
@@ -192,6 +228,9 @@
                 Allergies = form.Allergies,
                 MedicalNotes = form.MedicalNotes,
                 InitialClassId = form.InitialClassId,
+                UserName = form.UserName,
+                Email = form.Email,
+                Password = form.Password,
             });
 
             if (result.Succeeded)

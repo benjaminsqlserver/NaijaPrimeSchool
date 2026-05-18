@@ -53,8 +53,8 @@ public class CreateParentRequest
     [Phone, StringLength(30)]
     public string? AlternatePhone { get; set; }
 
-    [EmailAddress, StringLength(256)]
-    public string? Email { get; set; }
+    [Required, EmailAddress, StringLength(256)]
+    public string Email { get; set; } = string.Empty;
 
     [StringLength(300)]
     public string? ResidentialAddress { get; set; }
@@ -66,6 +66,13 @@ public class CreateParentRequest
     public string? Employer { get; set; }
 
     public bool IsActive { get; set; } = true;
+
+    [Required, StringLength(64, MinimumLength = 3)]
+    public string UserName { get; set; } = string.Empty;
+
+    [Required, StringLength(100, MinimumLength = 8)]
+    [DataType(DataType.Password)]
+    public string Password { get; set; } = string.Empty;
 }
 
 public class UpdateParentRequest

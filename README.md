@@ -2,7 +2,7 @@
 
 A modern school management system for Nigerian primary schools, built with **.NET 10**, **Blazor Auto**, **Clean Architecture**, **SQL Server**, and **Radzen Blazor Components**.
 
-Eight sprints have shipped. **Sprint 1** delivered the authentication & authorization foundation: user accounts, role-based access control, login/logout, activation/deactivation, and the SuperAdmin user-management screens. **Sprint 2** built the academic domain on top of that foundation: sessions, terms, class arms, subjects, timetable periods, and a click-to-edit weekly timetable grid. **Sprint 3** plugged students and parents into that academic structure: pupil profiles, parent/guardian directory, parent-to-pupil linkage with relationship + primary-contact + pickup flags, and per-session enrolment with a withdrawal lifecycle. **Sprint 4** lands attendance: a daily class register, per-subject session attendance off the timetable, the AttendanceStatus lookup, a submit/reopen lifecycle, and a per-class percentage summary. **Sprint 5** closes the academic loop: a per-(term, class, subject) gradebook of TermAssessments and AssessmentScores, a result computation pipeline that produces SubjectResults with grade bands and class positions, and per-(pupil, term) ReportCards with affective and psychomotor ratings, attendance roll-up, and a publish/unpublish lifecycle. **Sprint 5b** wires up pupil photographs: a dedicated upload pipeline backed by a reusable `StudentAvatar` Razor component, with the photo (or a coloured initials tile fallback) shown next to every pupil row across the Students, Enrolments, daily- and subject-attendance, score-sheet, and report-card pages. **Sprint 6** lays the financial spine: per-(term, class level) `FeeSchedule`s with line items, one-click invoice issuance to every actively-enrolled pupil, multi-allocation payments with auto-allocate, refund flow, and a bursar dashboard summarising invoiced, collected and outstanding amounts. **Sprint 7** turns the storeroom on: a `StoreItem` catalog tracked by `ItemCategory` and `UnitOfMeasure`, a movement-log of `StockMovement` rows (purchases, issuances, openings, write-offs, adjustments) typed by a directional `StockMovementType` lookup, a `Supplier` directory, a low-stock dashboard, and audit-safe reversal that undoes an entry's effect on `QuantityOnHand` when soft-deleted. **Sprint 8** finally turns the system outward to the families: a parent portal listing every linked ward with class, outstanding balance, attendance percentage, and report-card count plus a tabbed ward-detail page; a student portal with today's timetable, attendance summary, results history, and fee ledger; and an announcements pipeline — `AnnouncementCategory`, `AnnouncementAudience` (Everyone / Parents / Students / Specific Class) and per-user `AnnouncementRead` tracking — that lets the head teacher broadcast scoped, expiring, pin-to-top notices into both portals with live unread counts.
+Nine sprints have shipped. **Sprint 1** delivered the authentication & authorization foundation: user accounts, role-based access control, login/logout, activation/deactivation, and the SuperAdmin user-management screens. **Sprint 2** built the academic domain on top of that foundation: sessions, terms, class arms, subjects, timetable periods, and a click-to-edit weekly timetable grid. **Sprint 3** plugged students and parents into that academic structure: pupil profiles, parent/guardian directory, parent-to-pupil linkage with relationship + primary-contact + pickup flags, and per-session enrolment with a withdrawal lifecycle. **Sprint 4** lands attendance: a daily class register, per-subject session attendance off the timetable, the AttendanceStatus lookup, a submit/reopen lifecycle, and a per-class percentage summary. **Sprint 5** closes the academic loop: a per-(term, class, subject) gradebook of TermAssessments and AssessmentScores, a result computation pipeline that produces SubjectResults with grade bands and class positions, and per-(pupil, term) ReportCards with affective and psychomotor ratings, attendance roll-up, and a publish/unpublish lifecycle. **Sprint 5b** wires up pupil photographs: a dedicated upload pipeline backed by a reusable `StudentAvatar` Razor component, with the photo (or a coloured initials tile fallback) shown next to every pupil row across the Students, Enrolments, daily- and subject-attendance, score-sheet, and report-card pages. **Sprint 6** lays the financial spine: per-(term, class level) `FeeSchedule`s with line items, one-click invoice issuance to every actively-enrolled pupil, multi-allocation payments with auto-allocate, refund flow, and a bursar dashboard summarising invoiced, collected and outstanding amounts. **Sprint 7** turns the storeroom on: a `StoreItem` catalog tracked by `ItemCategory` and `UnitOfMeasure`, a movement-log of `StockMovement` rows (purchases, issuances, openings, write-offs, adjustments) typed by a directional `StockMovementType` lookup, a `Supplier` directory, a low-stock dashboard, and audit-safe reversal that undoes an entry's effect on `QuantityOnHand` when soft-deleted. **Sprint 8** finally turns the system outward to the families: a parent portal listing every linked ward with class, outstanding balance, attendance percentage, and report-card count plus a tabbed ward-detail page; a student portal with today's timetable, attendance summary, results history, and fee ledger; and an announcements pipeline — `AnnouncementCategory`, `AnnouncementAudience` (Everyone / Parents / Students / Specific Class) and per-user `AnnouncementRead` tracking — that lets the head teacher broadcast scoped, expiring, pin-to-top notices into both portals with live unread counts. **Sprint 9** closes the last manual step: creating a parent or a student now provisions a matching `ApplicationUser` in the **Parent** / **Student** role inside the same unit of work and stamps the new user's id onto `Parent.UserId` / `Student.UserId`, so the family can sign in straight away and the parent / student portal loads without an admin follow-up.
 
 Implementation walk-throughs for each sprint live at the repo root:
 
@@ -15,6 +15,7 @@ Implementation walk-throughs for each sprint live at the repo root:
 - `Sprint 6 - Implementation Guide.docx`
 - `Sprint 7 - Implementation Guide.docx`
 - `Sprint 8 - Implementation Guide.docx`
+- `Sprint 9 - Implementation Guide.docx`
 
 ---
 
@@ -203,6 +204,23 @@ Implementation walk-throughs for each sprint live at the repo root:
 - **Lookup tables (no enums)**
   - `AnnouncementCategories` (7 seeded: GEN, ACAD, FIN, EVENT, HOL, HEALTH, EMERG), `AnnouncementAudiences` (4 seeded: ALL, PARENT, STUDENT, CLASS — the last with `RequiresTargetClass = true`) — services key off `Code` and the `RequiresTargetClass` flag drives editor/validator behaviour, so audience labels can be renamed without breaking logic
 - **Pages added** — admin: `/announcements`, `/announcements/new`, `/announcements/{id}` (gated to **SuperAdmin** + **HeadTeacher**). Parent portal: `/portal/parent`, `/portal/parent/wards/{id}` (gated to **Parent** + the two admin roles). Student portal: `/portal/student`, `/portal/student/profile`, `/portal/student/results`, `/portal/student/attendance`, `/portal/student/fees` (gated to **Student** + the two admin roles). Shared: `/portal/announcements` (gated to **Parent** + **Student** + the two admin roles). The previously-disabled *My Children* navigation placeholder is replaced with three new role-scoped panels.
+
+## Sprint 9 — Auto-provisioned portal accounts ✅
+
+- **Create-parent provisions a login**
+  - `/parents/new` now collects a **Username** and **Initial password** alongside the existing profile fields; `Email` becomes required (Identity needs a unique email)
+  - `ParentService.CreateAsync` runs as a single unit of work: validate the request, create the `ApplicationUser`, assign the **Parent** role, then insert the `Parent` row with `UserId = user.Id`
+  - Username + email uniqueness are checked up-front so the form returns a clean error instead of letting Identity throw a generic `DuplicateUserName`
+  - If role assignment fails after the user is created, the half-built user is deleted to avoid orphaning an account
+- **Create-student provisions a login**
+  - `/students/new` mirrors the parent flow, capturing **Username**, **Email** and **Initial password** in a new *Portal sign-in* section
+  - `StudentService.CreateAsync` keeps its existing guards (admission number uniqueness, DOB-before-admission, optional initial class) running before any Identity work, so a validation failure never leaves a dangling user
+  - The `ApplicationUser` is created in the **Student** role; `Student.UserId` is stamped before `SaveChanges`
+- **Portals light up on first sign-in**
+  - `PortalService.ResolveParentIdForCurrentUserAsync` and `ResolveStudentIdForCurrentUserAsync` already keyed off `Parent.UserId` / `Student.UserId`; once those columns are populated the dashboards, ward detail, today's timetable, fees and results pages all resolve without any portal-layer changes
+- **No new tables, no migration**
+  - `Parent.UserId` and `Student.UserId` were added in sprint 3; the `Parent` and `Student` roles were seeded in sprint 1's `DatabaseInitializer.SeedRolesAsync`. Sprint 9 wires the two together for new rows only — existing rows with `UserId = NULL` keep the legacy manual-link behaviour.
+- **Files touched** — `Application/Family/Dtos/ParentDtos.cs`, `Application/Family/Dtos/StudentDtos.cs`, `Infrastructure/Services/ParentService.cs`, `Infrastructure/Services/StudentService.cs`, `Web/Components/Pages/Family/CreateParent.razor`, `Web/Components/Pages/Family/CreateStudent.razor`. Walk-through: `Sprint 9 - Implementation Guide.docx` (+ markdown companion).
 
 ## Cross-cutting (every sprint)
 
@@ -467,6 +485,7 @@ User management screens are gated behind the `ManageUsers` policy, which require
 | `tools/generate_sprint6_guide.py` | Generator for `Sprint 6 - Implementation Guide.docx` |
 | `tools/generate_sprint7_guide.py` | Generator for `Sprint 7 - Implementation Guide.docx` |
 | `tools/generate_sprint8_guide.py` | Generator for `Sprint 8 - Implementation Guide.docx` |
+| `tools/generate_sprint9_guide.py` | Generator for `Sprint 9 - Implementation Guide.docx` |
 
 ---
 
@@ -483,6 +502,7 @@ Delivered:
 - ✅ **Sprint 6** — Fees, invoices, receipts & bursar workflows (fee schedules, invoice issuance, multi-allocation payments with refund, bursar dashboard)
 - ✅ **Sprint 7** — Store & inventory management for the storekeeper (catalog, supplier directory, movement log with NPS/STK numbering, reversible soft-delete, low-stock dashboard)
 - ✅ **Sprint 8** — Parent & student portals + announcements (ward grid + tabbed detail, student dashboard with today's timetable, scoped announcements with per-user read tracking)
+- ✅ **Sprint 9** — Auto-provisioned portal accounts (create-parent and create-student now provision the matching ApplicationUser in the Parent / Student role and stamp `Parent.UserId` / `Student.UserId` so the portals light up on first sign-in)
 
 Planned for upcoming sprints:
 
