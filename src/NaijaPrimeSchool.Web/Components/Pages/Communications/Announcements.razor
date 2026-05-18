@@ -117,10 +117,12 @@
     private bool? isPublished;
     private bool loading = true;
 
-    private (string Text, bool? Value)[] statusOptions =
+    private record StatusOption(string Text, bool? Value);
+
+    private StatusOption[] statusOptions =
     [
-        ("Published", true),
-        ("Draft",     false),
+        new("Published", true),
+        new("Draft",     false),
     ];
 
     protected override async Task OnInitializedAsync()
