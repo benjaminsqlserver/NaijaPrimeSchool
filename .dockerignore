@@ -1,0 +1,23 @@
+**/bin/
+**/obj/
+**/out/
+**/.vs/
+**/.vscode/
+**/.idea/
+**/node_modules/
+
+.git/
+.github/
+.claude/
+
+*.md
+*.pdf
+*.docx
+LICENSE
+
+tools/
+
+# Local SQLite artifacts / secrets, not needed for a SQL Server container image
+src/NaijaPrimeSchool.Web/Data/*.db
+**/appsettings.Development.json
+**/*.user
