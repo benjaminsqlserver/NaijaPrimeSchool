@@ -73,9 +73,41 @@ app.MapRazorComponents<App>()
 
 app.MapAdditionalIdentityEndpoints();
 
-using (var scope = app.Services.CreateScope())
+// Run migrations/seeding in the background *after* the app has started listening,
+// so Kestrel binds the port immediately and platform health checks (Fly, Azure, etc.)
+// don't see the instance as down while we wait on the database. Retries with backoff
+// so a slow-to-start or momentarily unreachable database doesn't crash the process.
+app.Lifetime.ApplicationStarted.Register(() =>
 {
-    await DatabaseInitializer.InitializeAsync(scope.ServiceProvider);
-}
+    _ = Task.Run(async () =>
+    {
+        using var scope = app.Services.CreateScope();
+        var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("Startup");
+
+        const int maxAttempts = 8;
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                await DatabaseInitializer.InitializeAsync(scope.ServiceProvider);
+                return;
+            }
+            catch (Exception ex) when (attempt < maxAttempts)
+            {
+                var delay = TimeSpan.FromSeconds(Math.Min(30, attempt * 5));
+                logger.LogWarning(ex,
+                    "Database initialization failed (attempt {Attempt}/{Max}). Retrying in {Delay}...",
+                    attempt, maxAttempts, delay);
+                await Task.Delay(delay);
+            }
+            catch (Exception ex)
+            {
+                logger.LogCritical(ex,
+                    "Database initialization failed after {Max} attempts. The app will keep running, " +
+                    "but data access will fail until connectivity to the database is restored.", maxAttempts);
+            }
+        }
+    });
+});
 
 app.Run();
