@@ -1,16 +1,20 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using NaijaPrimeSchool.Application.Common;
 using NaijaPrimeSchool.Application.Communications;
 using NaijaPrimeSchool.Application.Communications.Dtos;
 using NaijaPrimeSchool.Domain.Communications;
 using NaijaPrimeSchool.Domain.Identity;
+using NaijaPrimeSchool.Infrastructure.Notifications;
 using NaijaPrimeSchool.Infrastructure.Persistence;
 
 namespace NaijaPrimeSchool.Infrastructure.Services;
 
 public class AnnouncementService(
     ApplicationDbContext db,
-    ICurrentUser currentUser) : IAnnouncementService
+    ICurrentUser currentUser,
+    INotificationService notifications,
+    IOptions<NotificationOptions> notificationOptions) : IAnnouncementService
 {
     public async Task<IReadOnlyList<AnnouncementDto>> ListAsync(AnnouncementFilter filter, CancellationToken ct = default)
     {
@@ -59,7 +63,14 @@ public class AnnouncementService(
                 .ToListAsync(ct)
             : [];
 
-        return rows.Select(a => MapDto(a, reads.GetValueOrDefault(a.Id), myReads.Contains(a.Id))).ToList();
+        var notificationCounts = await notifications.GetCountsByAnnouncementAsync(ids, ct);
+
+        return rows.Select(a =>
+        {
+            var dto = MapDto(a, reads.GetValueOrDefault(a.Id), myReads.Contains(a.Id));
+            dto.Notifications = notificationCounts.GetValueOrDefault(a.Id) ?? new NotificationCounts();
+            return dto;
+        }).ToList();
     }
 
     public async Task<AnnouncementDto?> GetByIdAsync(Guid id, CancellationToken ct = default)
@@ -100,6 +111,7 @@ public class AnnouncementService(
         };
         db.Announcements.Add(a);
         await db.SaveChangesAsync(ct);
+        if (a.IsPublished) await QueueUnreadRemindersAsync(a.Id, ct);
         return OperationResult<Guid>.Success(a.Id);
     }
 
@@ -131,6 +143,7 @@ public class AnnouncementService(
         a.IsPublished = true;
         a.PublishedOn = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
+        await QueueUnreadRemindersAsync(a.Id, ct);
         return OperationResult.Success();
     }
 
@@ -231,6 +244,15 @@ public class AnnouncementService(
             .Where(a => !db.AnnouncementReads.Any(r => r.AnnouncementId == a.Id && r.UserId == userId));
 
         return await unread.CountAsync(ct);
+    }
+
+    // Publishing already succeeded by the time this runs, so a queueing
+    // problem (e.g. both channels switched off) must not turn it into a
+    // failure; the head teacher can still queue from the grid later.
+    private async Task QueueUnreadRemindersAsync(Guid announcementId, CancellationToken ct)
+    {
+        if (!notificationOptions.Value.AutoQueueOnPublish) return;
+        await notifications.QueueForAnnouncementAsync(announcementId, sendNow: false, ct);
     }
 
     private async Task<IReadOnlyList<string>> ResolveAudienceCodesForCurrentUserAsync(CancellationToken ct)

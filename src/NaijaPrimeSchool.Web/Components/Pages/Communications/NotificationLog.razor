@@ -1,0 +1,247 @@
+@page "/announcements/notifications"
+@attribute [Authorize(Roles = $"{Roles.SuperAdmin},{Roles.HeadTeacher}")]
+@rendermode InteractiveServer
+
+@inject INotificationService NotificationService
+@inject IAnnouncementService AnnouncementService
+@inject ILookupService Lookups
+@inject NavigationManager Nav
+@inject NotificationService Notification
+
+<PageTitle>Notification log · Naija Prime School</PageTitle>
+
+<div class="nps-page-header">
+    <div>
+        <h1>Notification log</h1>
+        <p>Email and SMS reminders sent to parents and students who had not yet read an announcement in the portal.</p>
+    </div>
+    <div class="nps-page-actions">
+        <RadzenButton Text="Back to announcements" Icon="arrow_back" ButtonStyle="ButtonStyle.Light"
+                      Click="@(() => Nav.NavigateTo("/announcements"))" />
+        <RadzenButton Text="Refresh" Icon="refresh" ButtonStyle="ButtonStyle.Light" Click="@LoadAsync" />
+        <RadzenButton Text="Retry all failed" Icon="replay" ButtonStyle="ButtonStyle.Warning"
+                      Disabled="@(failedCount == 0)" Click="@RetryAllFailedAsync" />
+    </div>
+</div>
+
+<div class="nps-stat-grid" style="margin: 0 0 1rem;">
+    <div class="nps-stat-card">
+        <div class="nps-stat-icon"><RadzenIcon Icon="mark_email_read" /></div>
+        <div>
+            <div class="nps-stat-label">Sent</div>
+            <div class="nps-stat-value">@CountOf("SENT")</div>
+        </div>
+    </div>
+    <div class="nps-stat-card">
+        <div class="nps-stat-icon" style="background: #e0ecff; color: #1d4ed8;"><RadzenIcon Icon="schedule_send" /></div>
+        <div>
+            <div class="nps-stat-label">Pending</div>
+            <div class="nps-stat-value">@CountOf("PENDING")</div>
+        </div>
+    </div>
+    <div class="nps-stat-card">
+        <div class="nps-stat-icon" style="background: #fde2e2; color: #d64545;"><RadzenIcon Icon="error" /></div>
+        <div>
+            <div class="nps-stat-label">Failed</div>
+            <div class="nps-stat-value">@failedCount</div>
+        </div>
+    </div>
+    <div class="nps-stat-card">
+        <div class="nps-stat-icon" style="background: #eef0f3; color: #4b5563;"><RadzenIcon Icon="do_not_disturb_on" /></div>
+        <div>
+            <div class="nps-stat-label">Skipped (read / withdrawn)</div>
+            <div class="nps-stat-value">@CountOf("SKIPPED")</div>
+        </div>
+    </div>
+</div>
+
+<RadzenCard class="nps-card" Style="margin-bottom:1rem;">
+    <div class="nps-filter-bar">
+        <div class="nps-field">
+            <label>Search</label>
+            <RadzenTextBox @bind-Value="search" Placeholder="Recipient, email, phone or title"
+                           Change="@(_ => LoadAsync())" Style="min-width: 260px;" />
+        </div>
+        <div class="nps-field">
+            <label>Announcement</label>
+            <RadzenDropDown TValue="Guid?" Data="@announcements" TextProperty="Title" ValueProperty="Id"
+                            @bind-Value="AnnouncementId" AllowClear="true" AllowFiltering="true" Placeholder="All"
+                            Change="@(_ => LoadAsync())" Style="min-width: 260px;" />
+        </div>
+        <div class="nps-field">
+            <label>Channel</label>
+            <RadzenDropDown TValue="Guid?" Data="@channels" TextProperty="Name" ValueProperty="Id"
+                            @bind-Value="channelId" AllowClear="true" Placeholder="All"
+                            Change="@(_ => LoadAsync())" Style="min-width: 140px;" />
+        </div>
+        <div class="nps-field">
+            <label>Status</label>
+            <RadzenDropDown TValue="Guid?" Data="@statuses" TextProperty="Name" ValueProperty="Id"
+                            @bind-Value="statusId" AllowClear="true" Placeholder="All"
+                            Change="@(_ => LoadAsync())" Style="min-width: 140px;" />
+        </div>
+    </div>
+</RadzenCard>
+
+<RadzenCard class="nps-card">
+    <RadzenDataGrid TItem="AnnouncementNotificationDto" Data="@rows" IsLoading="@loading"
+                    AllowPaging="true" PageSize="25" AllowSorting="true"
+                    ExpandMode="DataGridExpandMode.Single"
+                    EmptyText="No notifications match your filters.">
+        <Template Context="n">
+            <div style="padding: 0.5rem 1rem;">
+                @if (n.Subject is not null)
+                {
+                    <div><strong>Subject:</strong> @n.Subject</div>
+                }
+                @if (n.Message is not null)
+                {
+                    <pre style="white-space: pre-wrap; font-family: inherit; margin: 0.5rem 0 0;">@n.Message</pre>
+                }
+                else
+                {
+                    <em style="color: var(--nps-ink-500);">Message text is recorded when the notification is sent.</em>
+                }
+            </div>
+        </Template>
+        <Columns>
+            <RadzenDataGridColumn TItem="AnnouncementNotificationDto" Title="Recipient" Property="RecipientName">
+                <Template Context="n">
+                    <strong>@n.RecipientName</strong>
+                    <br /><small style="color: var(--nps-ink-500);">@n.Destination</small>
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="AnnouncementNotificationDto" Title="Announcement" Property="AnnouncementTitle" />
+            <RadzenDataGridColumn TItem="AnnouncementNotificationDto" Title="Channel" Property="ChannelName" Width="110px">
+                <Template Context="n">
+                    <RadzenIcon Icon="@(n.ChannelCode == "SMS" ? "sms" : "mail")" Style="font-size:16px; vertical-align:middle;" />
+                    @n.ChannelName
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="AnnouncementNotificationDto" Title="Status" Property="StatusName" Width="130px">
+                <Template Context="n">
+                    <RadzenBadge Text="@n.StatusName" BadgeStyle="@BadgeFor(n.StatusCode)" Variant="Variant.Flat" />
+                    @if (n.AttemptCount > 1)
+                    {
+                        <br /><small>@n.AttemptCount attempts</small>
+                    }
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="AnnouncementNotificationDto" Title="When" Property="ScheduledFor" Width="200px">
+                <Template Context="n">
+                    @if (n.SentOn is { } sent)
+                    {
+                        <span>Sent @sent.ToLocalTime().ToString("dd MMM yyyy HH:mm")</span>
+                    }
+                    else if (n.StatusCode == "PENDING")
+                    {
+                        <span>Due @n.ScheduledFor.ToLocalTime().ToString("dd MMM yyyy HH:mm")</span>
+                    }
+                    else if (n.LastAttemptOn is { } tried)
+                    {
+                        <span>Tried @tried.ToLocalTime().ToString("dd MMM yyyy HH:mm")</span>
+                    }
+                    else
+                    {
+                        <span style="color: var(--nps-ink-500);">—</span>
+                    }
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="AnnouncementNotificationDto" Title="Note" Property="LastError">
+                <Template Context="n">
+                    <small title="@n.LastError" style="color: @(n.StatusCode == "FAILED" ? "#d64545" : "var(--nps-ink-500)");">@n.LastError</small>
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="AnnouncementNotificationDto" Title="" Width="70px" Sortable="false" TextAlign="TextAlign.Right">
+                <Template Context="n">
+                    @if (n.StatusCode is "FAILED" or "SKIPPED")
+                    {
+                        <RadzenButton Icon="replay" Size="ButtonSize.Small" Variant="Variant.Flat" ButtonStyle="ButtonStyle.Warning"
+                                      Click="@(() => RetryAsync(n))" title="Queue again now" />
+                    }
+                </Template>
+            </RadzenDataGridColumn>
+        </Columns>
+    </RadzenDataGrid>
+</RadzenCard>
+
+@code {
+    [SupplyParameterFromQuery(Name = "announcementId")] public Guid? AnnouncementId { get; set; }
+
+    private IReadOnlyList<AnnouncementNotificationDto> rows = [];
+    private IReadOnlyList<AnnouncementDto> announcements = [];
+    private IReadOnlyList<LookupDto> channels = [];
+    private IReadOnlyList<LookupDto> statuses = [];
+    private string? search;
+    private Guid? channelId;
+    private Guid? statusId;
+    private bool loading = true;
+    private int failedCount;
+
+    protected override async Task OnInitializedAsync()
+    {
+        channels = await Lookups.GetNotificationChannelsAsync();
+        statuses = await Lookups.GetNotificationStatusesAsync();
+        announcements = await AnnouncementService.ListAsync(new AnnouncementFilter { IsPublished = true, IncludeExpired = true });
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        rows = await NotificationService.ListAsync(new NotificationFilter
+        {
+            Search = search,
+            AnnouncementId = AnnouncementId,
+            ChannelId = channelId,
+            StatusId = statusId,
+        });
+        failedCount = CountOf("FAILED");
+        loading = false;
+    }
+
+    private int CountOf(string statusCode) => rows.Count(r => r.StatusCode == statusCode);
+
+    private static BadgeStyle BadgeFor(string statusCode) => statusCode switch
+    {
+        "SENT" => BadgeStyle.Success,
+        "PENDING" => BadgeStyle.Info,
+        "FAILED" => BadgeStyle.Danger,
+        _ => BadgeStyle.Light,
+    };
+
+    private async Task RetryAsync(AnnouncementNotificationDto n)
+    {
+        var result = await NotificationService.RetryAsync(n.Id);
+        if (result.Succeeded)
+        {
+            Notification.Notify(new NotificationMessage { Severity = NotificationSeverity.Success, Summary = "Queued again" });
+            await LoadAsync();
+        }
+        else { ShowErrors(result.Errors); }
+    }
+
+    private async Task RetryAllFailedAsync()
+    {
+        var result = await NotificationService.RetryAllFailedAsync(AnnouncementId);
+        if (result.Succeeded)
+        {
+            Notification.Notify(new NotificationMessage
+            {
+                Severity = NotificationSeverity.Success,
+                Summary = "Queued again",
+                Detail = $"{result.Data} failed notification(s) re-queued.",
+            });
+            await LoadAsync();
+        }
+        else { ShowErrors(result.Errors); }
+    }
+
+    private void ShowErrors(IReadOnlyList<string> errors)
+    {
+        foreach (var e in errors)
+        {
+            Notification.Notify(new NotificationMessage { Severity = NotificationSeverity.Error, Summary = "Error", Detail = e });
+        }
+    }
+}
