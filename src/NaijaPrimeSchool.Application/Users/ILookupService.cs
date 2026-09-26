@@ -42,4 +42,6 @@ public interface ILookupService
 
     Task<IReadOnlyList<LookupDto>> GetAnnouncementCategoriesAsync(CancellationToken ct = default);
     Task<IReadOnlyList<LookupDto>> GetAnnouncementAudiencesAsync(CancellationToken ct = default);
+    Task<IReadOnlyList<LookupDto>> GetNotificationChannelsAsync(CancellationToken ct = default);
+    Task<IReadOnlyList<LookupDto>> GetNotificationStatusesAsync(CancellationToken ct = default);
 }

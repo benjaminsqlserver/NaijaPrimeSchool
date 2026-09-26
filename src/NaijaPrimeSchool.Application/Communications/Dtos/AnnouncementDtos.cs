@@ -34,6 +34,8 @@ public class AnnouncementDto
 
     public int ReadCount { get; set; }
     public bool ReadByCurrentUser { get; set; }
+
+    public NotificationCounts Notifications { get; set; } = new();
 }
 
 public class CreateAnnouncementRequest

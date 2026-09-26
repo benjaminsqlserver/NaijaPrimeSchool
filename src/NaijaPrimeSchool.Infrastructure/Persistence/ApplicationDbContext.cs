@@ -91,6 +91,9 @@ public class ApplicationDbContext(
     public DbSet<AnnouncementAudience> AnnouncementAudiences => Set<AnnouncementAudience>();
     public DbSet<Announcement> Announcements => Set<Announcement>();
     public DbSet<AnnouncementRead> AnnouncementReads => Set<AnnouncementRead>();
+    public DbSet<NotificationChannel> NotificationChannels => Set<NotificationChannel>();
+    public DbSet<NotificationStatus> NotificationStatuses => Set<NotificationStatus>();
+    public DbSet<AnnouncementNotification> AnnouncementNotifications => Set<AnnouncementNotification>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -1228,6 +1231,63 @@ public class ApplicationDbContext(
             b.HasIndex(r => new { r.AnnouncementId, r.UserId }).IsUnique();
             b.HasIndex(r => r.IsDeleted);
             b.HasQueryFilter(r => !r.IsDeleted);
+        });
+
+        ConfigureLookup<NotificationChannel>(builder, "NotificationChannels", extra: b =>
+        {
+            b.Property(c => c.Name).HasMaxLength(40).IsRequired();
+            b.Property(c => c.Code).HasMaxLength(20).IsRequired();
+            b.HasIndex(c => c.Name).IsUnique();
+            b.HasIndex(c => c.Code).IsUnique();
+        });
+
+        ConfigureLookup<NotificationStatus>(builder, "NotificationStatuses", extra: b =>
+        {
+            b.Property(st => st.Name).HasMaxLength(40).IsRequired();
+            b.Property(st => st.Code).HasMaxLength(20).IsRequired();
+            b.HasIndex(st => st.Name).IsUnique();
+            b.HasIndex(st => st.Code).IsUnique();
+        });
+
+        builder.Entity<AnnouncementNotification>(b =>
+        {
+            b.ToTable("AnnouncementNotifications");
+            b.HasKey(n => n.Id);
+            b.Property(n => n.RecipientName).HasMaxLength(200).IsRequired();
+            b.Property(n => n.Destination).HasMaxLength(256).IsRequired();
+            b.Property(n => n.Subject).HasMaxLength(300);
+            b.Property(n => n.Message).HasMaxLength(4000);
+            b.Property(n => n.LastError).HasMaxLength(1000);
+            b.Property(n => n.ProviderMessageId).HasMaxLength(200);
+            b.Property(n => n.CreatedBy).HasMaxLength(100);
+            b.Property(n => n.ModifiedBy).HasMaxLength(100);
+            b.Property(n => n.DeletedBy).HasMaxLength(100);
+
+            b.HasOne(n => n.Announcement).WithMany(a => a.Notifications)
+                .HasForeignKey(n => n.AnnouncementId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Restrict (not Cascade) so SQL Server does not see two cascade
+            // paths into this table from Users (via Announcements.PostedBy).
+            b.HasOne(n => n.User).WithMany()
+                .HasForeignKey(n => n.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasOne(n => n.NotificationChannel).WithMany(c => c.Notifications)
+                .HasForeignKey(n => n.NotificationChannelId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasOne(n => n.NotificationStatus).WithMany(st => st.Notifications)
+                .HasForeignKey(n => n.NotificationStatusId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // One nudge per (announcement, user, channel); re-queueing re-arms
+            // the existing row rather than inserting a duplicate.
+            b.HasIndex(n => new { n.AnnouncementId, n.UserId, n.NotificationChannelId }).IsUnique();
+            // Dispatcher scan: pending rows whose ScheduledFor has passed.
+            b.HasIndex(n => new { n.NotificationStatusId, n.ScheduledFor });
+            b.HasIndex(n => n.IsDeleted);
+            b.HasQueryFilter(n => !n.IsDeleted);
         });
     }
 

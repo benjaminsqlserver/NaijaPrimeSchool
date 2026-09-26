@@ -2,7 +2,7 @@
 
 A modern school management system for Nigerian primary schools, built with **.NET 10**, **Blazor Auto**, **Clean Architecture**, **SQL Server**, and **Radzen Blazor Components**.
 
-Ten sprints have shipped. **Sprint 1** delivered the authentication & authorization foundation: user accounts, role-based access control, login/logout, activation/deactivation, and the SuperAdmin user-management screens. **Sprint 2** built the academic domain on top of that foundation: sessions, terms, class arms, subjects, timetable periods, and a click-to-edit weekly timetable grid. **Sprint 3** plugged students and parents into that academic structure: pupil profiles, parent/guardian directory, parent-to-pupil linkage with relationship + primary-contact + pickup flags, and per-session enrolment with a withdrawal lifecycle. **Sprint 4** lands attendance: a daily class register, per-subject session attendance off the timetable, the AttendanceStatus lookup, a submit/reopen lifecycle, and a per-class percentage summary. **Sprint 5** closes the academic loop: a per-(term, class, subject) gradebook of TermAssessments and AssessmentScores, a result computation pipeline that produces SubjectResults with grade bands and class positions, and per-(pupil, term) ReportCards with affective and psychomotor ratings, attendance roll-up, and a publish/unpublish lifecycle. **Sprint 5b** wires up pupil photographs: a dedicated upload pipeline backed by a reusable `StudentAvatar` Razor component, with the photo (or a coloured initials tile fallback) shown next to every pupil row across the Students, Enrolments, daily- and subject-attendance, score-sheet, and report-card pages. **Sprint 6** lays the financial spine: per-(term, class level) `FeeSchedule`s with line items, one-click invoice issuance to every actively-enrolled pupil, multi-allocation payments with auto-allocate, refund flow, and a bursar dashboard summarising invoiced, collected and outstanding amounts. **Sprint 7** turns the storeroom on: a `StoreItem` catalog tracked by `ItemCategory` and `UnitOfMeasure`, a movement-log of `StockMovement` rows (purchases, issuances, openings, write-offs, adjustments) typed by a directional `StockMovementType` lookup, a `Supplier` directory, a low-stock dashboard, and audit-safe reversal that undoes an entry's effect on `QuantityOnHand` when soft-deleted. **Sprint 8** finally turns the system outward to the families: a parent portal listing every linked ward with class, outstanding balance, attendance percentage, and report-card count plus a tabbed ward-detail page; a student portal with today's timetable, attendance summary, results history, and fee ledger; and an announcements pipeline — `AnnouncementCategory`, `AnnouncementAudience` (Everyone / Parents / Students / Specific Class) and per-user `AnnouncementRead` tracking — that lets the head teacher broadcast scoped, expiring, pin-to-top notices into both portals with live unread counts. **Sprint 9** closes the last manual step: creating a parent or a student now provisions a matching `ApplicationUser` in the **Parent** / **Student** role inside the same unit of work and stamps the new user's id onto `Parent.UserId` / `Student.UserId`, so the family can sign in straight away and the parent / student portal loads without an admin follow-up. **Sprint 10** is a focused hotfix on `ParentService.SoftDeleteAsync`: the link-count guard now reads from a fresh `db.StudentParents.CountAsync(...)` query instead of the `Parent.StudentLinks` navigation, so a parent whose links were soft-deleted earlier in the same Blazor circuit can now actually be deleted; the same operation also retires the auto-provisioned `ApplicationUser` so the deleted parent cannot keep signing in.
+Eleven sprints have shipped. **Sprint 1** delivered the authentication & authorization foundation: user accounts, role-based access control, login/logout, activation/deactivation, and the SuperAdmin user-management screens. **Sprint 2** built the academic domain on top of that foundation: sessions, terms, class arms, subjects, timetable periods, and a click-to-edit weekly timetable grid. **Sprint 3** plugged students and parents into that academic structure: pupil profiles, parent/guardian directory, parent-to-pupil linkage with relationship + primary-contact + pickup flags, and per-session enrolment with a withdrawal lifecycle. **Sprint 4** lands attendance: a daily class register, per-subject session attendance off the timetable, the AttendanceStatus lookup, a submit/reopen lifecycle, and a per-class percentage summary. **Sprint 5** closes the academic loop: a per-(term, class, subject) gradebook of TermAssessments and AssessmentScores, a result computation pipeline that produces SubjectResults with grade bands and class positions, and per-(pupil, term) ReportCards with affective and psychomotor ratings, attendance roll-up, and a publish/unpublish lifecycle. **Sprint 5b** wires up pupil photographs: a dedicated upload pipeline backed by a reusable `StudentAvatar` Razor component, with the photo (or a coloured initials tile fallback) shown next to every pupil row across the Students, Enrolments, daily- and subject-attendance, score-sheet, and report-card pages. **Sprint 6** lays the financial spine: per-(term, class level) `FeeSchedule`s with line items, one-click invoice issuance to every actively-enrolled pupil, multi-allocation payments with auto-allocate, refund flow, and a bursar dashboard summarising invoiced, collected and outstanding amounts. **Sprint 7** turns the storeroom on: a `StoreItem` catalog tracked by `ItemCategory` and `UnitOfMeasure`, a movement-log of `StockMovement` rows (purchases, issuances, openings, write-offs, adjustments) typed by a directional `StockMovementType` lookup, a `Supplier` directory, a low-stock dashboard, and audit-safe reversal that undoes an entry's effect on `QuantityOnHand` when soft-deleted. **Sprint 8** finally turns the system outward to the families: a parent portal listing every linked ward with class, outstanding balance, attendance percentage, and report-card count plus a tabbed ward-detail page; a student portal with today's timetable, attendance summary, results history, and fee ledger; and an announcements pipeline — `AnnouncementCategory`, `AnnouncementAudience` (Everyone / Parents / Students / Specific Class) and per-user `AnnouncementRead` tracking — that lets the head teacher broadcast scoped, expiring, pin-to-top notices into both portals with live unread counts. **Sprint 9** closes the last manual step: creating a parent or a student now provisions a matching `ApplicationUser` in the **Parent** / **Student** role inside the same unit of work and stamps the new user's id onto `Parent.UserId` / `Student.UserId`, so the family can sign in straight away and the parent / student portal loads without an admin follow-up. **Sprint 10** is a focused hotfix on `ParentService.SoftDeleteAsync`: the link-count guard now reads from a fresh `db.StudentParents.CountAsync(...)` query instead of the `Parent.StudentLinks` navigation, so a parent whose links were soft-deleted earlier in the same Blazor circuit can now actually be deleted; the same operation also retires the auto-provisioned `ApplicationUser` so the deleted parent cannot keep signing in. **Sprint 11** takes announcements beyond the portal: publishing a notice queues an email and an SMS for every parent / student in its audience, a background dispatcher sends them after an unread grace period (skipping anyone who has read it in the portal by then), and a notification log with retry lets the head teacher see exactly who was reached.
 
 Implementation walk-throughs for each sprint live at the repo root:
 
@@ -17,6 +17,7 @@ Implementation walk-throughs for each sprint live at the repo root:
 - `Sprint 8 - Implementation Guide.docx`
 - `Sprint 9 - Implementation Guide.docx`
 - `Sprint 10 - Implementation Guide.docx`
+- `Sprint 11 - Implementation Guide.docx`
 
 ---
 
@@ -236,6 +237,25 @@ Implementation walk-throughs for each sprint live at the repo root:
 - **No new tables, no migration, no UI change** — `Parents.razor` already calls `ParentService.SoftDeleteAsync` and surfaces the operation result; the fix is entirely behind the service boundary.
 - **Files touched** — `Infrastructure/Services/ParentService.cs`. Walk-through: `Sprint 10 - Implementation Guide.docx` (+ markdown companion).
 
+## Sprint 11 — Email / SMS notifications for unread announcements ✅
+
+- **Queue on publish**
+  - Publishing an announcement (or creating one with *Publish immediately*) writes one `AnnouncementNotification` row per recipient per channel. Recipients mirror the portal visibility rules: `ALL` → every parent and student with an active portal account, `PARENT` / `STUDENT` → one side, `CLASS` → pupils actively enrolled in the class plus their linked parents.
+  - Parent contacts come from `Parent.Email` / `PrimaryPhone` / `AlternatePhone`, falling back to the portal user; Nigerian numbers are normalised to `+234…`, and invalid ones are treated as missing.
+- **Unread grace period**
+  - Rows wait `UnreadGraceMinutes` (default 120) after publishing. At send time the dispatcher re-checks `AnnouncementReads`, so families who read the notice in the portal are **Skipped**, not emailed or texted. Unpublished, deleted or expired notices, and inactive accounts, are skipped too.
+- **Background dispatcher**
+  - A hosted `NotificationDispatchWorker` ticks every `DispatchIntervalSeconds`, sends due rows in batches (each in a fresh DI scope), saves after every row, and retries failures with back-off up to `MaxAttempts` before marking them **Failed**.
+- **Providers**
+  - Email: `Log` (default, writes to the app log) or `Smtp`. SMS: `Log` (default) or `Termii`. Emails use a green-and-gold HTML template with a plain-text alternative; SMS texts are trimmed to one 160-character GSM-7 segment and keep the portal link.
+- **UI**
+  - **Announcements** grid: an *Email / SMS* column (sent / pending / failed / skipped badges that link to the log) and a **Notify now** button that sends straight away to everyone still unread, without duplicates.
+  - **Communications → Notification log** (`/announcements/notifications`): stat cards; filters by announcement, channel, status and free text; expandable rows showing the exact message sent; per-row retry; **Retry all failed**.
+- **Data**
+  - New lookups `NotificationChannels` (EMAIL, SMS) and `NotificationStatuses` (PENDING, SENT, FAILED, SKIPPED), seeded on startup; new table `AnnouncementNotifications` with a unique `(AnnouncementId, UserId, NotificationChannelId)` index. Migration: `AnnouncementNotifications`.
+- **Configuration**
+  - The `Notifications` section in `appsettings.json`. Keep the SMTP password and Termii API key in user-secrets or environment variables. Full reference and a step-by-step test plan are in `Sprint 11 - Implementation Guide.md` / `.docx`.
+
 ## Cross-cutting (every sprint)
 
 - **Beautiful, inviting UI**
@@ -243,7 +263,7 @@ Implementation walk-throughs for each sprint live at the repo root:
   - Radzen Blazor components (DataGrid, Dialog, Notification, Layout, Sidebar, Forms)
   - Responsive layout
 - **Data integrity**
-  - No enums; every lookup (roles, titles, genders, term types, class levels, week days, relationships, enrolment statuses, blood groups, marital statuses, attendance statuses, assessment types, grade bands, affective traits, psychomotor skills, trait ratings, fee categories, payment methods, invoice statuses, payment statuses, item categories, units of measure, stock movement types, announcement categories, announcement audiences, …) is a first-class table
+  - No enums; every lookup (roles, titles, genders, term types, class levels, week days, relationships, enrolment statuses, blood groups, marital statuses, attendance statuses, assessment types, grade bands, affective traits, psychomotor skills, trait ratings, fee categories, payment methods, invoice statuses, payment statuses, item categories, units of measure, stock movement types, announcement categories, announcement audiences, notification channels, notification statuses, …) is a first-class table
   - Soft delete for all entities, enforced globally via EF Core query filters
   - Auditing (CreatedOn/By, ModifiedOn/By, DeletedOn/By) applied automatically in `SaveChanges`
 
@@ -275,7 +295,7 @@ NaijaPrimeSchool/
 │   │   ├── Results/                             # TermAssessment, SubjectResult, ReportCard + lookups (sprint 5)
 │   │   ├── Finance/                             # FeeSchedule, Invoice, Payment + lookups (sprint 6)
 │   │   ├── Inventory/                           # Supplier, StoreItem, StockMovement + lookups (sprint 7)
-│   │   └── Communications/                      # Announcement, AnnouncementRead + lookups (sprint 8)
+│   │   └── Communications/                      # Announcement, AnnouncementRead, AnnouncementNotification + lookups (sprints 8, 11)
 │   ├── NaijaPrimeSchool.Application/            # DTOs, service contracts, shared abstractions
 │   │   ├── Common/                              # ICurrentUser, OperationResult
 │   │   ├── Users/                               # IUserService, ILookupService, DTOs (sprint 1)
@@ -285,9 +305,10 @@ NaijaPrimeSchool/
 │   │   ├── Results/                             # IAssessmentService, IResultService, IReportCardService, DTOs (sprint 5)
 │   │   ├── Finance/                             # IFeeScheduleService, IInvoiceService, IPaymentService, DTOs (sprint 6)
 │   │   ├── Inventory/                           # ISupplierService, IStoreItemService, IStockMovementService, DTOs (sprint 7)
-│   │   ├── Communications/                      # IAnnouncementService, DTOs (sprint 8)
+│   │   ├── Communications/                      # IAnnouncementService, INotificationService, email/SMS gateways, DTOs (sprints 8, 11)
 │   │   └── Portals/                             # IPortalService, DTOs (sprint 8)
 │   ├── NaijaPrimeSchool.Infrastructure/         # EF Core DbContext, Identity stores, service impls, seed, migrations
+│   │   └── Notifications/                       # Dispatcher, background worker, composer, Log/SMTP/Termii gateways (sprint 11)
 │   ├── NaijaPrimeSchool.Web/                    # Blazor server host (auth endpoints, layout, pages, Program.cs)
 │   │   └── Components/Pages/
 │   │       ├── Users/                           # User management pages (sprint 1)
@@ -297,7 +318,7 @@ NaijaPrimeSchool/
 │   │       ├── Results/                         # Assessments, Score sheet, Results, Report cards (sprint 5)
 │   │       ├── Finance/                         # Fee schedules, Invoices, Payments, Bursar dashboard (sprint 6)
 │   │       ├── Inventory/                       # Store dashboard, Catalog, Movements, Suppliers (sprint 7)
-│   │       ├── Communications/                  # Announcements list + editor (sprint 8)
+│   │       ├── Communications/                  # Announcements list + editor (sprint 8), notification log (sprint 11)
 │   │       └── Portals/                         # Parent + student portals, shared announcements feed (sprint 8)
 │   └── NaijaPrimeSchool.Web.Client/             # Blazor WebAssembly client (Auto interactivity)
 ├── tools/                                       # Scripts (e.g. sprint guide generators)
@@ -484,12 +505,14 @@ User management screens are gated behind the `ManageUsers` policy, which require
 | `src/NaijaPrimeSchool.Infrastructure/Services/StoreItemService.cs` | Catalog CRUD + create-with-opening-balance shortcut |
 | `src/NaijaPrimeSchool.Infrastructure/Services/StockMovementService.cs` | Record / soft-delete movements, running balance, NPS/STK numbering, dashboard rollups |
 | `src/NaijaPrimeSchool.Web/Components/Pages/Inventory/` | Store dashboard, catalog, item detail, movements, record movement, suppliers |
-| `src/NaijaPrimeSchool.Domain/Communications/` | Announcement, AnnouncementRead + AnnouncementCategory / AnnouncementAudience lookups (sprint 8) |
-| `src/NaijaPrimeSchool.Application/Communications/` | IAnnouncementService contract and DTOs |
+| `src/NaijaPrimeSchool.Domain/Communications/` | Announcement, AnnouncementRead + AnnouncementCategory / AnnouncementAudience lookups (sprint 8); AnnouncementNotification + NotificationChannel / NotificationStatus lookups (sprint 11) |
+| `src/NaijaPrimeSchool.Application/Communications/` | IAnnouncementService, INotificationService, IEmailGateway / ISmsGateway contracts and DTOs |
 | `src/NaijaPrimeSchool.Application/Portals/` | IPortalService contract and dashboard DTOs |
 | `src/NaijaPrimeSchool.Infrastructure/Services/AnnouncementService.cs` | Announcement CRUD, publish/unpublish, portal feed + per-user read tracking |
 | `src/NaijaPrimeSchool.Infrastructure/Services/PortalService.cs` | Parent + student dashboard façade with `CurrentUserCanViewStudentAsync` access guard |
-| `src/NaijaPrimeSchool.Web/Components/Pages/Communications/` | Announcements admin list + editor |
+| `src/NaijaPrimeSchool.Web/Components/Pages/Communications/` | Announcements admin list + editor, notification log (sprint 11) |
+| `src/NaijaPrimeSchool.Infrastructure/Services/NotificationService.cs` | Recipient resolution, queue unread reminders, log listing, counts, retry (sprint 11) |
+| `src/NaijaPrimeSchool.Infrastructure/Notifications/` | Dispatcher + hosted worker, message composer, contact normaliser, Log / SMTP / Termii gateways, options (sprint 11) |
 | `src/NaijaPrimeSchool.Web/Components/Pages/Portals/` | Parent dashboard, ward detail, student dashboard + sub-pages, shared announcements feed |
 | `tools/generate_sprint2_guide.py` | Generator for `Sprint 2 - Implementation Guide.docx` |
 | `tools/generate_sprint3_guide.py` | Generator for `Sprint 3 - Implementation Guide.docx` |
@@ -501,6 +524,7 @@ User management screens are gated behind the `ManageUsers` policy, which require
 | `tools/generate_sprint8_guide.py` | Generator for `Sprint 8 - Implementation Guide.docx` |
 | `tools/generate_sprint9_guide.py` | Generator for `Sprint 9 - Implementation Guide.docx` |
 | `tools/generate_sprint10_guide.py` | Generator for `Sprint 10 - Implementation Guide.docx` |
+| `tools/generate_sprint11_guide.py` | Generator for `Sprint 11 - Implementation Guide.docx` (renders the markdown companion + source listings) |
 
 ---
 
@@ -519,10 +543,11 @@ Delivered:
 - ✅ **Sprint 8** — Parent & student portals + announcements (ward grid + tabbed detail, student dashboard with today's timetable, scoped announcements with per-user read tracking)
 - ✅ **Sprint 9** — Auto-provisioned portal accounts (create-parent and create-student now provision the matching ApplicationUser in the Parent / Student role and stamp `Parent.UserId` / `Student.UserId` so the portals light up on first sign-in)
 - ✅ **Sprint 10** — Parent-deletion hotfix (`ParentService.SoftDeleteAsync` reads the link count from a fresh DB query instead of the EF Core navigation, so a parent unlinked earlier in the same Blazor circuit can actually be deleted; the linked `ApplicationUser` is retired in the same operation)
+- ✅ **Sprint 11** — Email / SMS notifications for unread announcements (queue on publish, unread grace period, background dispatcher with retry, SMTP + Termii providers, notification log)
 
 Planned for upcoming sprints:
 
-- Notifications (email / SMS push of unread announcements)
+- Notification preferences (per-family email / SMS opt-out, quiet hours)
 - Two-way messaging between school office and families
 - Online fee payment (gateway on top of the existing `PaymentService`)
 - Audit log viewer

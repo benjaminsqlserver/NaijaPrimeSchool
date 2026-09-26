@@ -30,4 +30,5 @@ public class Announcement : BaseEntity
     public bool IsPinned { get; set; }
 
     public ICollection<AnnouncementRead> Reads { get; set; } = [];
+    public ICollection<AnnouncementNotification> Notifications { get; set; } = [];
 }

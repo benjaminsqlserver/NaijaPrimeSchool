@@ -3,6 +3,7 @@
 @rendermode InteractiveServer
 
 @inject IAnnouncementService AnnouncementService
+@inject INotificationService NotificationQueue
 @inject ILookupService Lookups
 @inject NavigationManager Nav
 @inject NotificationService Notification
@@ -15,6 +16,8 @@
         <p>Broadcast notices to parents, students, or a specific class. Publish to make them visible in the portals.</p>
     </div>
     <div class="nps-page-actions">
+        <RadzenButton Text="Notification log" Icon="mark_email_read" ButtonStyle="ButtonStyle.Light"
+                      Click="@(() => Nav.NavigateTo("/announcements/notifications"))" />
         <RadzenButton Text="New announcement" Icon="add" ButtonStyle="ButtonStyle.Primary"
                       Click="@(() => Nav.NavigateTo("/announcements/new"))" />
     </div>
@@ -83,11 +86,33 @@
                 </Template>
             </RadzenDataGridColumn>
             <RadzenDataGridColumn TItem="AnnouncementDto" Title="Reads" Width="100px" Property="ReadCount" />
-            <RadzenDataGridColumn TItem="AnnouncementDto" Title="Actions" Width="200px" Sortable="false" TextAlign="TextAlign.Right">
+            <RadzenDataGridColumn TItem="AnnouncementDto" Title="Email / SMS" Width="230px" Sortable="false">
+                <Template Context="a">
+                    @if (a.Notifications.Total == 0)
+                    {
+                        <span style="color: var(--nps-ink-500);">—</span>
+                    }
+                    else
+                    {
+                        <a href="@($"/announcements/notifications?announcementId={a.Id}")" style="display:flex; flex-wrap:wrap; gap:0.25rem; text-decoration:none;">
+                            @if (a.Notifications.Sent > 0) { <RadzenBadge Text="@($"{a.Notifications.Sent} sent")" BadgeStyle="BadgeStyle.Success" Variant="Variant.Flat" /> }
+                            @if (a.Notifications.Pending > 0) { <RadzenBadge Text="@($"{a.Notifications.Pending} pending")" BadgeStyle="BadgeStyle.Info" Variant="Variant.Flat" /> }
+                            @if (a.Notifications.Failed > 0) { <RadzenBadge Text="@($"{a.Notifications.Failed} failed")" BadgeStyle="BadgeStyle.Danger" Variant="Variant.Flat" /> }
+                            @if (a.Notifications.Skipped > 0) { <RadzenBadge Text="@($"{a.Notifications.Skipped} skipped")" BadgeStyle="BadgeStyle.Light" Variant="Variant.Flat" /> }
+                        </a>
+                    }
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="AnnouncementDto" Title="Actions" Width="240px" Sortable="false" TextAlign="TextAlign.Right">
                 <Template Context="a">
                     <div class="nps-inline-actions">
                         <RadzenButton Icon="edit" Size="ButtonSize.Small" Variant="Variant.Flat" ButtonStyle="ButtonStyle.Light"
                                       Click="@(() => Nav.NavigateTo($"/announcements/{a.Id}"))" />
+                        @if (a.IsPublished && !a.IsExpired)
+                        {
+                            <RadzenButton Icon="notifications_active" Size="ButtonSize.Small" Variant="Variant.Flat" ButtonStyle="ButtonStyle.Info"
+                                          Click="@(() => NotifyNowAsync(a))" title="Email / SMS everyone who has not read it yet" />
+                        }
                         @if (a.IsPublished)
                         {
                             <RadzenButton Icon="unpublished" Size="ButtonSize.Small" Variant="Variant.Flat" ButtonStyle="ButtonStyle.Warning"
@@ -152,6 +177,27 @@
         if (result.Succeeded)
         {
             Notification.Notify(new NotificationMessage { Severity = NotificationSeverity.Success, Summary = "Published" });
+            await LoadAsync();
+        }
+        else { ShowErrors(result.Errors); }
+    }
+
+    private async Task NotifyNowAsync(AnnouncementDto a)
+    {
+        var result = await NotificationQueue.QueueForAnnouncementAsync(a.Id, sendNow: true);
+        if (result.Succeeded && result.Data is { } r)
+        {
+            var detail = $"{r.Queued} message(s) queued for {r.Recipients} portal user(s).";
+            if (r.AlreadyQueued > 0) detail += $" {r.AlreadyQueued} already queued or sent.";
+            if (r.AlreadyRead > 0) detail += $" {r.AlreadyRead} already read it.";
+            if (r.MissingContact > 0) detail += $" {r.MissingContact} skipped for missing email / phone.";
+            Notification.Notify(new NotificationMessage
+            {
+                Severity = r.Queued > 0 ? NotificationSeverity.Success : NotificationSeverity.Info,
+                Summary = "Unread reminders",
+                Detail = detail,
+                Duration = 8000,
+            });
             await LoadAsync();
         }
         else { ShowErrors(result.Errors); }

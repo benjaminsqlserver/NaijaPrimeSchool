@@ -278,4 +278,16 @@ public class LookupService(
             .OrderBy(a => a.DisplayOrder)
             .Select(a => new LookupDto { Id = a.Id, Name = a.Name, Code = a.Code })
             .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<LookupDto>> GetNotificationChannelsAsync(CancellationToken ct = default) =>
+        await db.NotificationChannels
+            .OrderBy(c => c.DisplayOrder)
+            .Select(c => new LookupDto { Id = c.Id, Name = c.Name, Code = c.Code })
+            .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<LookupDto>> GetNotificationStatusesAsync(CancellationToken ct = default) =>
+        await db.NotificationStatuses
+            .OrderBy(st => st.DisplayOrder)
+            .Select(st => new LookupDto { Id = st.Id, Name = st.Name, Code = st.Code })
+            .ToListAsync(ct);
 }

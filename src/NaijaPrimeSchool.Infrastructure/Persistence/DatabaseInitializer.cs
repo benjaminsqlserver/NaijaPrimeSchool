@@ -172,6 +172,46 @@ public static class DatabaseInitializer
             }
         }
 
+        if (!await db.NotificationChannels.IgnoreQueryFilters().AnyAsync(ct))
+        {
+            (string Name, string Code)[] channels =
+            [
+                ("Email", "EMAIL"),
+                ("SMS",   "SMS"),
+            ];
+            for (var i = 0; i < channels.Length; i++)
+            {
+                var c = channels[i];
+                db.NotificationChannels.Add(new NotificationChannel
+                {
+                    Name = c.Name,
+                    Code = c.Code,
+                    DisplayOrder = i + 1,
+                });
+            }
+        }
+
+        if (!await db.NotificationStatuses.IgnoreQueryFilters().AnyAsync(ct))
+        {
+            (string Name, string Code)[] statuses =
+            [
+                ("Pending", "PENDING"),
+                ("Sent",    "SENT"),
+                ("Failed",  "FAILED"),
+                ("Skipped", "SKIPPED"),
+            ];
+            for (var i = 0; i < statuses.Length; i++)
+            {
+                var st = statuses[i];
+                db.NotificationStatuses.Add(new NotificationStatus
+                {
+                    Name = st.Name,
+                    Code = st.Code,
+                    DisplayOrder = i + 1,
+                });
+            }
+        }
+
         await db.SaveChangesAsync(ct);
     }
 

@@ -12,6 +12,7 @@ using NaijaPrimeSchool.Application.Portals;
 using NaijaPrimeSchool.Application.Results;
 using NaijaPrimeSchool.Application.Users;
 using NaijaPrimeSchool.Domain.Identity;
+using NaijaPrimeSchool.Infrastructure.Notifications;
 using NaijaPrimeSchool.Infrastructure.Persistence;
 using NaijaPrimeSchool.Infrastructure.Services;
 
@@ -88,6 +89,37 @@ public static class DependencyInjection
         services.AddScoped<IAnnouncementService, AnnouncementService>();
         services.AddScoped<IPortalService, PortalService>();
 
+        AddNotifications(services, configuration);
+
         return services;
+    }
+
+    private static void AddNotifications(IServiceCollection services, IConfiguration configuration)
+    {
+        var section = configuration.GetSection(NotificationOptions.SectionName);
+        services.Configure<NotificationOptions>(section);
+        var options = section.Get<NotificationOptions>() ?? new NotificationOptions();
+
+        services.AddScoped<INotificationService, NotificationService>();
+        services.AddScoped<NotificationDispatcher>();
+        services.AddHostedService<NotificationDispatchWorker>();
+
+        switch (options.Email.Provider.ToLowerInvariant())
+        {
+            case "log": services.AddScoped<IEmailGateway, LogEmailGateway>(); break;
+            case "smtp": services.AddScoped<IEmailGateway, SmtpEmailGateway>(); break;
+            default:
+                throw new InvalidOperationException(
+                    $"Unknown Notifications:Email:Provider '{options.Email.Provider}'. Use 'Log' or 'Smtp'.");
+        }
+
+        switch (options.Sms.Provider.ToLowerInvariant())
+        {
+            case "log": services.AddScoped<ISmsGateway, LogSmsGateway>(); break;
+            case "termii": services.AddHttpClient<ISmsGateway, TermiiSmsGateway>(); break;
+            default:
+                throw new InvalidOperationException(
+                    $"Unknown Notifications:Sms:Provider '{options.Sms.Provider}'. Use 'Log' or 'Termii'.");
+        }
     }
 }
