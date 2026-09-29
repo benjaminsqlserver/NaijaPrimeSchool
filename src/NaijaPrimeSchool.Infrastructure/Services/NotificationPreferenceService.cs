@@ -36,18 +36,9 @@ public class NotificationPreferenceService(
 
     private async Task<NotificationPreferenceDto?> LoadAsync(Guid userId, CancellationToken ct)
     {
-        var user = await db.Users
-            .Where(u => u.Id == userId)
-            .Select(u => new { u.Id, u.FirstName, u.LastName, u.Email, u.PhoneNumber })
-            .FirstOrDefaultAsync(ct);
-        if (user is null) return null;
-
-        // Same fallbacks as NotificationService.ResolveRecipientsAsync, so the
-        // page shows exactly where a reminder would be sent.
-        var parent = await db.Parents
-            .Where(p => p.UserId == userId)
-            .Select(p => new { p.Email, p.PrimaryPhone, p.AlternatePhone })
-            .FirstOrDefaultAsync(ct);
+        // Same resolution the notifications use, so the page shows exactly
+        // where a reminder or message alert would be sent.
+        if (await RecipientContacts.ForUserAsync(db, userId, ct) is not { } contact) return null;
 
         var opts = options.Value;
         var pref = await db.NotificationPreferences.FirstOrDefaultAsync(p => p.UserId == userId, ct);
@@ -55,19 +46,15 @@ public class NotificationPreferenceService(
 
         return new NotificationPreferenceDto
         {
-            UserId = user.Id,
-            DisplayName = $"{user.FirstName} {user.LastName}".Trim(),
+            UserId = contact.UserId,
+            DisplayName = contact.Name,
             EmailEnabled = effective.EmailEnabled,
             SmsEnabled = effective.SmsEnabled,
             QuietHoursEnabled = effective.QuietHoursEnabled,
             QuietHoursStart = effective.QuietHoursStart,
             QuietHoursEnd = effective.QuietHoursEnd,
-            EmailDestination = parent is null
-                ? ContactNormalizer.FirstEmail(user.Email)
-                : ContactNormalizer.FirstEmail(parent.Email, user.Email),
-            SmsDestination = parent is null
-                ? ContactNormalizer.FirstPhone(user.PhoneNumber)
-                : ContactNormalizer.FirstPhone(parent.PrimaryPhone, parent.AlternatePhone, user.PhoneNumber),
+            EmailDestination = contact.Email,
+            SmsDestination = contact.Phone,
             SchoolEmailEnabled = opts.Email.Enabled,
             SchoolSmsEnabled = opts.Sms.Enabled,
             TimeZone = opts.TimeZone,

@@ -32,8 +32,21 @@ public class NotificationOptions
     // link. Leave empty to omit the link.
     public string? PortalBaseUrl { get; set; }
 
+    public MessageAlertOptions Messages { get; set; } = new();
+
     public EmailChannelOptions Email { get; set; } = new();
     public SmsChannelOptions Sms { get; set; } = new();
+}
+
+// Alerts to a parent / student when the school office writes to them in a
+// portal conversation (sprint 14).
+public class MessageAlertOptions
+{
+    public bool Enabled { get; set; } = true;
+
+    // Wait this long after the office's message before alerting, so a family
+    // already on the portal sees it there first and nothing is sent.
+    public int GraceMinutes { get; set; } = 10;
 }
 
 public class EmailChannelOptions

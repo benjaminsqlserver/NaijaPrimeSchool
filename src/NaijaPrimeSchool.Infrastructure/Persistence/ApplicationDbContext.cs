@@ -1258,7 +1258,11 @@ public class ApplicationDbContext(
 
         builder.Entity<AnnouncementNotification>(b =>
         {
-            b.ToTable("AnnouncementNotifications");
+            // A notification is about exactly one thing: an announcement or
+            // a message conversation.
+            b.ToTable("AnnouncementNotifications", t => t.HasCheckConstraint(
+                "CK_AnnouncementNotifications_OneSource",
+                "(CASE WHEN [AnnouncementId] IS NULL THEN 0 ELSE 1 END) + (CASE WHEN [MessageThreadId] IS NULL THEN 0 ELSE 1 END) = 1"));
             b.HasKey(n => n.Id);
             b.Property(n => n.RecipientName).HasMaxLength(200).IsRequired();
             b.Property(n => n.Destination).HasMaxLength(256).IsRequired();
@@ -1272,6 +1276,10 @@ public class ApplicationDbContext(
 
             b.HasOne(n => n.Announcement).WithMany(a => a.Notifications)
                 .HasForeignKey(n => n.AnnouncementId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            b.HasOne(n => n.MessageThread).WithMany()
+                .HasForeignKey(n => n.MessageThreadId)
                 .OnDelete(DeleteBehavior.Cascade);
 
             // Restrict (not Cascade) so SQL Server does not see two cascade
@@ -1289,8 +1297,14 @@ public class ApplicationDbContext(
                 .OnDelete(DeleteBehavior.Restrict);
 
             // One nudge per (announcement, user, channel); re-queueing re-arms
-            // the existing row rather than inserting a duplicate.
-            b.HasIndex(n => new { n.AnnouncementId, n.UserId, n.NotificationChannelId }).IsUnique();
+            // the existing row rather than inserting a duplicate. Filtered so
+            // message rows (AnnouncementId NULL) are not caught by it.
+            b.HasIndex(n => new { n.AnnouncementId, n.UserId, n.NotificationChannelId })
+                .IsUnique()
+                .HasFilter("[AnnouncementId] IS NOT NULL");
+            // Message alerts: one row per alert, so no uniqueness here; the
+            // queue only avoids a second Pending row per (thread, user, channel).
+            b.HasIndex(n => new { n.MessageThreadId, n.UserId, n.NotificationChannelId });
             // Dispatcher scan: pending rows whose ScheduledFor has passed.
             b.HasIndex(n => new { n.NotificationStatusId, n.ScheduledFor });
             b.HasIndex(n => n.IsDeleted);

@@ -4,8 +4,15 @@ public class AnnouncementNotificationDto
 {
     public Guid Id { get; set; }
 
-    public Guid AnnouncementId { get; set; }
-    public string AnnouncementTitle { get; set; } = string.Empty;
+    // "ANNOUNCEMENT" or "MESSAGE" — what the notification is about.
+    public string Kind { get; set; } = string.Empty;
+    public bool IsMessageAlert => Kind == "MESSAGE";
+
+    public Guid? AnnouncementId { get; set; }
+    public Guid? MessageThreadId { get; set; }
+
+    // The announcement title or the conversation subject.
+    public string Title { get; set; } = string.Empty;
 
     public Guid UserId { get; set; }
     public string RecipientName { get; set; } = string.Empty;
@@ -32,6 +39,9 @@ public class NotificationFilter
 {
     public string? Search { get; set; }
     public Guid? AnnouncementId { get; set; }
+    public Guid? MessageThreadId { get; set; }
+    // "ANNOUNCEMENT", "MESSAGE" or null for both.
+    public string? Kind { get; set; }
     public Guid? ChannelId { get; set; }
     public Guid? StatusId { get; set; }
     public int Take { get; set; } = 500;
@@ -67,4 +77,10 @@ public class NotificationCounts
     public int Failed { get; set; }
     public int Skipped { get; set; }
     public int Total => Pending + Sent + Failed + Skipped;
+}
+
+public static class NotificationKinds
+{
+    public const string Announcement = "ANNOUNCEMENT";
+    public const string Message = "MESSAGE";
 }

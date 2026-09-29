@@ -13,7 +13,7 @@
 <div class="nps-page-header">
     <div>
         <h1>Notification log</h1>
-        <p>Email and SMS reminders sent to parents and students who had not yet read an announcement in the portal.</p>
+        <p>Email and SMS reminders about unread announcements, and alerts telling families the school office has messaged them.</p>
     </div>
     <div class="nps-page-actions">
         <RadzenButton Text="Back to announcements" Icon="arrow_back" ButtonStyle="ButtonStyle.Light"
@@ -61,6 +61,12 @@
             <label>Search</label>
             <RadzenTextBox @bind-Value="search" Placeholder="Recipient, email, phone or title"
                            Change="@(_ => LoadAsync())" Style="min-width: 260px;" />
+        </div>
+        <div class="nps-field">
+            <label>Type</label>
+            <RadzenDropDown TValue="string" Data="@kindOptions" TextProperty="Text" ValueProperty="Key"
+                            @bind-Value="kind" AllowClear="true" Placeholder="All"
+                            Change="@(_ => LoadAsync())" Style="min-width: 170px;" />
         </div>
         <div class="nps-field">
             <label>Announcement</label>
@@ -111,7 +117,20 @@
                     <br /><small style="color: var(--nps-ink-500);">@n.Destination</small>
                 </Template>
             </RadzenDataGridColumn>
-            <RadzenDataGridColumn TItem="AnnouncementNotificationDto" Title="Announcement" Property="AnnouncementTitle" />
+            <RadzenDataGridColumn TItem="AnnouncementNotificationDto" Title="About" Property="Title" Width="240px">
+                <Template Context="n">
+                    @if (n.IsMessageAlert)
+                    {
+                        <RadzenIcon Icon="forum" Style="font-size:16px; vertical-align:middle;" title="Message alert" />
+                        <a href="@($"/messages/{n.MessageThreadId}")">@n.Title</a>
+                    }
+                    else
+                    {
+                        <RadzenIcon Icon="campaign" Style="font-size:16px; vertical-align:middle;" title="Announcement reminder" />
+                        @n.Title
+                    }
+                </Template>
+            </RadzenDataGridColumn>
             <RadzenDataGridColumn TItem="AnnouncementNotificationDto" Title="Channel" Property="ChannelName" Width="110px">
                 <Template Context="n">
                     <RadzenIcon Icon="@(n.ChannelCode == "SMS" ? "sms" : "mail")" Style="font-size:16px; vertical-align:middle;" />
@@ -167,6 +186,15 @@
 
 @code {
     [SupplyParameterFromQuery(Name = "announcementId")] public Guid? AnnouncementId { get; set; }
+    [SupplyParameterFromQuery(Name = "messageThreadId")] public Guid? MessageThreadId { get; set; }
+
+    private string? kind;
+    private record KindOption(string Text, string Key);
+    private readonly KindOption[] kindOptions =
+    [
+        new("Announcement reminders", NotificationKinds.Announcement),
+        new("Message alerts", NotificationKinds.Message),
+    ];
 
     private IReadOnlyList<AnnouncementNotificationDto> rows = [];
     private IReadOnlyList<AnnouncementDto> announcements = [];
@@ -193,6 +221,8 @@
         {
             Search = search,
             AnnouncementId = AnnouncementId,
+            MessageThreadId = MessageThreadId,
+            Kind = kind,
             ChannelId = channelId,
             StatusId = statusId,
         });
