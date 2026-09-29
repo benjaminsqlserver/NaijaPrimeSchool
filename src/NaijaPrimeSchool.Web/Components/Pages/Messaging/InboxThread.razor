@@ -1,0 +1,11 @@
+@page "/messages/{Id:guid}"
+@attribute [Authorize(Roles = $"{Roles.SuperAdmin},{Roles.HeadTeacher}")]
+@rendermode InteractiveServer
+
+<PageTitle>Conversation · Naija Prime School</PageTitle>
+
+<MessageThreadView ThreadId="@Id" BackUrl="/messages" IsStaff="true" />
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+}

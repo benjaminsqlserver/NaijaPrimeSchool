@@ -12,6 +12,7 @@ using NaijaPrimeSchool.Domain.Family;
 using NaijaPrimeSchool.Domain.Finance;
 using NaijaPrimeSchool.Domain.Identity;
 using NaijaPrimeSchool.Domain.Inventory;
+using NaijaPrimeSchool.Domain.Messaging;
 using NaijaPrimeSchool.Domain.Results;
 
 namespace NaijaPrimeSchool.Infrastructure.Persistence;
@@ -95,6 +96,10 @@ public class ApplicationDbContext(
     public DbSet<NotificationStatus> NotificationStatuses => Set<NotificationStatus>();
     public DbSet<AnnouncementNotification> AnnouncementNotifications => Set<AnnouncementNotification>();
     public DbSet<NotificationPreference> NotificationPreferences => Set<NotificationPreference>();
+
+    public DbSet<MessageThreadStatus> MessageThreadStatuses => Set<MessageThreadStatus>();
+    public DbSet<MessageThread> MessageThreads => Set<MessageThread>();
+    public DbSet<ThreadMessage> ThreadMessages => Set<ThreadMessage>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -181,6 +186,7 @@ public class ApplicationDbContext(
         ConfigureFinance(builder);
         ConfigureInventory(builder);
         ConfigureCommunications(builder);
+        ConfigureMessaging(builder);
     }
 
     private static void ConfigureAcademics(ModelBuilder builder)
@@ -1306,6 +1312,69 @@ public class ApplicationDbContext(
             b.HasIndex(p => p.UserId).IsUnique();
             b.HasIndex(p => p.IsDeleted);
             b.HasQueryFilter(p => !p.IsDeleted);
+        });
+    }
+
+    private static void ConfigureMessaging(ModelBuilder builder)
+    {
+        ConfigureLookup<MessageThreadStatus>(builder, "MessageThreadStatuses", extra: b =>
+        {
+            b.Property(st => st.Name).HasMaxLength(40).IsRequired();
+            b.Property(st => st.Code).HasMaxLength(20).IsRequired();
+            b.HasIndex(st => st.Name).IsUnique();
+            b.HasIndex(st => st.Code).IsUnique();
+        });
+
+        builder.Entity<MessageThread>(b =>
+        {
+            b.ToTable("MessageThreads");
+            b.HasKey(t => t.Id);
+            b.Property(t => t.Subject).HasMaxLength(200).IsRequired();
+            b.Property(t => t.CreatedBy).HasMaxLength(100);
+            b.Property(t => t.ModifiedBy).HasMaxLength(100);
+            b.Property(t => t.DeletedBy).HasMaxLength(100);
+
+            // Restrict throughout: users and pupils are only ever soft-deleted,
+            // and SQL Server would reject the extra cascade paths from Users
+            // (Users -> Students -> MessageThreads).
+            b.HasOne(t => t.FamilyUser).WithMany()
+                .HasForeignKey(t => t.FamilyUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasOne(t => t.Student).WithMany()
+                .HasForeignKey(t => t.StudentId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasOne(t => t.MessageThreadStatus).WithMany(st => st.Threads)
+                .HasForeignKey(t => t.MessageThreadStatusId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasIndex(t => new { t.FamilyUserId, t.LastMessageOn });
+            b.HasIndex(t => t.LastMessageOn);
+            b.HasIndex(t => t.IsDeleted);
+            b.HasQueryFilter(t => !t.IsDeleted);
+        });
+
+        builder.Entity<ThreadMessage>(b =>
+        {
+            b.ToTable("ThreadMessages");
+            b.HasKey(m => m.Id);
+            b.Property(m => m.Body).HasMaxLength(4000).IsRequired();
+            b.Property(m => m.CreatedBy).HasMaxLength(100);
+            b.Property(m => m.ModifiedBy).HasMaxLength(100);
+            b.Property(m => m.DeletedBy).HasMaxLength(100);
+
+            b.HasOne(m => m.MessageThread).WithMany(t => t.Messages)
+                .HasForeignKey(m => m.MessageThreadId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            b.HasOne(m => m.SenderUser).WithMany()
+                .HasForeignKey(m => m.SenderUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasIndex(m => new { m.MessageThreadId, m.SentOn });
+            b.HasIndex(m => m.IsDeleted);
+            b.HasQueryFilter(m => !m.IsDeleted);
         });
     }
 

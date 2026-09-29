@@ -1,0 +1,14 @@
+@page "/portal/messages/new"
+@attribute [Authorize(Roles = $"{Roles.Parent},{Roles.Student}")]
+@rendermode InteractiveServer
+
+<PageTitle>Message the school · Naija Prime School</PageTitle>
+
+<div class="nps-page-header">
+    <div>
+        <h1>Message the school</h1>
+        <p>Your message goes privately to the school office. You'll see their reply under Messages.</p>
+    </div>
+</div>
+
+<NewMessageForm BackUrl="/portal/messages" ThreadUrlPrefix="/portal/messages/" />
