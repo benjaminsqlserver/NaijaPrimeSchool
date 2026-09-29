@@ -101,6 +101,7 @@ public static class DependencyInjection
         var options = section.Get<NotificationOptions>() ?? new NotificationOptions();
 
         services.AddScoped<INotificationService, NotificationService>();
+        services.AddScoped<INotificationPreferenceService, NotificationPreferenceService>();
         services.AddScoped<NotificationDispatcher>();
         services.AddHostedService<NotificationDispatchWorker>();
 

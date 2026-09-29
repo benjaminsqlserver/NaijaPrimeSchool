@@ -5,6 +5,14 @@ namespace NaijaPrimeSchool.Infrastructure.Notifications;
 
 internal static class ContactNormalizer
 {
+    // First candidate that normalises to a usable address / number, so callers
+    // can express "parent record, then portal account" fallbacks in one call.
+    public static string? FirstEmail(params string?[] candidates) =>
+        candidates.Select(NormalizeEmail).FirstOrDefault(e => e is not null);
+
+    public static string? FirstPhone(params string?[] candidates) =>
+        candidates.Select(NormalizePhone).FirstOrDefault(p => p is not null);
+
     // Returns the trimmed address when it parses as a single mailbox.
     public static string? NormalizeEmail(string? raw)
     {

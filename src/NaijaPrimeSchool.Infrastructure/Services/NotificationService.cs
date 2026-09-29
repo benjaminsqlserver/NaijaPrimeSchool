@@ -46,6 +46,11 @@ public class NotificationService(
                 .Select(r => r.UserId)
                 .ToListAsync(ct))
             .ToHashSet();
+        var recipientIds = recipients.Select(r => r.UserId).ToList();
+        var preferences = await db.NotificationPreferences
+            .Where(p => recipientIds.Contains(p.UserId))
+            .ToDictionaryAsync(p => p.UserId, ct);
+
         var existing = (await db.AnnouncementNotifications
                 .Where(n => n.AnnouncementId == announcementId)
                 .ToListAsync(ct))
@@ -76,8 +81,22 @@ public class NotificationService(
                 continue;
             }
 
+            preferences.TryGetValue(r.UserId, out var preference);
             foreach (var channel in channels)
             {
+                existing.TryGetValue((r.UserId, channel.Id), out var current);
+                if (NotificationPreferenceRules.OptedOutReason(preference, channel.Code) is { } optOut)
+                {
+                    // Also close off a reminder queued before they opted out.
+                    if (current is not null && current.NotificationStatusId == pendingId)
+                    {
+                        current.NotificationStatusId = skippedId;
+                        current.LastError = optOut;
+                    }
+                    result.OptedOut++;
+                    continue;
+                }
+
                 var destination = channel.Code == NotificationCodes.Email ? r.Email : r.Phone;
                 if (destination is null)
                 {
@@ -85,7 +104,7 @@ public class NotificationService(
                     continue;
                 }
 
-                if (existing.TryGetValue((r.UserId, channel.Id), out var row))
+                if (current is { } row)
                 {
                     if (row.NotificationStatusId == pendingId || row.NotificationStatusId == sentId)
                     {
@@ -284,10 +303,8 @@ public class NotificationService(
             recipients.AddRange(parents.Select(p => new Recipient(
                 p.UserId,
                 $"{p.FirstName} {p.LastName}".Trim(),
-                ContactNormalizer.NormalizeEmail(p.Email) ?? ContactNormalizer.NormalizeEmail(p.UserEmail),
-                ContactNormalizer.NormalizePhone(p.PrimaryPhone)
-                    ?? ContactNormalizer.NormalizePhone(p.AlternatePhone)
-                    ?? ContactNormalizer.NormalizePhone(p.UserPhone))));
+                ContactNormalizer.FirstEmail(p.Email, p.UserEmail),
+                ContactNormalizer.FirstPhone(p.PrimaryPhone, p.AlternatePhone, p.UserPhone))));
         }
 
         if (includeStudents)

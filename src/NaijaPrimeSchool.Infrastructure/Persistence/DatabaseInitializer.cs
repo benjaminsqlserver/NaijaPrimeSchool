@@ -128,15 +128,15 @@ public static class DatabaseInitializer
     {
         if (!await db.AnnouncementCategories.IgnoreQueryFilters().AnyAsync(ct))
         {
-            (string Name, string Code)[] categories =
+            (string Name, string Code, bool IsUrgent)[] categories =
             [
-                ("General",   "GEN"),
-                ("Academic",  "ACAD"),
-                ("Finance",   "FIN"),
-                ("Events",    "EVENT"),
-                ("Holiday",   "HOL"),
-                ("Health",    "HEALTH"),
-                ("Emergency", "EMERG"),
+                ("General",   "GEN",    false),
+                ("Academic",  "ACAD",   false),
+                ("Finance",   "FIN",    false),
+                ("Events",    "EVENT",  false),
+                ("Holiday",   "HOL",    false),
+                ("Health",    "HEALTH", false),
+                ("Emergency", "EMERG",  true),
             ];
             for (var i = 0; i < categories.Length; i++)
             {
@@ -146,6 +146,7 @@ public static class DatabaseInitializer
                     Name = c.Name,
                     Code = c.Code,
                     DisplayOrder = i + 1,
+                    IsUrgent = c.IsUrgent,
                 });
             }
         }

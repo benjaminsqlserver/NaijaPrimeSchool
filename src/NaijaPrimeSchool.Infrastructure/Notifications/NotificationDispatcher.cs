@@ -36,21 +36,39 @@ public sealed class NotificationDispatcher(
         // closed off as Skipped, instead of silently staying Pending forever.
         var due = await db.AnnouncementNotifications
             .IgnoreQueryFilters()
-            .Include(n => n.Announcement)
+            .Include(n => n.Announcement).ThenInclude(a => a!.AnnouncementCategory)
             .Include(n => n.User)
             .Where(n => !n.IsDeleted && n.NotificationStatusId == pendingId && n.ScheduledFor <= now)
             .OrderBy(n => n.ScheduledFor)
             .Take(Math.Max(1, opts.BatchSize))
             .ToListAsync(ct);
 
+        var userIds = due.Select(n => n.UserId).Distinct().ToList();
+        var preferences = await db.NotificationPreferences
+            .Where(p => userIds.Contains(p.UserId))
+            .ToDictionaryAsync(p => p.UserId, ct);
+        var zone = QuietHours.ResolveZone(opts.TimeZone);
+
         foreach (var n in due)
         {
             var channelCode = channelCodes.GetValueOrDefault(n.NotificationChannelId);
-            var skipReason = await GetSkipReasonAsync(n, channelCode, opts, ct);
+            var preference = preferences.GetValueOrDefault(n.UserId);
+            var skipReason = await GetSkipReasonAsync(n, channelCode, preference, opts, ct);
             if (skipReason is not null)
             {
                 n.NotificationStatusId = statusIds[NotificationCodes.Skipped];
                 n.LastError = skipReason;
+                await db.SaveChangesAsync(ct);
+                continue;
+            }
+
+            // Inside the recipient's quiet hours: hold (not an attempt) and
+            // let the read check run again when the window ends.
+            if (NotificationPreferenceRules.HoldUntil(preference, n.Announcement!.AnnouncementCategory,
+                    DateTimeOffset.UtcNow, zone) is { } resumeAt)
+            {
+                n.ScheduledFor = resumeAt;
+                n.LastError = $"Held for quiet hours until {TimeZoneInfo.ConvertTime(resumeAt, zone):HH:mm}.";
                 await db.SaveChangesAsync(ct);
                 continue;
             }
@@ -91,7 +109,8 @@ public sealed class NotificationDispatcher(
     }
 
     private async Task<string?> GetSkipReasonAsync(
-        AnnouncementNotification n, string? channelCode, NotificationOptions opts, CancellationToken ct)
+        AnnouncementNotification n, string? channelCode, NotificationPreference? preference,
+        NotificationOptions opts, CancellationToken ct)
     {
         var a = n.Announcement;
         if (a is null || a.IsDeleted) return "Announcement was deleted.";
@@ -113,6 +132,9 @@ public sealed class NotificationDispatcher(
             default:
                 return $"Unknown notification channel '{channelCode}'.";
         }
+
+        if (NotificationPreferenceRules.OptedOutReason(preference, channelCode) is { } optOut)
+            return optOut;
 
         var read = await db.AnnouncementReads.AnyAsync(
             r => r.AnnouncementId == n.AnnouncementId && r.UserId == n.UserId, ct);

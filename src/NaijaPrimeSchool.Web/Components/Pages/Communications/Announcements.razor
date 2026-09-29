@@ -191,6 +191,7 @@
             if (r.AlreadyQueued > 0) detail += $" {r.AlreadyQueued} already queued or sent.";
             if (r.AlreadyRead > 0) detail += $" {r.AlreadyRead} already read it.";
             if (r.MissingContact > 0) detail += $" {r.MissingContact} skipped for missing email / phone.";
+            if (r.OptedOut > 0) detail += $" {r.OptedOut} not sent because the family turned that channel off.";
             Notification.Notify(new NotificationMessage
             {
                 Severity = r.Queued > 0 ? NotificationSeverity.Success : NotificationSeverity.Info,

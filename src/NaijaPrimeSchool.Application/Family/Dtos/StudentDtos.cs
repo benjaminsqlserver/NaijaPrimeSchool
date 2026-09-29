@@ -5,6 +5,7 @@ namespace NaijaPrimeSchool.Application.Family.Dtos;
 public class StudentDto
 {
     public Guid Id { get; set; }
+    public Guid? UserId { get; set; }
     public string AdmissionNumber { get; set; } = string.Empty;
     public DateOnly AdmissionDate { get; set; }
 

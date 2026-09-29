@@ -94,6 +94,7 @@ public class ApplicationDbContext(
     public DbSet<NotificationChannel> NotificationChannels => Set<NotificationChannel>();
     public DbSet<NotificationStatus> NotificationStatuses => Set<NotificationStatus>();
     public DbSet<AnnouncementNotification> AnnouncementNotifications => Set<AnnouncementNotification>();
+    public DbSet<NotificationPreference> NotificationPreferences => Set<NotificationPreference>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -1288,6 +1289,23 @@ public class ApplicationDbContext(
             b.HasIndex(n => new { n.NotificationStatusId, n.ScheduledFor });
             b.HasIndex(n => n.IsDeleted);
             b.HasQueryFilter(n => !n.IsDeleted);
+        });
+
+        builder.Entity<NotificationPreference>(b =>
+        {
+            b.ToTable("NotificationPreferences");
+            b.HasKey(p => p.Id);
+            b.Property(p => p.CreatedBy).HasMaxLength(100);
+            b.Property(p => p.ModifiedBy).HasMaxLength(100);
+            b.Property(p => p.DeletedBy).HasMaxLength(100);
+
+            b.HasOne(p => p.User).WithMany()
+                .HasForeignKey(p => p.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            b.HasIndex(p => p.UserId).IsUnique();
+            b.HasIndex(p => p.IsDeleted);
+            b.HasQueryFilter(p => !p.IsDeleted);
         });
     }
 

@@ -51,6 +51,7 @@ public class ParentService(
             .Select(p => new ParentDto
             {
                 Id = p.Id,
+                UserId = p.UserId,
                 FirstName = p.FirstName,
                 LastName = p.LastName,
                 MiddleName = p.MiddleName,
@@ -80,6 +81,7 @@ public class ParentService(
             .Select(p => new ParentDto
             {
                 Id = p.Id,
+                UserId = p.UserId,
                 FirstName = p.FirstName,
                 LastName = p.LastName,
                 MiddleName = p.MiddleName,

@@ -65,6 +65,7 @@ public class StudentService(
             .Select(s => new StudentDto
             {
                 Id = s.Id,
+                UserId = s.UserId,
                 AdmissionNumber = s.AdmissionNumber,
                 AdmissionDate = s.AdmissionDate,
                 FirstName = s.FirstName,
@@ -122,6 +123,7 @@ public class StudentService(
             .Select(s => new StudentDto
             {
                 Id = s.Id,
+                UserId = s.UserId,
                 AdmissionNumber = s.AdmissionNumber,
                 AdmissionDate = s.AdmissionDate,
                 FirstName = s.FirstName,

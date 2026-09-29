@@ -1,0 +1,148 @@
+@* Email / SMS reminder preferences for one portal user. With UserId unset it
+   edits the signed-in user's own preferences (portal page); with UserId set
+   it edits that user's on their behalf (SuperAdmin / HeadTeacher only). *@
+
+@inject INotificationPreferenceService PreferenceService
+@inject NotificationService Notification
+
+@if (loading)
+{
+    <p>Loading preferences...</p>
+}
+else if (pref is null)
+{
+    <RadzenAlert Severity="AlertSeverity.Warning" AllowClose="false">
+        No portal account was found, so there are no reminder preferences to manage.
+    </RadzenAlert>
+}
+else
+{
+    <p style="margin: 0 0 1.25rem; color: var(--nps-ink-500);">
+        When the school posts an announcement that is still unread in the portal after a while, a reminder is sent
+        by email and SMS. Choose how @(UserId is null ? "you" : pref.DisplayName) would like to be reminded.
+    </p>
+
+    <div class="nps-form-grid">
+        <div class="nps-field">
+            <label>Email reminders</label>
+            <div style="display:flex; align-items:center; gap:0.6rem;">
+                <RadzenSwitch @bind-Value="form.EmailEnabled" Disabled="@(!pref.SchoolEmailEnabled)" />
+                <span>@(form.EmailEnabled ? "On" : "Off")</span>
+            </div>
+            <small style="color: var(--nps-ink-500);">
+                @if (!pref.SchoolEmailEnabled) { <text>Email reminders are currently switched off by the school.</text> }
+                else if (pref.EmailDestination is null) { <text>No valid email address on file. Ask the school office to update it.</text> }
+                else { <text>Sent to @pref.EmailDestination</text> }
+            </small>
+        </div>
+
+        <div class="nps-field">
+            <label>SMS reminders</label>
+            <div style="display:flex; align-items:center; gap:0.6rem;">
+                <RadzenSwitch @bind-Value="form.SmsEnabled" Disabled="@(!pref.SchoolSmsEnabled)" />
+                <span>@(form.SmsEnabled ? "On" : "Off")</span>
+            </div>
+            <small style="color: var(--nps-ink-500);">
+                @if (!pref.SchoolSmsEnabled) { <text>SMS reminders are currently switched off by the school.</text> }
+                else if (pref.SmsDestination is null) { <text>No valid phone number on file. Ask the school office to update it.</text> }
+                else { <text>Sent to @pref.SmsDestination</text> }
+            </small>
+        </div>
+
+        <div class="nps-field nps-span-2">
+            <label>Quiet hours</label>
+            <div style="display:flex; align-items:center; gap:0.6rem;">
+                <RadzenSwitch @bind-Value="form.QuietHoursEnabled" />
+                <span>@(form.QuietHoursEnabled ? "No reminders between these times" : "Off: reminders can arrive at any time")</span>
+            </div>
+        </div>
+
+        @if (form.QuietHoursEnabled)
+        {
+            <div class="nps-field">
+                <label>From</label>
+                <RadzenDropDown TValue="TimeOnly" Data="@slots" TextProperty="Text" ValueProperty="Value"
+                                @bind-Value="form.QuietHoursStart" />
+            </div>
+            <div class="nps-field">
+                <label>Until</label>
+                <RadzenDropDown TValue="TimeOnly" Data="@slots" TextProperty="Text" ValueProperty="Value"
+                                @bind-Value="form.QuietHoursEnd" />
+            </div>
+            <div class="nps-span-2">
+                <small style="color: var(--nps-ink-500);">
+                    Times are school time (@pref.TimeZone). Reminders that fall in this window wait until it ends.
+                    Emergency announcements are still delivered straight away.
+                </small>
+            </div>
+        }
+    </div>
+
+    <div class="nps-inline-actions" style="margin-top:1.25rem;">
+        <RadzenButton Text="Save preferences" Icon="save" ButtonStyle="ButtonStyle.Primary"
+                      IsBusy="@saving" Click="@SaveAsync" />
+        @if (!pref.IsSaved)
+        {
+            <small style="align-self:center; color: var(--nps-ink-500);">Showing the defaults: nothing has been saved yet.</small>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public Guid? UserId { get; set; }
+
+    private NotificationPreferenceDto? pref;
+    private UpdateNotificationPreferenceRequest form = new();
+    private bool loading = true;
+    private bool saving;
+
+    private record Slot(string Text, TimeOnly Value);
+
+    private static readonly Slot[] slots = Enumerable.Range(0, 48)
+        .Select(i => new TimeOnly(i / 2, i % 2 * 30))
+        .Select(t => new Slot(t.ToString("HH:mm"), t))
+        .ToArray();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        loading = true;
+        pref = UserId is { } id
+            ? await PreferenceService.GetForUserAsync(id)
+            : await PreferenceService.GetForCurrentUserAsync();
+
+        if (pref is not null)
+        {
+            form = new UpdateNotificationPreferenceRequest
+            {
+                EmailEnabled = pref.EmailEnabled,
+                SmsEnabled = pref.SmsEnabled,
+                QuietHoursEnabled = pref.QuietHoursEnabled,
+                QuietHoursStart = pref.QuietHoursStart,
+                QuietHoursEnd = pref.QuietHoursEnd,
+            };
+        }
+        loading = false;
+    }
+
+    private async Task SaveAsync()
+    {
+        saving = true;
+        var result = UserId is { } id
+            ? await PreferenceService.SaveForUserAsync(id, form)
+            : await PreferenceService.SaveForCurrentUserAsync(form);
+        saving = false;
+
+        if (result.Succeeded)
+        {
+            Notification.Notify(new NotificationMessage { Severity = NotificationSeverity.Success, Summary = "Preferences saved" });
+            if (pref is not null) pref.IsSaved = true;
+        }
+        else
+        {
+            foreach (var e in result.Errors)
+            {
+                Notification.Notify(new NotificationMessage { Severity = NotificationSeverity.Error, Summary = "Error", Detail = e });
+            }
+        }
+    }
+}
