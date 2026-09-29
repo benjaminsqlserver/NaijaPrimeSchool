@@ -8,6 +8,7 @@ using NaijaPrimeSchool.Domain.Communications;
 using NaijaPrimeSchool.Domain.Family;
 using NaijaPrimeSchool.Domain.Finance;
 using NaijaPrimeSchool.Domain.Inventory;
+using NaijaPrimeSchool.Domain.Messaging;
 using NaijaPrimeSchool.Domain.Identity;
 using NaijaPrimeSchool.Domain.Results;
 
@@ -37,6 +38,7 @@ public static class DatabaseInitializer
         await SeedFinanceLookupsAsync(db, ct);
         await SeedInventoryLookupsAsync(db, ct);
         await SeedCommunicationsLookupsAsync(db, ct);
+        await SeedMessagingLookupsAsync(db, ct);
         await SeedRolesAsync(sp, ct);
         await SeedSuperAdminAsync(sp, logger, ct);
     }
@@ -213,6 +215,27 @@ public static class DatabaseInitializer
             }
         }
 
+        await db.SaveChangesAsync(ct);
+    }
+
+    private static async Task SeedMessagingLookupsAsync(ApplicationDbContext db, CancellationToken ct)
+    {
+        if (await db.MessageThreadStatuses.IgnoreQueryFilters().AnyAsync(ct)) return;
+
+        (string Name, string Code)[] statuses =
+        [
+            ("Open",   "OPEN"),
+            ("Closed", "CLOSED"),
+        ];
+        for (var i = 0; i < statuses.Length; i++)
+        {
+            db.MessageThreadStatuses.Add(new MessageThreadStatus
+            {
+                Name = statuses[i].Name,
+                Code = statuses[i].Code,
+                DisplayOrder = i + 1,
+            });
+        }
         await db.SaveChangesAsync(ct);
     }
 

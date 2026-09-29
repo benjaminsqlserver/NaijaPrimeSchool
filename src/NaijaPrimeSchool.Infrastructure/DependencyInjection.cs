@@ -8,6 +8,7 @@ using NaijaPrimeSchool.Application.Communications;
 using NaijaPrimeSchool.Application.Family;
 using NaijaPrimeSchool.Application.Finance;
 using NaijaPrimeSchool.Application.Inventory;
+using NaijaPrimeSchool.Application.Messaging;
 using NaijaPrimeSchool.Application.Portals;
 using NaijaPrimeSchool.Application.Results;
 using NaijaPrimeSchool.Application.Users;
@@ -88,6 +89,7 @@ public static class DependencyInjection
 
         services.AddScoped<IAnnouncementService, AnnouncementService>();
         services.AddScoped<IPortalService, PortalService>();
+        services.AddScoped<IMessagingService, MessagingService>();
 
         AddNotifications(services, configuration);
 

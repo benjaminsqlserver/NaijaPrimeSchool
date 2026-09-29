@@ -1,0 +1,73 @@
+@page "/portal/messages"
+@attribute [Authorize(Roles = $"{Roles.Parent},{Roles.Student}")]
+@rendermode InteractiveServer
+
+@inject IMessagingService Messaging
+@inject NavigationManager Nav
+
+<PageTitle>Messages · Naija Prime School</PageTitle>
+
+<div class="nps-page-header">
+    <div>
+        <h1>Messages</h1>
+        <p>Private conversations with the school office.</p>
+    </div>
+    <div class="nps-page-actions">
+        <RadzenButton Text="Message the school" Icon="edit" ButtonStyle="ButtonStyle.Primary"
+                      Click="@(() => Nav.NavigateTo("/portal/messages/new"))" />
+    </div>
+</div>
+
+@if (loading)
+{
+    <RadzenCard class="nps-card"><p>Loading...</p></RadzenCard>
+}
+else if (threads.Count == 0)
+{
+    <RadzenCard class="nps-card">
+        <h3>No messages yet.</h3>
+        <p>Have a question for the school? Press <strong>Message the school</strong> to start a conversation.</p>
+    </RadzenCard>
+}
+else
+{
+    <div class="nps-announcement-list">
+        @foreach (var t in threads)
+        {
+            <RadzenCard class="@($"nps-card nps-thread-row {(t.HasUnread ? "is-unread" : "")}")"
+                        @onclick="@(() => Nav.NavigateTo($"/portal/messages/{t.Id}"))">
+                <div style="display:flex; justify-content:space-between; gap:1rem; align-items:flex-start;">
+                    <div>
+                        @if (t.HasUnread)
+                        {
+                            <RadzenBadge Text="New reply" BadgeStyle="BadgeStyle.Success" Variant="Variant.Flat" />
+                        }
+                        @if (t.IsClosed)
+                        {
+                            <RadzenBadge Text="Resolved" BadgeStyle="BadgeStyle.Light" Variant="Variant.Flat" />
+                        }
+                        <h3 style="margin: 0.25rem 0;">@t.Subject</h3>
+                        <small style="color: var(--nps-ink-500);">
+                            @(t.LastMessageFromStaff ? "School office: " : "You: ")@t.LastMessagePreview
+                        </small>
+                    </div>
+                    <small style="white-space:nowrap; color: var(--nps-ink-500);">
+                        @t.LastMessageOn.ToLocalTime().ToString("dd MMM, HH:mm")
+                        @if (t.StudentName is not null) { <br />@t.StudentName }
+                    </small>
+                </div>
+            </RadzenCard>
+        }
+    </div>
+}
+
+@code {
+    private IReadOnlyList<MessageThreadSummaryDto> threads = [];
+    private bool loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        threads = await Messaging.ListThreadsAsync(new InboxFilter { Open = null });
+        loading = false;
+    }
+}

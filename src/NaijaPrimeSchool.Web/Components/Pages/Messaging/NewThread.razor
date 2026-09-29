@@ -1,0 +1,18 @@
+@page "/messages/new"
+@attribute [Authorize(Roles = $"{Roles.SuperAdmin},{Roles.HeadTeacher}")]
+@rendermode InteractiveServer
+
+<PageTitle>New message · Naija Prime School</PageTitle>
+
+<div class="nps-page-header">
+    <div>
+        <h1>New message</h1>
+        <p>Write privately to a parent or student. They'll see it under Messages in their portal.</p>
+    </div>
+</div>
+
+<NewMessageForm IsStaff="true" BackUrl="/messages" ThreadUrlPrefix="/messages/" InitialRecipientId="@To" />
+
+@code {
+    [SupplyParameterFromQuery(Name = "to")] public Guid? To { get; set; }
+}

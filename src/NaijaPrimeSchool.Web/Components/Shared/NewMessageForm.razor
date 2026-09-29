@@ -1,0 +1,106 @@
+@* Start a conversation. Staff pick the parent / student to write to; a
+   family member always writes to the school office. Either side may tag
+   the pupil it is about. *@
+
+@inject IMessagingService Messaging
+@inject NavigationManager Nav
+@inject NotificationService Notification
+
+<RadzenCard class="nps-card" Style="max-width: 860px;">
+    <div class="nps-form-grid">
+        @if (IsStaff)
+        {
+            <div class="nps-field nps-span-2">
+                <label>To *</label>
+                <RadzenDropDown TValue="Guid?" Data="@recipients" TextProperty="Display" ValueProperty="UserId"
+                                @bind-Value="recipientId" AllowFiltering="true" FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive"
+                                Placeholder="Search parents and students with a portal account" Change="@(_ => LoadStudentOptionsAsync())" />
+            </div>
+        }
+        @if (studentOptions.Count > 0)
+        {
+            <div class="nps-field nps-span-2">
+                <label>About (optional)</label>
+                <RadzenDropDown TValue="Guid?" Data="@studentOptions" TextProperty="Name" ValueProperty="StudentId"
+                                @bind-Value="studentId" AllowClear="true" Placeholder="General, not about a particular pupil" />
+            </div>
+        }
+        <div class="nps-field nps-span-2">
+            <label>Subject *</label>
+            <RadzenTextBox @bind-Value="subject" MaxLength="200" />
+        </div>
+        <div class="nps-field nps-span-2">
+            <label>Message *</label>
+            <RadzenTextArea Value="@body" @oninput="@(e => body = e.Value?.ToString())" Rows="7" MaxLength="4000" Style="width:100%;" />
+            <small style="color: var(--nps-ink-500);">@((body?.Length ?? 0))/4000</small>
+        </div>
+    </div>
+
+    <div class="nps-inline-actions" style="margin-top: 1rem;">
+        <RadzenButton Text="Send" Icon="send" ButtonStyle="ButtonStyle.Primary" IsBusy="@sending" Click="@SendAsync" />
+        <RadzenButton Text="Cancel" ButtonStyle="ButtonStyle.Light" Click="@(() => Nav.NavigateTo(BackUrl))" />
+    </div>
+</RadzenCard>
+
+@code {
+    [Parameter] public bool IsStaff { get; set; }
+    [Parameter, EditorRequired] public string BackUrl { get; set; } = "/";
+    // Where to go after sending; the new thread id is appended.
+    [Parameter, EditorRequired] public string ThreadUrlPrefix { get; set; } = "/";
+    [Parameter] public Guid? InitialRecipientId { get; set; }
+
+    private IReadOnlyList<MessageRecipientDto> recipients = [];
+    private IReadOnlyList<MessageStudentOptionDto> studentOptions = [];
+    private Guid? recipientId;
+    private Guid? studentId;
+    private string? subject;
+    private string? body;
+    private bool sending;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (IsStaff)
+        {
+            recipients = await Messaging.GetRecipientsAsync();
+            if (InitialRecipientId is { } initial && recipients.Any(r => r.UserId == initial))
+            {
+                recipientId = initial;
+                await LoadStudentOptionsAsync();
+            }
+        }
+        else
+        {
+            studentOptions = await Messaging.GetStudentOptionsAsync();
+        }
+    }
+
+    private async Task LoadStudentOptionsAsync()
+    {
+        studentId = null;
+        studentOptions = recipientId is { } id ? await Messaging.GetStudentOptionsAsync(id) : [];
+    }
+
+    private async Task SendAsync()
+    {
+        sending = true;
+        var result = await Messaging.StartThreadAsync(new StartThreadRequest
+        {
+            FamilyUserId = recipientId,
+            StudentId = studentId,
+            Subject = subject ?? "",
+            Body = body ?? "",
+        });
+        sending = false;
+
+        if (result.Succeeded)
+        {
+            Notification.Notify(new NotificationMessage { Severity = NotificationSeverity.Success, Summary = "Message sent" });
+            Nav.NavigateTo(ThreadUrlPrefix + result.Data);
+        }
+        else
+        {
+            foreach (var e in result.Errors)
+                Notification.Notify(new NotificationMessage { Severity = NotificationSeverity.Error, Summary = "Cannot send", Detail = e });
+        }
+    }
+}

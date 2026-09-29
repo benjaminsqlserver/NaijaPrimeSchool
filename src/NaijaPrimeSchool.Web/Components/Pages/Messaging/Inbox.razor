@@ -1,0 +1,100 @@
+@page "/messages"
+@attribute [Authorize(Roles = $"{Roles.SuperAdmin},{Roles.HeadTeacher}")]
+@rendermode InteractiveServer
+
+@inject IMessagingService Messaging
+@inject NavigationManager Nav
+
+<PageTitle>Inbox · Naija Prime School</PageTitle>
+
+<div class="nps-page-header">
+    <div>
+        <h1>Inbox</h1>
+        <p>Private conversations between the school office and families. @(unreadCount > 0 ? $"{unreadCount} with new messages." : "You're all caught up.")</p>
+    </div>
+    <div class="nps-page-actions">
+        <RadzenButton Text="New message" Icon="edit" ButtonStyle="ButtonStyle.Primary" Click="@(() => Nav.NavigateTo("/messages/new"))" />
+    </div>
+</div>
+
+<RadzenCard class="nps-card" Style="margin-bottom:1rem;">
+    <div class="nps-filter-bar">
+        <div class="nps-field">
+            <label>Search</label>
+            <RadzenTextBox @bind-Value="search" Placeholder="Subject, name or message text"
+                           Change="@(_ => LoadAsync())" Style="min-width: 280px;" />
+        </div>
+        <div class="nps-field">
+            <label>Status</label>
+            <RadzenDropDown TValue="string" Data="@statusOptions" TextProperty="Text" ValueProperty="Key"
+                            @bind-Value="status" Change="@(_ => LoadAsync())" Style="min-width: 160px;" />
+        </div>
+        <div class="nps-field">
+            <label>Show</label>
+            <div style="display:flex; align-items:center; gap:0.5rem; height:40px;">
+                <RadzenCheckBox @bind-Value="unreadOnly" Name="unreadOnly" Change="@((bool _) => LoadAsync())" />
+                <RadzenLabel Text="Unread only" Component="unreadOnly" />
+            </div>
+        </div>
+    </div>
+</RadzenCard>
+
+<RadzenCard class="nps-card">
+    <RadzenDataGrid TItem="MessageThreadSummaryDto" Data="@rows" IsLoading="@loading" AllowPaging="true" PageSize="25"
+                    RowClick="@(args => { if (args.Data is { } t) Nav.NavigateTo($"/messages/{t.Id}"); })" RowRender="@RowRender"
+                    EmptyText="No conversations match your filters.">
+        <Columns>
+            <RadzenDataGridColumn TItem="MessageThreadSummaryDto" Title="Family" Width="230px">
+                <Template Context="t">
+                    @if (t.HasUnread) { <span class="nps-unread-dot" title="New message"></span> }
+                    <strong>@t.FamilyName</strong>
+                    <br /><small style="color: var(--nps-ink-500);">@t.FamilyRole@(t.StudentName is null ? "" : " · about " + t.StudentName)</small>
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="MessageThreadSummaryDto" Title="Conversation">
+                <Template Context="t">
+                    <strong>@t.Subject</strong>
+                    <br /><small style="color: var(--nps-ink-500);">@(t.LastMessageFromStaff ? "Office: " : "")@t.LastMessagePreview</small>
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="MessageThreadSummaryDto" Title="Messages" Property="MessageCount" Width="110px" TextAlign="TextAlign.Center" />
+            <RadzenDataGridColumn TItem="MessageThreadSummaryDto" Title="Last message" Width="170px">
+                <Template Context="t">
+                    @t.LastMessageOn.ToLocalTime().ToString("dd MMM yyyy, HH:mm")
+                    @if (t.IsClosed) { <br /><RadzenBadge Text="Resolved" BadgeStyle="BadgeStyle.Light" Variant="Variant.Flat" /> }
+                    else if (!t.LastMessageFromStaff) { <br /><RadzenBadge Text="Awaiting reply" BadgeStyle="BadgeStyle.Warning" Variant="Variant.Flat" /> }
+                </Template>
+            </RadzenDataGridColumn>
+        </Columns>
+    </RadzenDataGrid>
+</RadzenCard>
+
+@code {
+    private IReadOnlyList<MessageThreadSummaryDto> rows = [];
+    private string? search;
+    private string status = "open";
+    private bool unreadOnly;
+    private bool loading = true;
+    private int unreadCount;
+
+    private record StatusOption(string Text, string Key);
+    private readonly StatusOption[] statusOptions = [new("Open", "open"), new("Resolved", "closed"), new("All", "all")];
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        rows = await Messaging.ListThreadsAsync(new InboxFilter
+        {
+            Search = search,
+            Open = status switch { "open" => true, "closed" => false, _ => null },
+            UnreadOnly = unreadOnly,
+        });
+        unreadCount = await Messaging.CountUnreadThreadsAsync();
+        loading = false;
+    }
+
+    private void RowRender(RowRenderEventArgs<MessageThreadSummaryDto> args) =>
+        args.Attributes["class"] = $"nps-thread-row {(args.Data?.HasUnread == true ? "is-unread" : "")}";
+}

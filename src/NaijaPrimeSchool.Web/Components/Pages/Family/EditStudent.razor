@@ -41,6 +41,11 @@ else
                 <RadzenButton Text="Activate" Icon="check_circle" Variant="Variant.Flat"
                               ButtonStyle="ButtonStyle.Success" Click="@(() => SetActiveAsync(true))" />
             }
+            @if (student.UserId is { } messageUserId)
+            {
+                <RadzenButton Text="Send message" Icon="forum" Variant="Variant.Flat" ButtonStyle="ButtonStyle.Info"
+                              Click="@(() => Nav.NavigateTo($"/messages/new?to={messageUserId}"))" />
+            }
             <RadzenButton Text="Back" Icon="arrow_back" Variant="Variant.Flat"
                           ButtonStyle="ButtonStyle.Light" Click="@(() => Nav.NavigateTo("/students"))" />
         </div>

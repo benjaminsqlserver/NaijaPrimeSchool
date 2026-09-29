@@ -1,0 +1,191 @@
+@* One conversation: message bubbles plus a reply box. Used by the office
+   inbox and the parent / student portal; the service decides which side
+   the viewer is on and refuses threads they may not see. *@
+@implements IAsyncDisposable
+
+@inject IMessagingService Messaging
+@inject NavigationManager Nav
+@inject NotificationService Notification
+
+@if (loading)
+{
+    <RadzenCard class="nps-card"><p>Loading conversation...</p></RadzenCard>
+}
+else if (thread is null)
+{
+    <RadzenCard class="nps-card">
+        <h3>Conversation not found.</h3>
+        <p>It may have been removed, or you may not have access to it.</p>
+        <RadzenButton Text="Back" Icon="arrow_back" ButtonStyle="ButtonStyle.Light" Click="@(() => Nav.NavigateTo(BackUrl))" />
+    </RadzenCard>
+}
+else
+{
+    <div class="nps-page-header">
+        <div>
+            <h1>@thread.Subject</h1>
+            <p>
+                <RadzenBadge Text="@thread.StatusName" BadgeStyle="@(thread.IsClosed ? BadgeStyle.Light : BadgeStyle.Success)" Variant="Variant.Flat" />
+                @if (IsStaff)
+                {
+                    <span> · @thread.FamilyName (@thread.FamilyRole)</span>
+                }
+                else
+                {
+                    <span> · with the school office</span>
+                }
+                @if (thread.StudentName is not null)
+                {
+                    <span> · about @thread.StudentName</span>
+                }
+            </p>
+        </div>
+        <div class="nps-page-actions">
+            @if (IsStaff)
+            {
+                if (thread.IsClosed)
+                {
+                    <RadzenButton Text="Reopen" Icon="lock_open" ButtonStyle="ButtonStyle.Light" Click="@(() => SetClosedAsync(false))" />
+                }
+                else
+                {
+                    <RadzenButton Text="Mark resolved" Icon="task_alt" ButtonStyle="ButtonStyle.Success" Click="@(() => SetClosedAsync(true))" />
+                }
+            }
+            <RadzenButton Text="Back" Icon="arrow_back" ButtonStyle="ButtonStyle.Light" Click="@(() => Nav.NavigateTo(BackUrl))" />
+        </div>
+    </div>
+
+    <RadzenCard class="nps-card" Style="max-width: 980px;">
+        <div class="nps-chat">
+            @foreach (var m in thread.Messages)
+            {
+                <div class="@($"nps-bubble {(m.IsMine ? "is-mine" : "is-theirs")}")">@m.Body<span class="nps-bubble__meta">@SenderLabel(m) · @m.SentOn.ToLocalTime().ToString("dd MMM yyyy, HH:mm")</span></div>
+            }
+        </div>
+
+        <div style="margin-top: 1.25rem; border-top: 1px solid var(--nps-ink-200); padding-top: 1rem;">
+            @if (thread.IsClosed)
+            {
+                <small style="display:block; margin-bottom:0.5rem; color: var(--nps-ink-500);">
+                    This conversation is marked resolved. Replying will reopen it.
+                </small>
+            }
+            @* oninput (not the default change) so Send enables and the counter moves while typing. *@
+            <RadzenTextArea Value="@replyText" @oninput="@(e => replyText = e.Value?.ToString())" Rows="4" MaxLength="4000"
+                            Placeholder="Write a reply..." Style="width:100%;" />
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:0.5rem;">
+                <small style="color: var(--nps-ink-500);">@((replyText?.Length ?? 0))/4000</small>
+                <RadzenButton Text="Send reply" Icon="send" ButtonStyle="ButtonStyle.Primary" IsBusy="@sending"
+                              Disabled="@string.IsNullOrWhiteSpace(replyText)" Click="@SendAsync" />
+            </div>
+        </div>
+    </RadzenCard>
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid ThreadId { get; set; }
+    [Parameter, EditorRequired] public string BackUrl { get; set; } = "/";
+    [Parameter] public bool IsStaff { get; set; }
+
+    private MessageThreadDto? thread;
+    private string? replyText;
+    private bool loading = true;
+    private bool sending;
+
+    // Poll so a reply from the other side shows up without a page reload.
+    private PeriodicTimer? timer;
+    private Task? pollTask;
+    private readonly CancellationTokenSource cts = new();
+
+    // The circuit's DbContext is shared with the rest of the page and must
+    // never see two operations at once, so the poll and user actions queue.
+    private readonly SemaphoreSlim gate = new(1, 1);
+
+    private async Task<T> Serialized<T>(Func<Task<T>> call)
+    {
+        await gate.WaitAsync();
+        try { return await call(); }
+        finally { gate.Release(); }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        loading = true;
+        thread = await Serialized(() => Messaging.GetThreadAsync(ThreadId));
+        loading = false;
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (!firstRender) return;
+        timer = new PeriodicTimer(TimeSpan.FromSeconds(15));
+        pollTask = PollAsync();
+    }
+
+    private async Task PollAsync()
+    {
+        try
+        {
+            while (timer is not null && await timer.WaitForNextTickAsync(cts.Token))
+            {
+                var latest = await Serialized(() => Messaging.GetThreadAsync(ThreadId, cts.Token));
+                if (latest is not null && (thread is null || latest.MessageCount != thread.MessageCount || latest.StatusCode != thread.StatusCode))
+                {
+                    thread = latest;
+                    await InvokeAsync(StateHasChanged);
+                }
+            }
+        }
+        catch (OperationCanceledException) { }
+    }
+
+    private string SenderLabel(ThreadMessageDto m) =>
+        m.IsMine ? "You"
+        : m.IsFromStaff ? (IsStaff ? $"{m.SenderName} (office)" : $"School office · {m.SenderName}")
+        : m.SenderName;
+
+    private async Task SendAsync()
+    {
+        if (string.IsNullOrWhiteSpace(replyText)) return;
+        sending = true;
+        var text = replyText;
+        var result = await Serialized(() => Messaging.ReplyAsync(ThreadId, text));
+        sending = false;
+        if (result.Succeeded)
+        {
+            replyText = null;
+            thread = await Serialized(() => Messaging.GetThreadAsync(ThreadId));
+        }
+        else { ShowErrors(result.Errors); }
+    }
+
+    private async Task SetClosedAsync(bool closed)
+    {
+        var result = await Serialized(() => Messaging.SetClosedAsync(ThreadId, closed));
+        if (result.Succeeded)
+        {
+            Notification.Notify(new NotificationMessage { Severity = NotificationSeverity.Success, Summary = closed ? "Marked resolved" : "Reopened" });
+            thread = await Serialized(() => Messaging.GetThreadAsync(ThreadId));
+        }
+        else { ShowErrors(result.Errors); }
+    }
+
+    private void ShowErrors(IReadOnlyList<string> errors)
+    {
+        foreach (var e in errors)
+            Notification.Notify(new NotificationMessage { Severity = NotificationSeverity.Error, Summary = "Error", Detail = e });
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        cts.Cancel();
+        timer?.Dispose();
+        if (pollTask is not null)
+        {
+            try { await pollTask; } catch (OperationCanceledException) { }
+        }
+        cts.Dispose();
+        gate.Dispose();
+    }
+}
