@@ -145,6 +145,77 @@ public class NotificationService(
         return OperationResult<NotificationQueueResult>.Success(result);
     }
 
+    public async Task<OperationResult<NotificationQueueResult>> QueueMessageAlertAsync(
+        Guid messageThreadId, CancellationToken ct = default)
+    {
+        var opts = options.Value;
+        if (!opts.Messages.Enabled)
+            return OperationResult<NotificationQueueResult>.Success(new NotificationQueueResult());
+
+        var thread = await db.MessageThreads
+            .Where(t => t.Id == messageThreadId)
+            .Select(t => new { t.Id, t.FamilyUserId })
+            .FirstOrDefaultAsync(ct);
+        if (thread is null) return OperationResult<NotificationQueueResult>.Failure("Conversation not found.");
+
+        var result = new NotificationQueueResult();
+        if (await RecipientContacts.ForUserAsync(db, thread.FamilyUserId, ct) is not { } contact)
+            return OperationResult<NotificationQueueResult>.Success(result);
+        result.Recipients = 1;
+
+        var channels = await db.NotificationChannels
+            .Where(c => (c.Code == NotificationCodes.Email && opts.Email.Enabled)
+                        || (c.Code == NotificationCodes.Sms && opts.Sms.Enabled))
+            .ToListAsync(ct);
+        var pendingId = await StatusIdAsync(NotificationCodes.Pending, ct);
+        var preference = await db.NotificationPreferences.FirstOrDefaultAsync(p => p.UserId == contact.UserId, ct);
+
+        // Channels that already have an alert waiting: a burst of office
+        // replies produces one alert (covering all of them), not one each.
+        var waiting = await db.AnnouncementNotifications
+            .Where(n => n.MessageThreadId == thread.Id && n.UserId == contact.UserId && n.NotificationStatusId == pendingId)
+            .Select(n => n.NotificationChannelId)
+            .ToListAsync(ct);
+
+        var scheduledFor = DateTimeOffset.UtcNow.AddMinutes(Math.Max(0, opts.Messages.GraceMinutes));
+        foreach (var channel in channels)
+        {
+            if (NotificationPreferenceRules.OptedOutReason(preference, channel.Code) is not null)
+            {
+                result.OptedOut++;
+                continue;
+            }
+
+            var destination = channel.Code == NotificationCodes.Email ? contact.Email : contact.Phone;
+            if (destination is null)
+            {
+                result.MissingContact++;
+                continue;
+            }
+
+            if (waiting.Contains(channel.Id))
+            {
+                result.AlreadyQueued++;
+                continue;
+            }
+
+            db.AnnouncementNotifications.Add(new AnnouncementNotification
+            {
+                MessageThreadId = thread.Id,
+                UserId = contact.UserId,
+                NotificationChannelId = channel.Id,
+                NotificationStatusId = pendingId,
+                RecipientName = contact.Name,
+                Destination = destination,
+                ScheduledFor = scheduledFor,
+            });
+            result.Queued++;
+        }
+
+        await db.SaveChangesAsync(ct);
+        return OperationResult<NotificationQueueResult>.Success(result);
+    }
+
     public async Task<IReadOnlyList<AnnouncementNotificationDto>> ListAsync(NotificationFilter filter, CancellationToken ct = default)
     {
         var q = db.AnnouncementNotifications.AsQueryable();
@@ -155,10 +226,14 @@ public class NotificationService(
             q = q.Where(n =>
                 n.RecipientName.ToLower().Contains(term)
                 || n.Destination.ToLower().Contains(term)
-                || n.Announcement!.Title.ToLower().Contains(term));
+                || (n.Announcement != null && n.Announcement.Title.ToLower().Contains(term))
+                || (n.MessageThread != null && n.MessageThread.Subject.ToLower().Contains(term)));
         }
 
         if (filter.AnnouncementId is { } aid) q = q.Where(n => n.AnnouncementId == aid);
+        if (filter.MessageThreadId is { } tid) q = q.Where(n => n.MessageThreadId == tid);
+        if (filter.Kind == NotificationKinds.Announcement) q = q.Where(n => n.AnnouncementId != null);
+        if (filter.Kind == NotificationKinds.Message) q = q.Where(n => n.MessageThreadId != null);
         if (filter.ChannelId is { } cid) q = q.Where(n => n.NotificationChannelId == cid);
         if (filter.StatusId is { } sid) q = q.Where(n => n.NotificationStatusId == sid);
 
@@ -168,8 +243,12 @@ public class NotificationService(
             .Select(n => new AnnouncementNotificationDto
             {
                 Id = n.Id,
+                Kind = n.MessageThreadId != null ? NotificationKinds.Message : NotificationKinds.Announcement,
                 AnnouncementId = n.AnnouncementId,
-                AnnouncementTitle = n.Announcement!.Title,
+                MessageThreadId = n.MessageThreadId,
+                Title = n.MessageThreadId != null
+                    ? (n.MessageThread != null ? n.MessageThread.Subject : "")
+                    : (n.Announcement != null ? n.Announcement.Title : ""),
                 UserId = n.UserId,
                 RecipientName = n.RecipientName,
                 Destination = n.Destination,
@@ -196,8 +275,8 @@ public class NotificationService(
         if (announcementIds.Count == 0) return new Dictionary<Guid, NotificationCounts>();
 
         var rows = await db.AnnouncementNotifications
-            .Where(n => announcementIds.Contains(n.AnnouncementId))
-            .GroupBy(n => new { n.AnnouncementId, n.NotificationStatus!.Code })
+            .Where(n => n.AnnouncementId != null && announcementIds.Contains(n.AnnouncementId.Value))
+            .GroupBy(n => new { AnnouncementId = n.AnnouncementId!.Value, n.NotificationStatus!.Code })
             .Select(g => new { g.Key.AnnouncementId, g.Key.Code, Count = g.Count() })
             .ToListAsync(ct);
 

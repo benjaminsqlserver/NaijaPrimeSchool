@@ -1,6 +1,7 @@
 using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using NaijaPrimeSchool.Application.Common;
+using NaijaPrimeSchool.Application.Communications;
 using NaijaPrimeSchool.Application.Messaging;
 using NaijaPrimeSchool.Application.Messaging.Dtos;
 using NaijaPrimeSchool.Domain.Identity;
@@ -11,7 +12,8 @@ namespace NaijaPrimeSchool.Infrastructure.Services;
 
 public class MessagingService(
     ApplicationDbContext db,
-    ICurrentUser currentUser) : IMessagingService
+    ICurrentUser currentUser,
+    INotificationService notifications) : IMessagingService
 {
     private const string Open = "OPEN";
     private const string Closed = "CLOSED";
@@ -201,6 +203,7 @@ public class MessagingService(
 
         db.MessageThreads.Add(thread);
         await db.SaveChangesAsync(ct);
+        if (staff) await notifications.QueueMessageAlertAsync(thread.Id, ct);
         return OperationResult<Guid>.Success(thread.Id);
     }
 
@@ -240,6 +243,10 @@ public class MessagingService(
         }
 
         await db.SaveChangesAsync(ct);
+
+        // Office wrote to the family: queue an email / SMS alert, sent only if
+        // they haven't read it in the portal by the end of the grace period.
+        if (staff) await notifications.QueueMessageAlertAsync(t.Id, ct);
         return OperationResult.Success();
     }
 

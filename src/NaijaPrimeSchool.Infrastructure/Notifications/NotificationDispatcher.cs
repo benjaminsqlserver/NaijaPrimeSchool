@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NaijaPrimeSchool.Application.Communications;
 using NaijaPrimeSchool.Domain.Communications;
+using NaijaPrimeSchool.Domain.Messaging;
 using NaijaPrimeSchool.Infrastructure.Persistence;
 
 namespace NaijaPrimeSchool.Infrastructure.Notifications;
@@ -37,6 +38,7 @@ public sealed class NotificationDispatcher(
         var due = await db.AnnouncementNotifications
             .IgnoreQueryFilters()
             .Include(n => n.Announcement).ThenInclude(a => a!.AnnouncementCategory)
+            .Include(n => n.MessageThread)
             .Include(n => n.User)
             .Where(n => !n.IsDeleted && n.NotificationStatusId == pendingId && n.ScheduledFor <= now)
             .OrderBy(n => n.ScheduledFor)
@@ -64,7 +66,8 @@ public sealed class NotificationDispatcher(
 
             // Inside the recipient's quiet hours: hold (not an attempt) and
             // let the read check run again when the window ends.
-            if (NotificationPreferenceRules.HoldUntil(preference, n.Announcement!.AnnouncementCategory,
+            // Message alerts are never urgent; announcements follow their category.
+            if (NotificationPreferenceRules.HoldUntil(preference, n.Announcement?.AnnouncementCategory,
                     DateTimeOffset.UtcNow, zone) is { } resumeAt)
             {
                 n.ScheduledFor = resumeAt;
@@ -73,7 +76,7 @@ public sealed class NotificationDispatcher(
                 continue;
             }
 
-            var result = await SendAsync(n, channelCode!, opts, ct);
+            var result = await SendAsync(n, channelCode!, opts, zone, ct);
 
             n.AttemptCount++;
             n.LastAttemptOn = DateTimeOffset.UtcNow;
@@ -112,11 +115,18 @@ public sealed class NotificationDispatcher(
         AnnouncementNotification n, string? channelCode, NotificationPreference? preference,
         NotificationOptions opts, CancellationToken ct)
     {
-        var a = n.Announcement;
-        if (a is null || a.IsDeleted) return "Announcement was deleted.";
-        if (!a.IsPublished) return "Announcement was unpublished before the reminder went out.";
-        if (a.ExpiresOn is { } exp && exp < DateOnly.FromDateTime(DateTime.UtcNow))
-            return "Announcement expired before the reminder went out.";
+        if (n.MessageThreadId is not null)
+        {
+            if (n.MessageThread is null || n.MessageThread.IsDeleted) return "Conversation was deleted.";
+        }
+        else
+        {
+            var a = n.Announcement;
+            if (a is null || a.IsDeleted) return "Announcement was deleted.";
+            if (!a.IsPublished) return "Announcement was unpublished before the reminder went out.";
+            if (a.ExpiresOn is { } exp && exp < DateOnly.FromDateTime(DateTime.UtcNow))
+                return "Announcement expired before the reminder went out.";
+        }
 
         if (n.User is null || n.User.IsDeleted || !n.User.IsActive)
             return "Recipient's portal account is inactive or deleted.";
@@ -136,17 +146,57 @@ public sealed class NotificationDispatcher(
         if (NotificationPreferenceRules.OptedOutReason(preference, channelCode) is { } optOut)
             return optOut;
 
+        if (n.MessageThread is { } thread)
+        {
+            return (await UnreadOfficeMessagesAsync(thread, ct)).Count == 0
+                ? "Read in the portal before the alert went out."
+                : null;
+        }
+
         var read = await db.AnnouncementReads.AnyAsync(
             r => r.AnnouncementId == n.AnnouncementId && r.UserId == n.UserId, ct);
         return read ? "Read in the portal before the reminder went out." : null;
     }
 
-    private async Task<GatewayResult> SendAsync(
-        AnnouncementNotification n, string channelCode, NotificationOptions opts, CancellationToken ct)
+    // Office messages the family hasn't seen yet, oldest first.
+    private async Task<List<ThreadMessage>> UnreadOfficeMessagesAsync(MessageThread thread, CancellationToken ct)
     {
-        var a = n.Announcement!;
+        var seen = thread.FamilyLastReadOn;
+        return await db.ThreadMessages
+            .Include(m => m.SenderUser)
+            .Where(m => m.MessageThreadId == thread.Id && m.IsFromStaff && (seen == null || m.SentOn > seen))
+            .OrderBy(m => m.SentOn)
+            .ToListAsync(ct);
+    }
+
+    private async Task<GatewayResult> SendAsync(
+        AnnouncementNotification n, string channelCode, NotificationOptions opts, TimeZoneInfo zone, CancellationToken ct)
+    {
         try
         {
+            if (n.MessageThread is { } thread)
+            {
+                if (channelCode == NotificationCodes.Email)
+                {
+                    // Quote at most the last five unread office messages.
+                    var unread = (await UnreadOfficeMessagesAsync(thread, ct))
+                        .TakeLast(5)
+                        .Select(m => ($"School office · {m.SenderUser?.FirstName} {m.SenderUser?.LastName}".TrimEnd(), m.SentOn, m.Body))
+                        .ToList();
+                    var mail = NotificationComposer.ComposeMessageEmail(opts, n.RecipientName, thread.Id, thread.Subject, unread, zone);
+                    n.Subject = mail.Subject;
+                    n.Message = Clip(mail.TextBody, 4000);
+                    return await emailGateway.SendAsync(n.Destination, n.RecipientName, mail.Subject,
+                        mail.TextBody, mail.HtmlBody, ct);
+                }
+
+                var alert = NotificationComposer.ComposeMessageSms(opts, thread.Id, thread.Subject);
+                n.Subject = null;
+                n.Message = alert;
+                return await smsGateway.SendAsync(n.Destination, alert, ct);
+            }
+
+            var a = n.Announcement!;
             if (channelCode == NotificationCodes.Email)
             {
                 var mail = NotificationComposer.ComposeEmail(opts, n.RecipientName, a.Title, a.Body);

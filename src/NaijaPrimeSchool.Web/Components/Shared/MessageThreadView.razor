@@ -43,6 +43,9 @@ else
         <div class="nps-page-actions">
             @if (IsStaff)
             {
+                <RadzenButton Text="Alert log" Icon="mark_email_read" ButtonStyle="ButtonStyle.Light"
+                              title="Email / SMS alerts sent to the family for this conversation"
+                              Click="@(() => Nav.NavigateTo($"/announcements/notifications?messageThreadId={ThreadId}"))" />
                 if (thread.IsClosed)
                 {
                     <RadzenButton Text="Reopen" Icon="lock_open" ButtonStyle="ButtonStyle.Light" Click="@(() => SetClosedAsync(false))" />

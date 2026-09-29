@@ -15,6 +15,13 @@ public interface INotificationService
     Task<OperationResult<NotificationQueueResult>> QueueForAnnouncementAsync(
         Guid announcementId, bool sendNow, CancellationToken ct = default);
 
+    // Queues an email / SMS alert telling the family member of a conversation
+    // that the school office has written to them. Sent after the configured
+    // grace period unless they read it in the portal first; at most one alert
+    // per channel is waiting at a time, however many replies the office sends.
+    Task<OperationResult<NotificationQueueResult>> QueueMessageAlertAsync(
+        Guid messageThreadId, CancellationToken ct = default);
+
     Task<IReadOnlyList<AnnouncementNotificationDto>> ListAsync(NotificationFilter filter, CancellationToken ct = default);
 
     Task<IReadOnlyDictionary<Guid, NotificationCounts>> GetCountsByAnnouncementAsync(
