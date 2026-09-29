@@ -25,6 +25,9 @@ public class NotificationOptions
 
     public string SchoolName { get; set; } = "Naija Prime School";
 
+    // IANA time zone that families' quiet hours are interpreted in.
+    public string TimeZone { get; set; } = "Africa/Lagos";
+
     // Public URL of the web app, used to build the "read it in the portal"
     // link. Leave empty to omit the link.
     public string? PortalBaseUrl { get; set; }

@@ -1,0 +1,16 @@
+@page "/portal/notifications"
+@attribute [Authorize(Roles = $"{Roles.Parent},{Roles.Student}")]
+@rendermode InteractiveServer
+
+<PageTitle>Reminder settings · Naija Prime School</PageTitle>
+
+<div class="nps-page-header">
+    <div>
+        <h1>Reminder settings</h1>
+        <p>Choose whether the school may email or text you about announcements you haven't read yet, and when.</p>
+    </div>
+</div>
+
+<RadzenCard class="nps-card" Style="max-width: 860px;">
+    <NotificationPreferencesEditor />
+</RadzenCard>

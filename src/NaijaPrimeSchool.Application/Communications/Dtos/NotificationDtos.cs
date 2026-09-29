@@ -37,7 +37,7 @@ public class NotificationFilter
     public int Take { get; set; } = 500;
 }
 
-// Queued, AlreadyQueued and MissingContact count messages (one per
+// Queued, AlreadyQueued, MissingContact and OptedOut count messages (one per
 // recipient per enabled channel); Recipients and AlreadyRead count people.
 public class NotificationQueueResult
 {
@@ -49,6 +49,9 @@ public class NotificationQueueResult
 
     // Messages not queued because the recipient has no usable email / phone.
     public int MissingContact { get; set; }
+
+    // Messages not queued because the recipient turned that channel off.
+    public int OptedOut { get; set; }
 
     // People in the audience who have already read it in the portal.
     public int AlreadyRead { get; set; }

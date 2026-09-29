@@ -339,6 +339,21 @@ else
                     }
                 </RadzenCard>
             </RadzenTabsItem>
+
+            <RadzenTabsItem Text="Reminders">
+                <RadzenCard class="nps-card">
+                    @if (student.UserId is { } reminderUserId)
+                    {
+                        <NotificationPreferencesEditor UserId="@reminderUserId" />
+                    }
+                    else
+                    {
+                        <RadzenAlert Severity="AlertSeverity.Info" AllowClose="false">
+                            This student has no portal account, so they don't receive announcement reminders.
+                        </RadzenAlert>
+                    }
+                </RadzenCard>
+            </RadzenTabsItem>
         </Tabs>
     </RadzenTabs>
 }
