@@ -1,0 +1,153 @@
+@page "/finance/online-payments"
+@attribute [Authorize(Roles = $"{Roles.SuperAdmin},{Roles.HeadTeacher},{Roles.SchoolBursar}")]
+@rendermode InteractiveServer
+
+@inject IOnlinePaymentService OnlinePaymentService
+@inject NavigationManager Nav
+@inject NotificationService Notification
+
+<PageTitle>Online payments · Naija Prime School</PageTitle>
+
+<div class="nps-page-header">
+    <div>
+        <h1>Online payments</h1>
+        <p>
+            Payments families started from the portal via @settings.ProviderName.
+            Confirmed payments become receipts automatically; <strong>Needs review</strong> rows need a manual check.
+            @if (!settings.Enabled) { <strong> Online payment is currently switched off.</strong> }
+        </p>
+    </div>
+    <div class="nps-page-actions">
+        <RadzenButton Text="Refresh" Icon="refresh" ButtonStyle="ButtonStyle.Light" Click="@LoadAsync" />
+    </div>
+</div>
+
+<div class="nps-stat-grid" style="margin: 0 0 1rem;">
+    <div class="nps-stat-card">
+        <div class="nps-stat-icon"><RadzenIcon Icon="paid" /></div>
+        <div><div class="nps-stat-label">Received online</div><div class="nps-stat-value">₦@rows.Where(r => r.StatusCode == "SUCCEEDED").Sum(r => r.Amount).ToString("N2")</div></div>
+    </div>
+    <div class="nps-stat-card">
+        <div class="nps-stat-icon" style="background:#e0ecff; color:#1d4ed8;"><RadzenIcon Icon="hourglass_top" /></div>
+        <div><div class="nps-stat-label">Awaiting confirmation</div><div class="nps-stat-value">@rows.Count(r => r.StatusCode is "PENDING" or "ABANDONED")</div></div>
+    </div>
+    <div class="nps-stat-card">
+        <div class="nps-stat-icon" style="background:#fde2e2; color:#d64545;"><RadzenIcon Icon="report" /></div>
+        <div><div class="nps-stat-label">Needs review</div><div class="nps-stat-value">@rows.Count(r => r.StatusCode == "REVIEW")</div></div>
+    </div>
+</div>
+
+<RadzenCard class="nps-card" Style="margin-bottom:1rem;">
+    <div class="nps-filter-bar">
+        <div class="nps-field">
+            <label>Search</label>
+            <RadzenTextBox @bind-Value="search" Placeholder="Reference, invoice, pupil, payer or email"
+                           Change="@(_ => LoadAsync())" Style="min-width: 300px;" />
+        </div>
+        <div class="nps-field">
+            <label>Status</label>
+            <RadzenDropDown TValue="string" Data="@statusOptions" TextProperty="Text" ValueProperty="Code"
+                            @bind-Value="status" AllowClear="true" Placeholder="All"
+                            Change="@(_ => LoadAsync())" Style="min-width: 170px;" />
+        </div>
+    </div>
+</RadzenCard>
+
+<RadzenCard class="nps-card">
+    <RadzenDataGrid TItem="OnlinePaymentDto" Data="@rows" IsLoading="@loading" AllowPaging="true" PageSize="25" AllowSorting="true"
+                    EmptyText="No online payments yet.">
+        <Columns>
+            <RadzenDataGridColumn TItem="OnlinePaymentDto" Title="Started" Property="CreatedOn" Width="175px">
+                <Template Context="o">@o.CreatedOn.ToLocalTime().ToString("dd MMM yyyy, HH:mm")</Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="OnlinePaymentDto" Title="Pupil / invoice" Property="StudentName">
+                <Template Context="o">
+                    <strong>@o.StudentName</strong>
+                    <br /><small style="color: var(--nps-ink-500);">@o.InvoiceNumber</small>
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="OnlinePaymentDto" Title="Payer" Property="PayerName">
+                <Template Context="o">
+                    @o.PayerName
+                    <br /><small style="color: var(--nps-ink-500);">@o.PayerEmail</small>
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="OnlinePaymentDto" Title="Amount" Property="Amount" Width="130px" TextAlign="TextAlign.Right">
+                <Template Context="o"><strong>₦@o.Amount.ToString("N2")</strong></Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="OnlinePaymentDto" Title="Status" Property="StatusName" Width="150px">
+                <Template Context="o">
+                    <RadzenBadge Text="@o.StatusName" BadgeStyle="@BadgeFor(o.StatusCode)" Variant="Variant.Flat" />
+                    @if (o.ReceiptNumber is not null)
+                    {
+                        <br /><a href="@($"/payments/{o.PaymentId}")"><small>@o.ReceiptNumber</small></a>
+                    }
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="OnlinePaymentDto" Title="Reference / note" Property="Reference">
+                <Template Context="o">
+                    <small>@o.Reference@(o.Channel is null ? "" : $" · {o.Channel}")</small>
+                    @if (o.StatusMessage is not null)
+                    {
+                        <br /><small title="@o.StatusMessage" style="color: @(o.StatusCode == "REVIEW" ? "#d64545" : "var(--nps-ink-500)");">@o.StatusMessage</small>
+                    }
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="OnlinePaymentDto" Title="" Width="80px" Sortable="false" TextAlign="TextAlign.Right">
+                <Template Context="o">
+                    @if (o.StatusCode is "PENDING" or "ABANDONED")
+                    {
+                        <RadzenButton Icon="sync" Size="ButtonSize.Small" Variant="Variant.Flat" ButtonStyle="ButtonStyle.Info"
+                                      title="Check with the payment provider now" Click="@(() => VerifyAsync(o))" />
+                    }
+                </Template>
+            </RadzenDataGridColumn>
+        </Columns>
+    </RadzenDataGrid>
+</RadzenCard>
+
+@code {
+    private OnlinePaymentSettingsDto settings = new();
+    private IReadOnlyList<OnlinePaymentDto> rows = [];
+    private string? search;
+    private string? status;
+    private bool loading = true;
+
+    private record StatusOption(string Text, string Code);
+    private readonly StatusOption[] statusOptions =
+    [
+        new("Pending", "PENDING"), new("Succeeded", "SUCCEEDED"), new("Failed", "FAILED"),
+        new("Abandoned", "ABANDONED"), new("Needs review", "REVIEW"),
+    ];
+
+    protected override async Task OnInitializedAsync()
+    {
+        settings = OnlinePaymentService.GetSettings();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        rows = await OnlinePaymentService.ListAsync(new OnlinePaymentFilter { Search = search, StatusCode = status });
+        loading = false;
+    }
+
+    private async Task VerifyAsync(OnlinePaymentDto o)
+    {
+        var result = await OnlinePaymentService.ConfirmAsync(o.Reference);
+        Notification.Notify(result.Succeeded
+            ? new NotificationMessage { Severity = NotificationSeverity.Info, Summary = "Checked with provider", Detail = $"{o.Reference}: {result.Data!.StatusName}" }
+            : new NotificationMessage { Severity = NotificationSeverity.Error, Summary = "Error", Detail = string.Join(" ", result.Errors) });
+        await LoadAsync();
+    }
+
+    private static BadgeStyle BadgeFor(string code) => code switch
+    {
+        "SUCCEEDED" => BadgeStyle.Success,
+        "PENDING" => BadgeStyle.Info,
+        "REVIEW" => BadgeStyle.Danger,
+        "FAILED" => BadgeStyle.Warning,
+        _ => BadgeStyle.Light,
+    };
+}

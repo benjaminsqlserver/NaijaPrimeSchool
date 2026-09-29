@@ -1,0 +1,93 @@
+@page "/portal/payments/return"
+@attribute [Authorize(Roles = $"{Roles.Parent},{Roles.Student}")]
+@rendermode InteractiveServer
+
+@inject IOnlinePaymentService OnlinePayments
+@inject NavigationManager Nav
+
+<PageTitle>Payment status · Naija Prime School</PageTitle>
+
+<div class="nps-page-header">
+    <div>
+        <h1>Payment status</h1>
+    </div>
+</div>
+
+@if (loading)
+{
+    <RadzenCard class="nps-card"><p>Confirming your payment with the payment provider...</p></RadzenCard>
+}
+else if (payment is null)
+{
+    <RadzenCard class="nps-card"><h3>We couldn't find that payment.</h3></RadzenCard>
+}
+else
+{
+    <RadzenCard class="nps-card" Style="max-width: 640px;">
+        @switch (payment.StatusCode)
+        {
+            case "SUCCEEDED":
+                <h2 style="color:#0b6b3a; margin-top:0;"><RadzenIcon Icon="check_circle" /> Payment received</h2>
+                <p>Thank you. ₦@payment.Amount.ToString("N2") has been paid towards invoice <strong>@payment.InvoiceNumber</strong> for @payment.StudentName.</p>
+                <p>Receipt number: <strong>@payment.ReceiptNumber</strong></p>
+                @if (payment.StatusMessage is { } note && note.Contains("credit"))
+                {
+                    <RadzenAlert Severity="AlertSeverity.Info" AllowClose="false">@note</RadzenAlert>
+                }
+                break;
+            case "PENDING":
+                <h2 style="margin-top:0;"><RadzenIcon Icon="hourglass_top" /> Waiting for confirmation</h2>
+                <p>The payment provider hasn't confirmed this payment yet. This can take a minute for bank transfers and USSD.</p>
+                <RadzenButton Text="Check again" Icon="refresh" ButtonStyle="ButtonStyle.Light" IsBusy="@checking" Click="@CheckAsync" />
+                break;
+            case "REVIEW":
+                <h2 style="margin-top:0;"><RadzenIcon Icon="support_agent" /> Being checked by the bursary</h2>
+                <p>Your payment reached us but needs a quick manual check before the receipt is issued. You don't need to pay again; the bursary will be in touch.</p>
+                break;
+            default:
+                <h2 style="color:#d64545; margin-top:0;"><RadzenIcon Icon="error" /> Payment not completed</h2>
+                <p>No money was taken@(payment.StatusMessage is null ? "." : $": {payment.StatusMessage}")</p>
+                <RadzenButton Text="Try again" Icon="replay" ButtonStyle="ButtonStyle.Primary"
+                              Click="@(() => Nav.NavigateTo($"/portal/pay/{payment.InvoiceId}"))" />
+                break;
+        }
+        <p style="margin-top:1.25rem; color: var(--nps-ink-500);"><small>Reference: @payment.Reference</small></p>
+        <RadzenButton Text="Back to fees" Icon="arrow_back" ButtonStyle="ButtonStyle.Light"
+                      Click="@(() => Nav.NavigateTo(BackUrl))" />
+    </RadzenCard>
+}
+
+@code {
+    // Paystack appends both ?trxref= and ?reference=; the simulator sends reference.
+    [SupplyParameterFromQuery(Name = "reference")] public string? Reference { get; set; }
+    [SupplyParameterFromQuery(Name = "trxref")] public string? TrxRef { get; set; }
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private OnlinePaymentDto? payment;
+    private bool loading = true;
+    private bool checking;
+    private string BackUrl = "/portal/student/fees";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CheckAsync();
+        var user = AuthState is null ? null : (await AuthState).User;
+        if (user?.IsInRole(Roles.Parent) == true && payment is not null)
+            BackUrl = $"/portal/parent/wards/{payment.StudentId}";
+        loading = false;
+    }
+
+    private async Task CheckAsync()
+    {
+        checking = true;
+        var reference = Reference ?? TrxRef;
+        if (!string.IsNullOrWhiteSpace(reference)
+            && await OnlinePayments.GetByReferenceAsync(reference) is not null)
+        {
+            // Never trust the redirect itself: re-verify with the provider.
+            await OnlinePayments.ConfirmAsync(reference);
+            payment = await OnlinePayments.GetByReferenceAsync(reference);
+        }
+        checking = false;
+    }
+}

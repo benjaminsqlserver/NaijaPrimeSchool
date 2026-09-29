@@ -39,6 +39,7 @@ public static class DatabaseInitializer
         await SeedInventoryLookupsAsync(db, ct);
         await SeedCommunicationsLookupsAsync(db, ct);
         await SeedMessagingLookupsAsync(db, ct);
+        await SeedOnlinePaymentLookupsAsync(db, ct);
         await SeedRolesAsync(sp, ct);
         await SeedSuperAdminAsync(sp, logger, ct);
     }
@@ -215,6 +216,30 @@ public static class DatabaseInitializer
             }
         }
 
+        await db.SaveChangesAsync(ct);
+    }
+
+    private static async Task SeedOnlinePaymentLookupsAsync(ApplicationDbContext db, CancellationToken ct)
+    {
+        if (await db.OnlinePaymentStatuses.IgnoreQueryFilters().AnyAsync(ct)) return;
+
+        (string Name, string Code)[] statuses =
+        [
+            ("Pending",      "PENDING"),
+            ("Succeeded",    "SUCCEEDED"),
+            ("Failed",       "FAILED"),
+            ("Abandoned",    "ABANDONED"),
+            ("Needs review", "REVIEW"),
+        ];
+        for (var i = 0; i < statuses.Length; i++)
+        {
+            db.OnlinePaymentStatuses.Add(new OnlinePaymentStatus
+            {
+                Name = statuses[i].Name,
+                Code = statuses[i].Code,
+                DisplayOrder = i + 1,
+            });
+        }
         await db.SaveChangesAsync(ct);
     }
 

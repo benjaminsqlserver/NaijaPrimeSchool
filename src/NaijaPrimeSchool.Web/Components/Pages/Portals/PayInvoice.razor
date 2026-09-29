@@ -1,0 +1,121 @@
+@page "/portal/pay/{InvoiceId:guid}"
+@attribute [Authorize(Roles = $"{Roles.Parent},{Roles.Student}")]
+@rendermode InteractiveServer
+
+@inject IOnlinePaymentService OnlinePayments
+@inject IInvoiceService InvoiceService
+@inject IPortalService PortalService
+@inject NavigationManager Nav
+@inject NotificationService Notification
+
+<PageTitle>Pay fees online · Naija Prime School</PageTitle>
+
+<div class="nps-page-header">
+    <div>
+        <h1>Pay fees online</h1>
+        <p>Pay securely by card, bank transfer or USSD. Your receipt is issued automatically once the payment is confirmed.</p>
+    </div>
+    <div class="nps-page-actions">
+        <RadzenButton Text="Back" Icon="arrow_back" ButtonStyle="ButtonStyle.Light" Click="@(() => Nav.NavigateTo(BackUrl))" />
+    </div>
+</div>
+
+@if (loading)
+{
+    <RadzenCard class="nps-card"><p>Loading...</p></RadzenCard>
+}
+else if (!settings.Enabled)
+{
+    <RadzenCard class="nps-card"><h3>Online payment isn't available right now.</h3><p>Please pay at the bursary or contact the school office.</p></RadzenCard>
+}
+else if (invoice is null)
+{
+    <RadzenCard class="nps-card"><h3>Invoice not found.</h3></RadzenCard>
+}
+else if (invoice.Balance <= 0)
+{
+    <RadzenCard class="nps-card"><h3>This invoice is fully paid. Thank you!</h3></RadzenCard>
+}
+else
+{
+    <RadzenCard class="nps-card" Style="max-width: 640px;">
+        <div class="nps-readonly-grid" style="margin-bottom: 1.25rem;">
+            <div><small>Invoice</small><strong>@invoice.InvoiceNumber</strong></div>
+            <div><small>Pupil</small><strong>@invoice.StudentName</strong></div>
+            <div><small>Term</small><strong>@invoice.TermName</strong></div>
+            <div><small>Outstanding balance</small><strong>₦@invoice.Balance.ToString("N2")</strong></div>
+        </div>
+
+        <div class="nps-field">
+            <label>Amount to pay (₦)</label>
+            <RadzenNumeric TValue="decimal" @bind-Value="amount" Min="@minimum" Max="@invoice.Balance" Step="1000"
+                           Format="N2" Style="width: 100%; max-width: 280px;" />
+            <small style="color: var(--nps-ink-500);">
+                Pay the full balance or part of it (at least ₦@minimum.ToString("N2")).
+            </small>
+        </div>
+
+        <div class="nps-inline-actions" style="margin-top: 1.5rem;">
+            <RadzenButton Text="@($"Pay ₦{amount:N2} securely")" Icon="lock" ButtonStyle="ButtonStyle.Primary"
+                          IsBusy="@starting" Click="@PayAsync" />
+        </div>
+        <small style="display:block; margin-top: 0.75rem; color: var(--nps-ink-500);">
+            You'll be taken to @settings.ProviderName to complete the payment, then brought back here.
+            The school never sees your card details.
+        </small>
+    </RadzenCard>
+}
+
+@code {
+    [Parameter] public Guid InvoiceId { get; set; }
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private OnlinePaymentSettingsDto settings = new();
+    private InvoiceDto? invoice;
+    private decimal amount;
+    private decimal minimum;
+    private bool loading = true;
+    private bool starting;
+    private string BackUrl = "/";
+
+    protected override async Task OnInitializedAsync()
+    {
+        settings = OnlinePayments.GetSettings();
+        var detail = await InvoiceService.GetByIdAsync(InvoiceId);
+        // Only show an invoice the signed-in parent / student may see.
+        if (detail is not null && await PortalService.CurrentUserCanViewStudentAsync(detail.Invoice.StudentId))
+        {
+            invoice = detail.Invoice;
+            amount = invoice.Balance;
+            minimum = Math.Min(settings.MinimumAmount, invoice.Balance);
+        }
+
+        var user = AuthState is null ? null : (await AuthState).User;
+        BackUrl = user?.IsInRole(Roles.Parent) == true && invoice is not null
+            ? $"/portal/parent/wards/{invoice.StudentId}"
+            : "/portal/student/fees";
+        loading = false;
+    }
+
+    private async Task PayAsync()
+    {
+        starting = true;
+        var result = await OnlinePayments.StartAsync(new StartOnlinePaymentRequest
+        {
+            InvoiceId = InvoiceId,
+            Amount = amount,
+            ReturnUrl = Nav.ToAbsoluteUri("/portal/payments/return").ToString(),
+        });
+
+        if (result.Succeeded && result.Data is { } started)
+        {
+            // Full navigation: the gateway's checkout is outside this app.
+            Nav.NavigateTo(started.RedirectUrl, forceLoad: true);
+            return;
+        }
+
+        starting = false;
+        foreach (var e in result.Errors)
+            Notification.Notify(new NotificationMessage { Severity = NotificationSeverity.Error, Summary = "Cannot start payment", Detail = e });
+    }
+}

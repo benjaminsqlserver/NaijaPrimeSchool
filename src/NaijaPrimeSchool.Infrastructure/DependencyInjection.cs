@@ -14,6 +14,7 @@ using NaijaPrimeSchool.Application.Results;
 using NaijaPrimeSchool.Application.Users;
 using NaijaPrimeSchool.Domain.Identity;
 using NaijaPrimeSchool.Infrastructure.Notifications;
+using NaijaPrimeSchool.Infrastructure.Payments;
 using NaijaPrimeSchool.Infrastructure.Persistence;
 using NaijaPrimeSchool.Infrastructure.Services;
 
@@ -82,6 +83,7 @@ public static class DependencyInjection
         services.AddScoped<InvoiceService>();
         services.AddScoped<IInvoiceService>(sp => sp.GetRequiredService<InvoiceService>());
         services.AddScoped<IPaymentService, PaymentService>();
+        AddOnlinePayments(services, configuration);
 
         services.AddScoped<ISupplierService, SupplierService>();
         services.AddScoped<IStoreItemService, StoreItemService>();
@@ -94,6 +96,30 @@ public static class DependencyInjection
         AddNotifications(services, configuration);
 
         return services;
+    }
+
+    private static void AddOnlinePayments(IServiceCollection services, IConfiguration configuration)
+    {
+        var section = configuration.GetSection(OnlinePaymentOptions.SectionName);
+        services.Configure<OnlinePaymentOptions>(section);
+        var options = section.Get<OnlinePaymentOptions>() ?? new OnlinePaymentOptions();
+
+        services.AddScoped<IOnlinePaymentService, OnlinePaymentService>();
+
+        switch (options.Provider.ToLowerInvariant())
+        {
+            case "paystack":
+                services.AddHttpClient<IPaymentGateway, PaystackGateway>();
+                break;
+            case "simulator":
+                // Singleton: the simulator keeps its "charges" in memory.
+                services.AddSingleton<SimulatorGateway>();
+                services.AddSingleton<IPaymentGateway>(sp => sp.GetRequiredService<SimulatorGateway>());
+                break;
+            default:
+                throw new InvalidOperationException(
+                    $"Unknown OnlinePayments:Provider '{options.Provider}'. Use 'Paystack' or 'Simulator'.");
+        }
     }
 
     private static void AddNotifications(IServiceCollection services, IConfiguration configuration)

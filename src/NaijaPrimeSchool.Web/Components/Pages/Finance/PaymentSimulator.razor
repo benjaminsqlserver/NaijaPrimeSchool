@@ -1,0 +1,51 @@
+@page "/payments/simulator"
+@attribute [Authorize]
+@rendermode InteractiveServer
+
+@inject IPaymentGateway Gateway
+@inject NavigationManager Nav
+
+<PageTitle>Payment simulator · Naija Prime School</PageTitle>
+
+@* Development-only stand-in for the Paystack checkout page. Program.cs
+   refuses to start with the simulator outside Development. *@
+@if (Gateway is not NaijaPrimeSchool.Infrastructure.Payments.SimulatorGateway sim)
+{
+    <RadzenCard class="nps-card"><h3>Not available.</h3></RadzenCard>
+}
+else if (sim.Describe(Reference ?? "") is not { } charge)
+{
+    <RadzenCard class="nps-card"><h3>Unknown payment reference.</h3><p>The simulator may have been restarted.</p></RadzenCard>
+}
+else
+{
+    <div style="max-width: 520px; margin: 2rem auto;">
+        <RadzenAlert Severity="AlertSeverity.Warning" AllowClose="false">
+            Development simulator: no real money moves. In production this is Paystack's secure checkout.
+        </RadzenAlert>
+        <RadzenCard class="nps-card" Style="margin-top:1rem; text-align:center;">
+            <p style="color: var(--nps-ink-500); margin:0;">Amount</p>
+            <h1 style="margin: 0.25rem 0 1rem;">@charge.Currency @charge.Amount.ToString("N2")</h1>
+            <p><small>Reference @Reference</small></p>
+            <div style="display:flex; flex-direction:column; gap:0.6rem; margin-top:1rem;">
+                <RadzenButton Text="Pay (simulate success)" Icon="credit_card" ButtonStyle="ButtonStyle.Success"
+                              Click="@(() => Finish(sim, NaijaPrimeSchool.Application.Finance.GatewayChargeStatus.Success))" />
+                <RadzenButton Text="Card declined (simulate failure)" Icon="credit_card_off" ButtonStyle="ButtonStyle.Danger"
+                              Click="@(() => Finish(sim, NaijaPrimeSchool.Application.Finance.GatewayChargeStatus.Failed))" />
+                <RadzenButton Text="Cancel and return" ButtonStyle="ButtonStyle.Light"
+                              Click="@(() => Finish(sim, NaijaPrimeSchool.Application.Finance.GatewayChargeStatus.Abandoned))" />
+            </div>
+        </RadzenCard>
+    </div>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "reference")] public string? Reference { get; set; }
+
+    private void Finish(NaijaPrimeSchool.Infrastructure.Payments.SimulatorGateway sim, NaijaPrimeSchool.Application.Finance.GatewayChargeStatus outcome)
+    {
+        if (Reference is null || sim.Complete(Reference, outcome) is not { } callback) return;
+        var separator = callback.Contains('?') ? '&' : '?';
+        Nav.NavigateTo($"{callback}{separator}reference={Uri.EscapeDataString(Reference)}", forceLoad: true);
+    }
+}
