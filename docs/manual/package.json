@@ -1,0 +1,16 @@
+{
+  "name": "manual",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "docx": "^9.8.1",
+    "mammoth": "^1.13.0"
+  }
+}

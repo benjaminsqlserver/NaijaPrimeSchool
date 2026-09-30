@@ -1,0 +1,366 @@
+{
+"access-denied": [
+1400,
+950
+],
+"announcement-new": [
+1366,
+950
+],
+"announcements": [
+1400,
+950
+],
+"assessment-new": [
+1400,
+950
+],
+"assessment-scores": [
+1400,
+950
+],
+"assessments": [
+1400,
+950
+],
+"attendance-open": [
+1400,
+950
+],
+"attendance-register": [
+1366,
+950
+],
+"attendance-subject": [
+1400,
+950
+],
+"attendance-summary": [
+1366,
+950
+],
+"audit-history": [
+1400,
+950
+],
+"audit-log": [
+1400,
+950
+],
+"class-new": [
+1366,
+950
+],
+"classes": [
+1400,
+950
+],
+"dashboard-admin": [
+1400,
+950
+],
+"dashboard-head": [
+1400,
+950
+],
+"dashboard-parent": [
+1400,
+950
+],
+"dashboard-teacher": [
+1400,
+950
+],
+"enrolments": [
+1400,
+950
+],
+"fee-schedule-detail": [
+1366,
+950
+],
+"fee-schedule-new": [
+1400,
+950
+],
+"fee-schedules": [
+1400,
+950
+],
+"finance-dashboard": [
+1366,
+950
+],
+"inbox-thread": [
+1400,
+950
+],
+"inbox": [
+1400,
+950
+],
+"invoice-detail": [
+1366,
+950
+],
+"invoices-issue": [
+1400,
+950
+],
+"invoices": [
+1400,
+950
+],
+"login-filled": [
+1366,
+860
+],
+"login": [
+1366,
+860
+],
+"message-new": [
+1400,
+950
+],
+"movement-new": [
+1366,
+950
+],
+"movements": [
+1400,
+950
+],
+"notification-log": [
+1400,
+950
+],
+"online-payments": [
+1400,
+950
+],
+"parent-detail": [
+1400,
+950
+],
+"parent-new": [
+1366,
+950
+],
+"parent-reminders": [
+1400,
+950
+],
+"parent-wards": [
+1400,
+950
+],
+"parents": [
+1400,
+950
+],
+"pay-checkout": [
+1400,
+950
+],
+"pay-invoice": [
+1400,
+950
+],
+"pay-success": [
+1400,
+950
+],
+"payment-receipt": [
+1366,
+950
+],
+"payment-record": [
+1366,
+950
+],
+"payments": [
+1400,
+950
+],
+"periods": [
+1400,
+950
+],
+"portal-announcements": [
+1400,
+950
+],
+"portal-message-new": [
+1400,
+950
+],
+"portal-messages": [
+1400,
+950
+],
+"portal-reminders": [
+1400,
+950
+],
+"portal-report-card": [
+1366,
+950
+],
+"portal-thread": [
+1400,
+950
+],
+"report-cards": [
+1400,
+950
+],
+"report-comments": [
+1400,
+950
+],
+"report-detail": [
+1400,
+950
+],
+"report-generate": [
+1400,
+950
+],
+"report-traits": [
+1400,
+950
+],
+"results": [
+1400,
+950
+],
+"roles": [
+1400,
+950
+],
+"session-new": [
+1366,
+950
+],
+"sessions": [
+1400,
+950
+],
+"store-dashboard": [
+1366,
+950
+],
+"store-item-detail": [
+1366,
+950
+],
+"store-item-new": [
+1366,
+950
+],
+"store-items": [
+1400,
+950
+],
+"student-attendance": [
+1400,
+950
+],
+"student-enrolments": [
+1400,
+950
+],
+"student-fees": [
+1400,
+950
+],
+"student-link-parent": [
+1400,
+950
+],
+"student-my-profile": [
+1400,
+950
+],
+"student-new": [
+1366,
+950
+],
+"student-parents": [
+1400,
+950
+],
+"student-photo": [
+1400,
+950
+],
+"student-profile": [
+1400,
+950
+],
+"student-results": [
+1400,
+950
+],
+"student-today": [
+1400,
+950
+],
+"students": [
+1400,
+950
+],
+"subjects": [
+1400,
+950
+],
+"suppliers": [
+1400,
+950
+],
+"terms": [
+1400,
+950
+],
+"timetable-edit": [
+1400,
+950
+],
+"timetable": [
+1366,
+950
+],
+"user-edit": [
+1400,
+950
+],
+"user-new": [
+1366,
+950
+],
+"user-reset-password": [
+1400,
+950
+],
+"user-roles": [
+1400,
+950
+],
+"users": [
+1400,
+950
+],
+"ward-fees": [
+1400,
+950
+],
+"ward-overview": [
+1400,
+950
+],
+"ward-report-cards": [
+1400,
+950
+]
+}
