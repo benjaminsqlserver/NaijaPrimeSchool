@@ -1,0 +1,223 @@
+@page "/admin/audit-log"
+@attribute [Authorize(Roles = $"{Roles.SuperAdmin},{Roles.HeadTeacher}")]
+@rendermode InteractiveServer
+
+@inject IAuditLogService AuditLogService
+@inject NavigationManager Nav
+
+<PageTitle>Audit log · Naija Prime School</PageTitle>
+
+<div class="nps-page-header">
+    <div>
+        <h1>Audit log</h1>
+        <p>
+            Who created, changed, deleted or restored what, and when, with the old and new value of every field that changed.
+            Passwords and security stamps are never recorded, only the fact that they changed.
+        </p>
+    </div>
+    <div class="nps-page-actions">
+        @if (EntityId is not null)
+        {
+            <RadzenButton Text="Show all records" Icon="filter_alt_off" ButtonStyle="ButtonStyle.Light" Click="@ClearRecordAsync" />
+        }
+        <RadzenButton Text="Refresh" Icon="refresh" ButtonStyle="ButtonStyle.Light" Click="@ReloadAsync" />
+    </div>
+</div>
+
+@if (EntityId is not null)
+{
+    <RadzenAlert Severity="AlertSeverity.Info" AllowClose="false" Style="margin-bottom:1rem;">
+        Showing the full history of one @Friendly(EntityType) (id <code>@EntityId</code>), newest first.
+    </RadzenAlert>
+}
+
+<RadzenCard class="nps-card" Style="margin-bottom:1rem;">
+    <div class="nps-filter-bar">
+        <div class="nps-field">
+            <label>From</label>
+            <RadzenDatePicker TValue="DateTime?" @bind-Value="from" DateFormat="dd MMM yyyy" AllowClear="true"
+                              Change="@(_ => ReloadAsync())" Style="width: 150px;" />
+        </div>
+        <div class="nps-field">
+            <label>To</label>
+            <RadzenDatePicker TValue="DateTime?" @bind-Value="to" DateFormat="dd MMM yyyy" AllowClear="true"
+                              Change="@(_ => ReloadAsync())" Style="width: 150px;" />
+        </div>
+        <div class="nps-field">
+            <label>User</label>
+            <RadzenDropDown TValue="string" Data="@userNames" @bind-Value="userName" AllowClear="true" AllowFiltering="true"
+                            Placeholder="Anyone" Change="@(_ => ReloadAsync())" Style="min-width: 220px;" />
+        </div>
+        <div class="nps-field">
+            <label>Record type</label>
+            <RadzenDropDown TValue="string" Data="@entityTypes" TextProperty="Text" ValueProperty="Value"
+                            @bind-Value="EntityType" AllowClear="true" AllowFiltering="true" Placeholder="All"
+                            Change="@(_ => ReloadAsync())" Style="min-width: 190px;" />
+        </div>
+        <div class="nps-field">
+            <label>Action</label>
+            <RadzenDropDown TValue="string" Data="@actions" TextProperty="Text" ValueProperty="Value"
+                            @bind-Value="actionCode" AllowClear="true" Placeholder="All"
+                            Change="@(_ => ReloadAsync())" Style="min-width: 140px;" />
+        </div>
+        <div class="nps-field">
+            <label>Search</label>
+            <RadzenTextBox @bind-Value="search" Placeholder="Name, number or any changed value"
+                           Change="@(_ => ReloadAsync())" Style="min-width: 240px;" />
+        </div>
+    </div>
+</RadzenCard>
+
+<RadzenCard class="nps-card">
+    <RadzenDataGrid @ref="grid" TItem="AuditEntryDto" Data="@rows" Count="@total" LoadData="@LoadAsync" IsLoading="@loading"
+                    AllowPaging="true" PageSize="50" PagerHorizontalAlign="HorizontalAlign.Left" ShowPagingSummary="true"
+                    ExpandMode="DataGridExpandMode.Multiple" EmptyText="No changes match your filters.">
+        <Template Context="e">
+            @if (e.Changes.Count == 0)
+            {
+                <em style="color: var(--nps-ink-500);">No field values recorded for this change.</em>
+            }
+            else
+            {
+                <table class="nps-audit-changes">
+                    <thead><tr><th>Field</th><th>Before</th><th>After</th></tr></thead>
+                    <tbody>
+                        @foreach (var c in e.Changes)
+                        {
+                            <tr>
+                                <td>@SplitWords(c.Field)</td>
+                                <td class="is-old">@(c.Old ?? "—")</td>
+                                <td class="is-new">@(c.New ?? "—")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </Template>
+        <Columns>
+            <RadzenDataGridColumn TItem="AuditEntryDto" Title="When" Width="195px" Sortable="false">
+                <Template Context="e">@e.OccurredOn.ToLocalTime().ToString("dd MMM yyyy, HH:mm:ss")</Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="AuditEntryDto" Title="Who" Width="220px" Sortable="false">
+                <Template Context="e">
+                    @if (e.UserId is null)
+                    {
+                        <span style="color: var(--nps-ink-500);"><RadzenIcon Icon="smart_toy" Style="font-size:16px; vertical-align:middle;" /> System</span>
+                    }
+                    else { @e.UserName }
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="AuditEntryDto" Title="Action" Width="110px" Sortable="false">
+                <Template Context="e"><RadzenBadge Text="@e.ActionName" BadgeStyle="@BadgeFor(e.ActionCode)" Variant="Variant.Flat" /></Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="AuditEntryDto" Title="Record" Sortable="false">
+                <Template Context="e">
+                    <strong>@(e.EntityLabel ?? "(no name)")</strong>
+                    <br /><small style="color: var(--nps-ink-500);">@Friendly(e.EntityType) · @e.Changes.Count field(s)</small>
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="AuditEntryDto" Title="" Width="125px" Sortable="false" TextAlign="TextAlign.Right">
+                <Template Context="e">
+                    @if (EntityId != e.EntityId)
+                    {
+                        <RadzenButton Text="History" Icon="history" Size="ButtonSize.Small" Variant="Variant.Flat" ButtonStyle="ButtonStyle.Light"
+                                      title="Every recorded change to this record" Click="@(() => ShowHistoryAsync(e))" />
+                    }
+                </Template>
+            </RadzenDataGridColumn>
+        </Columns>
+    </RadzenDataGrid>
+</RadzenCard>
+
+@code {
+    // Deep link: /admin/audit-log?entityType=Invoice&entityId=<guid>
+    [SupplyParameterFromQuery(Name = "entityType")] public string? EntityType { get; set; }
+    [SupplyParameterFromQuery(Name = "entityId")] public string? EntityId { get; set; }
+
+    private RadzenDataGrid<AuditEntryDto>? grid;
+    // Null until the first LoadData: with an empty list Radzen assumes the
+    // data is already loaded and never asks for the first page.
+    private IReadOnlyList<AuditEntryDto>? rows;
+    private int total;
+    private bool loading = true;
+
+    private DateTime? from;
+    private DateTime? to;
+    private string? userName;
+    private string? actionCode;
+    private string? search;
+
+    private record Option(string Text, string Value);
+    private IReadOnlyList<string> userNames = [];
+    private IReadOnlyList<Option> entityTypes = [];
+    private readonly Option[] actions =
+    [
+        new("Created", "CREATE"), new("Updated", "UPDATE"), new("Deleted", "DELETE"), new("Restored", "RESTORE"),
+    ];
+
+    protected override async Task OnInitializedAsync()
+    {
+        userNames = await AuditLogService.GetUserNamesAsync();
+        entityTypes = (await AuditLogService.GetEntityTypesAsync()).Select(t => new Option(Friendly(t), t)).OrderBy(o => o.Text).ToList();
+    }
+
+    private async Task LoadAsync(LoadDataArgs args)
+    {
+        loading = true;
+        var page = await AuditLogService.ListAsync(new AuditLogFilter
+        {
+            From = from is { } f ? DateOnly.FromDateTime(f) : null,
+            To = to is { } t ? DateOnly.FromDateTime(t) : null,
+            UserName = userName,
+            EntityType = EntityType,
+            EntityId = EntityId,
+            ActionCode = actionCode,
+            Search = search,
+            Skip = args.Skip ?? 0,
+            Take = args.Top ?? 50,
+        });
+        rows = page.Items;
+        total = page.TotalCount;
+        loading = false;
+    }
+
+    private Task ReloadAsync() => grid?.FirstPage(true) ?? Task.CompletedTask;
+
+    private async Task ShowHistoryAsync(AuditEntryDto e)
+    {
+        EntityType = e.EntityType;
+        EntityId = e.EntityId;
+        Nav.NavigateTo($"/admin/audit-log?entityType={Uri.EscapeDataString(e.EntityType)}&entityId={Uri.EscapeDataString(e.EntityId)}", replace: false);
+        await ReloadAsync();
+    }
+
+    private async Task ClearRecordAsync()
+    {
+        EntityId = null;
+        EntityType = null;
+        Nav.NavigateTo("/admin/audit-log");
+        await ReloadAsync();
+    }
+
+    private static BadgeStyle BadgeFor(string code) => code switch
+    {
+        "CREATE" => BadgeStyle.Success,
+        "UPDATE" => BadgeStyle.Info,
+        "DELETE" => BadgeStyle.Danger,
+        "RESTORE" => BadgeStyle.Warning,
+        _ => BadgeStyle.Light,
+    };
+
+    // "ApplicationUser" -> "User account", "StudentParent" -> "Student parent".
+    private static string Friendly(string? type) => type switch
+    {
+        null => "record",
+        "ApplicationUser" => "User account",
+        "ApplicationUserRole" => "User role",
+        "ApplicationRole" => "Role",
+        _ => SplitWords(type) is var s && s.Length > 0 ? char.ToUpperInvariant(s[0]) + s[1..].ToLowerInvariant() : type,
+    };
+
+    private static string SplitWords(string name) =>
+        System.Text.RegularExpressions.Regex.Replace(name, "(?<=[a-z0-9])(?=[A-Z])", " ");
+}

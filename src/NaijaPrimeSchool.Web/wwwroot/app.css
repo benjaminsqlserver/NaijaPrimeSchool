@@ -814,3 +814,23 @@ h1:focus {
 
 .nps-thread-row { cursor: pointer; }
 .nps-thread-row.is-unread strong { font-weight: 700; }
+
+/* ===================== Audit log (sprint 16) ===================== */
+.nps-audit-changes {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+    margin: 0.25rem 0 0.5rem;
+}
+.nps-audit-changes th,
+.nps-audit-changes td {
+    text-align: left;
+    padding: 0.35rem 0.6rem;
+    border-bottom: 1px solid var(--nps-ink-200);
+    vertical-align: top;
+    overflow-wrap: anywhere;
+}
+.nps-audit-changes th { color: var(--nps-ink-500); font-weight: 600; }
+.nps-audit-changes td:first-child { width: 22%; font-weight: 600; }
+.nps-audit-changes td.is-old { background: #fdf0f0; color: #7f1d1d; width: 39%; }
+.nps-audit-changes td.is-new { background: #eefaf3; color: #14532d; width: 39%; }

@@ -30,6 +30,7 @@ public static class DatabaseInitializer
         logger.LogInformation("Applying database migrations...");
         await db.Database.MigrateAsync(ct);
 
+        await SeedAuditLookupsAsync(db, ct);
         await SeedLookupsAsync(db, ct);
         await SeedAcademicLookupsAsync(db, ct);
         await SeedFamilyLookupsAsync(db, ct);
@@ -216,6 +217,29 @@ public static class DatabaseInitializer
             }
         }
 
+        await db.SaveChangesAsync(ct);
+    }
+
+    private static async Task SeedAuditLookupsAsync(ApplicationDbContext db, CancellationToken ct)
+    {
+        if (await db.AuditActions.IgnoreQueryFilters().AnyAsync(ct)) return;
+
+        (string Name, string Code)[] actions =
+        [
+            ("Created",  "CREATE"),
+            ("Updated",  "UPDATE"),
+            ("Deleted",  "DELETE"),
+            ("Restored", "RESTORE"),
+        ];
+        for (var i = 0; i < actions.Length; i++)
+        {
+            db.AuditActions.Add(new Domain.Auditing.AuditAction
+            {
+                Name = actions[i].Name,
+                Code = actions[i].Code,
+                DisplayOrder = i + 1,
+            });
+        }
         await db.SaveChangesAsync(ct);
     }
 

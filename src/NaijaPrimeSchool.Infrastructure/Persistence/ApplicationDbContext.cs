@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using NaijaPrimeSchool.Application.Common;
 using NaijaPrimeSchool.Domain.Academics;
+using NaijaPrimeSchool.Domain.Auditing;
 using NaijaPrimeSchool.Domain.Attendance;
 using NaijaPrimeSchool.Domain.Common;
 using NaijaPrimeSchool.Domain.Communications;
@@ -96,6 +97,9 @@ public class ApplicationDbContext(
     public DbSet<NotificationStatus> NotificationStatuses => Set<NotificationStatus>();
     public DbSet<AnnouncementNotification> AnnouncementNotifications => Set<AnnouncementNotification>();
     public DbSet<NotificationPreference> NotificationPreferences => Set<NotificationPreference>();
+
+    public DbSet<AuditAction> AuditActions => Set<AuditAction>();
+    public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
 
     public DbSet<OnlinePaymentStatus> OnlinePaymentStatuses => Set<OnlinePaymentStatus>();
     public DbSet<OnlinePayment> OnlinePayments => Set<OnlinePayment>();
@@ -191,6 +195,37 @@ public class ApplicationDbContext(
         ConfigureCommunications(builder);
         ConfigureMessaging(builder);
         ConfigureOnlinePayments(builder);
+        ConfigureAuditing(builder);
+    }
+
+    private static void ConfigureAuditing(ModelBuilder builder)
+    {
+        ConfigureLookup<AuditAction>(builder, "AuditActions", extra: b =>
+        {
+            b.Property(a => a.Name).HasMaxLength(40).IsRequired();
+            b.Property(a => a.Code).HasMaxLength(20).IsRequired();
+            b.HasIndex(a => a.Name).IsUnique();
+            b.HasIndex(a => a.Code).IsUnique();
+        });
+
+        builder.Entity<AuditEntry>(b =>
+        {
+            b.ToTable("AuditEntries");
+            b.HasKey(e => e.Id);
+            b.Property(e => e.UserName).HasMaxLength(100).IsRequired();
+            b.Property(e => e.EntityType).HasMaxLength(100).IsRequired();
+            b.Property(e => e.EntityId).HasMaxLength(100).IsRequired();
+            b.Property(e => e.EntityLabel).HasMaxLength(200);
+            b.Property(e => e.Changes).IsRequired();
+
+            b.HasOne(e => e.AuditAction).WithMany(a => a.Entries)
+                .HasForeignKey(e => e.AuditActionId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasIndex(e => e.OccurredOn);
+            b.HasIndex(e => new { e.EntityType, e.EntityId, e.OccurredOn });
+            b.HasIndex(e => new { e.UserName, e.OccurredOn });
+        });
     }
 
     private static void ConfigureOnlinePayments(ModelBuilder builder)
@@ -1467,13 +1502,68 @@ public class ApplicationDbContext(
     public override int SaveChanges()
     {
         ApplyAuditAndSoftDelete();
-        return base.SaveChanges();
+        var added = HasAuditableChanges() ? AddAuditEntries(auditActionIds ??= LoadAuditActionIds()) : [];
+        try
+        {
+            return base.SaveChanges();
+        }
+        catch
+        {
+            DetachAuditEntries(added);
+            throw;
+        }
     }
 
-    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         ApplyAuditAndSoftDelete();
-        return base.SaveChangesAsync(cancellationToken);
+        var added = HasAuditableChanges()
+            ? AddAuditEntries(auditActionIds ??= await LoadAuditActionIdsAsync(cancellationToken))
+            : [];
+        try
+        {
+            return await base.SaveChangesAsync(cancellationToken);
+        }
+        catch
+        {
+            DetachAuditEntries(added);
+            throw;
+        }
+    }
+
+    // A failed save must not leave its audit rows tracked: in a long-lived
+    // Blazor circuit the next successful save would otherwise commit a record
+    // of a change that never happened.
+    private void DetachAuditEntries(List<AuditEntry> added)
+    {
+        foreach (var e in added) Entry(e).State = EntityState.Detached;
+    }
+
+    // AuditAction ids, looked up once per context. Empty while the database
+    // is still being seeded (the lookup rows don't exist yet), which simply
+    // leaves seeding unaudited.
+    private IReadOnlyDictionary<string, Guid>? auditActionIds;
+
+    private bool HasAuditableChanges() =>
+        ChangeTracker.Entries().Any(e => e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted
+                                         && e.Entity is not AuditEntry);
+
+    private Dictionary<string, Guid> LoadAuditActionIds() =>
+        AuditActions.AsNoTracking().ToDictionary(a => a.Code, a => a.Id);
+
+    private async Task<IReadOnlyDictionary<string, Guid>> LoadAuditActionIdsAsync(CancellationToken ct) =>
+        await AuditActions.AsNoTracking().ToDictionaryAsync(a => a.Code, a => a.Id, ct);
+
+    // Appends one AuditEntry per changed row to the same SaveChanges, so the
+    // trail commits (or rolls back) together with the change it describes.
+    private List<AuditEntry> AddAuditEntries(IReadOnlyDictionary<string, Guid> actionIds)
+    {
+        if (actionIds.Count == 0) return [];
+        var entries = AuditTrail.Capture(
+            ChangeTracker.Entries().ToList(), actionIds, DateTimeOffset.UtcNow,
+            currentUser.UserId, currentUser.UserName ?? "system");
+        if (entries.Count > 0) AuditEntries.AddRange(entries);
+        return entries;
     }
 
     private void ApplyAuditAndSoftDelete()

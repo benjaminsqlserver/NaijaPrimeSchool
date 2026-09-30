@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using NaijaPrimeSchool.Application.Academics;
+using NaijaPrimeSchool.Application.Auditing;
 using NaijaPrimeSchool.Application.Attendance;
 using NaijaPrimeSchool.Application.Communications;
 using NaijaPrimeSchool.Application.Family;
@@ -92,6 +93,7 @@ public static class DependencyInjection
         services.AddScoped<IAnnouncementService, AnnouncementService>();
         services.AddScoped<IPortalService, PortalService>();
         services.AddScoped<IMessagingService, MessagingService>();
+        services.AddScoped<IAuditLogService, AuditLogService>();
 
         AddNotifications(services, configuration);
 
