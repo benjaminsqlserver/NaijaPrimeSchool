@@ -290,7 +290,12 @@ public class StudentService(
 
         student.IsActive = isActive;
         await db.SaveChangesAsync(ct);
-        return OperationResult.Success();
+
+        var login = await PortalAccounts.SetActiveAsync(
+            userManager, student.UserId, isActive, "Pupil record deactivated", currentUser.UserName ?? "system");
+        return login.Succeeded
+            ? OperationResult.Success()
+            : OperationResult.Failure(login.Errors.Select(e => e.Description));
     }
 
     public async Task<OperationResult> SoftDeleteAsync(Guid id, CancellationToken ct = default)

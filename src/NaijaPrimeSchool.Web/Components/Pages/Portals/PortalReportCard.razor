@@ -1,0 +1,154 @@
+@page "/portal/report-cards/{Id:guid}"
+@attribute [Authorize(Roles = $"{Roles.Parent},{Roles.Student},{Roles.SuperAdmin},{Roles.HeadTeacher}")]
+@rendermode InteractiveServer
+
+@* Read-only report card for families. The staff page (/reports/{id}) edits
+   comments and ratings, so families get this view instead: a pupil sees only
+   their own published cards, a parent only their linked wards' published
+   cards. *@
+
+@inject IReportCardService ReportCardService
+@inject IPortalService PortalService
+@inject NavigationManager Nav
+
+<PageTitle>Report card · Naija Prime School</PageTitle>
+
+@if (loading)
+{
+    <RadzenCard class="nps-card"><p>Loading...</p></RadzenCard>
+}
+else if (detail is null)
+{
+    <RadzenCard class="nps-card">
+        <h3>Report card not available.</h3>
+        <p>It may not have been published yet, or it belongs to another pupil.</p>
+        <RadzenButton Text="Back" Icon="arrow_back" Variant="Variant.Flat" ButtonStyle="ButtonStyle.Light"
+                      Click="@(() => Nav.NavigateTo(backUrl))" />
+    </RadzenCard>
+}
+else
+{
+    var card = detail.Card;
+    <div class="nps-page-header">
+        <div style="display:flex; gap:1rem; align-items:center;">
+            <StudentAvatar PhotoUrl="@card.StudentPhotoUrl" FirstName="@card.StudentFirstName" LastName="@card.StudentLastName" Size="large" />
+            <div>
+                <h1 style="margin:0;">@card.StudentName</h1>
+                <p style="margin:0;">@card.SchoolClassName · @card.TermName · admission #@card.StudentAdmissionNumber</p>
+            </div>
+        </div>
+        <div class="nps-page-actions">
+            <RadzenButton Text="Print" Icon="print" Variant="Variant.Flat" ButtonStyle="ButtonStyle.Light"
+                          Click="@PrintAsync" />
+            <RadzenButton Text="Back" Icon="arrow_back" Variant="Variant.Flat" ButtonStyle="ButtonStyle.Light"
+                          Click="@(() => Nav.NavigateTo(backUrl))" />
+        </div>
+    </div>
+
+    <div class="nps-stat-grid">
+        <div class="nps-stat-card">
+            <div class="nps-stat-icon"><RadzenIcon Icon="menu_book" /></div>
+            <div><div class="nps-stat-label">Subjects offered</div><div class="nps-stat-value">@card.SubjectsTaken</div></div>
+        </div>
+        <div class="nps-stat-card">
+            <div class="nps-stat-icon"><RadzenIcon Icon="percent" /></div>
+            <div><div class="nps-stat-label">Average</div><div class="nps-stat-value">@card.AveragePercentage.ToString("F2")%</div></div>
+        </div>
+        <div class="nps-stat-card">
+            <div class="nps-stat-icon"><RadzenIcon Icon="emoji_events" /></div>
+            <div>
+                <div class="nps-stat-label">Position in class</div>
+                <div class="nps-stat-value">@(card.Position.HasValue ? $"{card.Position} of {card.StudentsInClass}" : "—")</div>
+            </div>
+        </div>
+        <div class="nps-stat-card">
+            <div class="nps-stat-icon"><RadzenIcon Icon="event_available" /></div>
+            <div><div class="nps-stat-label">Days present</div><div class="nps-stat-value">@card.DaysPresent / @card.TotalSchoolDays</div></div>
+        </div>
+    </div>
+
+    <RadzenCard class="nps-card" Style="margin-top: 1rem;">
+        <h3 style="margin: 0 0 1rem;">Subjects</h3>
+        <RadzenDataGrid TItem="SubjectResultDto" Data="@detail.Results" AllowPaging="false" EmptyText="No subject results.">
+            <Columns>
+                <RadzenDataGridColumn TItem="SubjectResultDto" Title="Subject" Property="SubjectName" />
+                <RadzenDataGridColumn TItem="SubjectResultDto" Title="%" Width="100px">
+                    <Template Context="r"><strong>@r.Percentage.ToString("F2")%</strong></Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="SubjectResultDto" Title="Grade" Width="100px" Property="GradeBandName" />
+                <RadzenDataGridColumn TItem="SubjectResultDto" Title="Position" Width="110px">
+                    <Template Context="r">@(r.Position.HasValue ? $"{r.Position} / {r.StudentsInClass}" : "—")</Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="SubjectResultDto" Title="Remark" Property="GradeBandRemark" />
+            </Columns>
+        </RadzenDataGrid>
+    </RadzenCard>
+
+    <div class="nps-form-grid" style="margin-top: 1rem;">
+        <RadzenCard class="nps-card">
+            <h3 style="margin: 0 0 1rem;">Affective traits</h3>
+            @if (detail.AffectiveRatings.Count == 0) { <p style="color: var(--nps-ink-500);">Not rated.</p> }
+            @foreach (var r in detail.AffectiveRatings)
+            {
+                <div style="display:flex; justify-content:space-between; padding: .25rem 0;"><span>@r.AffectiveTraitName</span><strong>@r.TraitRatingName</strong></div>
+            }
+        </RadzenCard>
+        <RadzenCard class="nps-card">
+            <h3 style="margin: 0 0 1rem;">Psychomotor skills</h3>
+            @if (detail.PsychomotorRatings.Count == 0) { <p style="color: var(--nps-ink-500);">Not rated.</p> }
+            @foreach (var r in detail.PsychomotorRatings)
+            {
+                <div style="display:flex; justify-content:space-between; padding: .25rem 0;"><span>@r.PsychomotorSkillName</span><strong>@r.TraitRatingName</strong></div>
+            }
+        </RadzenCard>
+    </div>
+
+    <RadzenCard class="nps-card" Style="margin-top: 1rem;">
+        <h3 style="margin: 0 0 .5rem;">Class teacher's comment</h3>
+        <p>@(string.IsNullOrWhiteSpace(card.ClassTeacherComment) ? "—" : card.ClassTeacherComment)</p>
+        <h3 style="margin: 1rem 0 .5rem;">Head teacher's comment</h3>
+        <p>@(string.IsNullOrWhiteSpace(card.HeadTeacherComment) ? "—" : card.HeadTeacherComment)</p>
+        @if (card.NextTermBegins is { } next)
+        {
+            <p style="margin-top: 1rem;"><strong>Next term begins:</strong> @next.ToString("dddd, d MMMM yyyy")</p>
+        }
+    </RadzenCard>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+
+    private ReportCardDetailDto? detail;
+    private bool loading = true;
+    private string backUrl = "/";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        loading = true;
+        detail = null;
+        var user = AuthState is null ? null : (await AuthState).User;
+        var found = await ReportCardService.GetByIdAsync(Id);
+
+        if (found is not null && user is not null)
+        {
+            var isStaff = user.IsInRole(Roles.SuperAdmin) || user.IsInRole(Roles.HeadTeacher);
+            if (user.IsInRole(Roles.Student) && !isStaff)
+            {
+                backUrl = "/portal/student/results";
+                var me = await PortalService.ResolveStudentIdForCurrentUserAsync();
+                if (me == found.Card.StudentId && found.Card.IsPublished) detail = found;
+            }
+            else
+            {
+                backUrl = $"/portal/parent/wards/{found.Card.StudentId}";
+                if (isStaff || (found.Card.IsPublished && await PortalService.CurrentUserCanViewStudentAsync(found.Card.StudentId)))
+                    detail = found;
+            }
+        }
+        loading = false;
+    }
+
+    private async Task PrintAsync() => await JS.InvokeVoidAsync("print");
+}

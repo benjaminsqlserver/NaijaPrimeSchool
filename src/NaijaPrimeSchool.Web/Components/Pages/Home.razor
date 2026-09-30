@@ -1,6 +1,7 @@
 @page "/"
 @attribute [Authorize]
 @rendermode InteractiveServer
+@using System.Security.Claims
 
 <PageTitle>Dashboard · Naija Prime School</PageTitle>
 
@@ -8,7 +9,7 @@
     <div>
         <AuthorizeView>
             <Authorized>
-                <h2>Welcome, @context.User.Identity?.Name!</h2>
+                <h2>Welcome, @(displayName ?? context.User.Identity?.Name)!</h2>
             </Authorized>
             <NotAuthorized>
                 <h2>Welcome to Naija Prime School</h2>
@@ -30,42 +31,70 @@
     </div>
 </div>
 
-<div class="nps-stat-grid">
-    <div class="nps-stat-card">
-        <span class="nps-stat-icon rzi rzi-people"></span>
-        <div>
-            <div class="nps-stat-label">Staff &amp; students</div>
-            <div class="nps-stat-value">@totalUsers</div>
+@* Account statistics are for the administrator only; everyone else gets
+   shortcuts to the parts of the portal their role can use. *@
+<AuthorizeView Roles="@Roles.SuperAdmin">
+    <Authorized>
+        <div class="nps-stat-grid">
+            <div class="nps-stat-card">
+                <span class="nps-stat-icon"><RadzenIcon Icon="people" /></span>
+                <div>
+                    <div class="nps-stat-label">Staff &amp; students</div>
+                    <div class="nps-stat-value">@totalUsers</div>
+                </div>
+            </div>
+            <div class="nps-stat-card">
+                <span class="nps-stat-icon"><RadzenIcon Icon="admin_panel_settings" /></span>
+                <div>
+                    <div class="nps-stat-label">Roles configured</div>
+                    <div class="nps-stat-value">@totalRoles</div>
+                </div>
+            </div>
+            <div class="nps-stat-card">
+                <span class="nps-stat-icon"><RadzenIcon Icon="verified_user" /></span>
+                <div>
+                    <div class="nps-stat-label">Active users</div>
+                    <div class="nps-stat-value">@activeUsers</div>
+                </div>
+            </div>
+            <div class="nps-stat-card">
+                <span class="nps-stat-icon"><RadzenIcon Icon="person_off" /></span>
+                <div>
+                    <div class="nps-stat-label">Deactivated</div>
+                    <div class="nps-stat-value">@deactivatedUsers</div>
+                </div>
+            </div>
         </div>
-    </div>
-    <div class="nps-stat-card">
-        <span class="nps-stat-icon rzi rzi-admin_panel_settings"></span>
-        <div>
-            <div class="nps-stat-label">Roles configured</div>
-            <div class="nps-stat-value">@totalRoles</div>
-        </div>
-    </div>
-    <div class="nps-stat-card">
-        <span class="nps-stat-icon rzi rzi-verified_user"></span>
-        <div>
-            <div class="nps-stat-label">Active users</div>
-            <div class="nps-stat-value">@activeUsers</div>
-        </div>
-    </div>
-    <div class="nps-stat-card">
-        <span class="nps-stat-icon rzi rzi-person_off"></span>
-        <div>
-            <div class="nps-stat-label">Deactivated</div>
-            <div class="nps-stat-value">@deactivatedUsers</div>
-        </div>
-    </div>
-</div>
+    </Authorized>
+    <NotAuthorized>
+        @if (shortcuts.Count > 0)
+        {
+            <div class="nps-stat-grid">
+                @foreach (var s in shortcuts)
+                {
+                    <a class="nps-stat-card" href="@s.Path" style="text-decoration: none; color: inherit;">
+                        <span class="nps-stat-icon"><RadzenIcon Icon="@s.Icon" /></span>
+                        <div>
+                            <div class="nps-stat-value" style="font-size: 1.05rem;">@s.Text</div>
+                            <div class="nps-stat-label">@s.Hint</div>
+                        </div>
+                    </a>
+                }
+            </div>
+        }
+    </NotAuthorized>
+</AuthorizeView>
 
 @code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
     [Inject] private IUserService UserService { get; set; } = default!;
     [Inject] private ILookupService LookupService { get; set; } = default!;
     [Inject] private NavigationManager Nav { get; set; } = default!;
 
+    private record Shortcut(string Text, string Hint, string Icon, string Path);
+
+    private string? displayName;
+    private List<Shortcut> shortcuts = [];
     private int totalUsers;
     private int activeUsers;
     private int deactivatedUsers;
@@ -73,12 +102,73 @@
 
     protected override async Task OnInitializedAsync()
     {
-        var all = await UserService.ListAsync(new UserListFilter { Take = 10_000 });
-        totalUsers = all.TotalCount;
-        activeUsers = all.Items.Count(u => u.IsActive);
-        deactivatedUsers = all.Items.Count(u => !u.IsActive);
+        if (AuthState is null) return;
+        var user = (await AuthState).User;
 
-        var roles = await LookupService.GetRolesAsync();
-        totalRoles = roles.Count;
+        if (Guid.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var userId)
+            && await UserService.GetByIdAsync(userId) is { } me)
+        {
+            displayName = string.IsNullOrWhiteSpace(me.FirstName) ? me.FullName : me.FirstName;
+        }
+
+        if (user.IsInRole(Roles.SuperAdmin))
+        {
+            var all = await UserService.ListAsync(new UserListFilter { Take = 10_000 });
+            totalUsers = all.TotalCount;
+            activeUsers = all.Items.Count(u => u.IsActive);
+            deactivatedUsers = all.Items.Count(u => !u.IsActive);
+            totalRoles = (await LookupService.GetRolesAsync()).Count;
+            return;
+        }
+
+        shortcuts = BuildShortcuts(user);
+    }
+
+    private static List<Shortcut> BuildShortcuts(ClaimsPrincipal user)
+    {
+        var list = new List<Shortcut>();
+        void Add(string text, string hint, string icon, string path)
+        {
+            if (list.All(s => s.Path != path)) list.Add(new Shortcut(text, hint, icon, path));
+        }
+
+        if (user.IsInRole(Roles.HeadTeacher))
+        {
+            Add("Students", "Pupils, parents and enrolments", "boy", "/students");
+            Add("Report cards", "Review and publish", "description", "/reports");
+            Add("Bursar dashboard", "Fees collected and outstanding", "space_dashboard", "/finance");
+            Add("Inbox", "Messages from families", "forum", "/messages");
+        }
+        if (user.IsInRole(Roles.Teacher))
+        {
+            Add("Daily attendance", "Take today's register", "today", "/attendance/daily");
+            Add("Assessments", "Enter and publish scores", "grading", "/assessments");
+            Add("Timetable", "Class schedules", "grid_on", "/timetable");
+        }
+        if (user.IsInRole(Roles.SchoolBursar))
+        {
+            Add("Bursar dashboard", "Fees collected and outstanding", "space_dashboard", "/finance");
+            Add("Record payment", "Cash, transfer, POS or cheque", "add_card", "/payments/new");
+            Add("Invoices", "Balances by pupil", "request_quote", "/invoices");
+        }
+        if (user.IsInRole(Roles.SchoolStoreKeeper))
+        {
+            Add("Store dashboard", "Stock levels and low stock", "space_dashboard", "/store");
+            Add("Record movement", "Receive or issue stock", "post_add", "/store/movements/new");
+            Add("Catalog", "All store items", "inventory_2", "/store/items");
+        }
+        if (user.IsInRole(Roles.Parent))
+        {
+            Add("My wards", "Results, attendance and fees", "groups", "/portal/parent");
+            Add("Announcements", "News from the school", "campaign", "/portal/announcements");
+            Add("Messages", "Write to the school office", "forum", "/portal/messages");
+        }
+        if (user.IsInRole(Roles.Student))
+        {
+            Add("Today", "Your timetable for today", "today", "/portal/student");
+            Add("My results", "Published report cards", "grading", "/portal/student/results");
+            Add("Announcements", "News from the school", "campaign", "/portal/announcements");
+        }
+        return list;
     }
 }

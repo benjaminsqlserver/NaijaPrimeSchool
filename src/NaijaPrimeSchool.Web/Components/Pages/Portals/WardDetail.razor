@@ -85,7 +85,7 @@ else
                             <RadzenDataGridColumn TItem="ReportCardDto" Title="" Width="120px" Sortable="false" TextAlign="TextAlign.Right">
                                 <Template Context="r">
                                     <RadzenButton Icon="visibility" Size="ButtonSize.Small" Variant="Variant.Flat" ButtonStyle="ButtonStyle.Light"
-                                                  Click="@(() => Nav.NavigateTo($"/reports/{r.Id}"))" />
+                                                  Click="@(() => Nav.NavigateTo($"/portal/report-cards/{r.Id}"))" title="View report card" />
                                 </Template>
                             </RadzenDataGridColumn>
                         </Columns>

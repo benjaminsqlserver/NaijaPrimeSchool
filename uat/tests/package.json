@@ -1,0 +1,12 @@
+{
+  "name": "naijaprimeschool-uat",
+  "private": true,
+  "type": "module",
+  "description": "User Acceptance Test scripts for Naija Prime School, run in a real browser with Playwright.",
+  "scripts": {
+    "uat": "node run.mjs"
+  },
+  "dependencies": {
+    "playwright": "1.56.1"
+  }
+}

@@ -137,7 +137,8 @@
 
 @code {
     private RadzenDataGrid<StudentDto>? grid;
-    private List<StudentDto> students = [];
+    // Starts null: a Radzen grid only calls LoadData for its first page while Data is null.
+    private List<StudentDto>? students;
     private int total;
     private bool loading;
 
