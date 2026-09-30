@@ -77,7 +77,7 @@ for (const c of cases) {
   }
   // Icons whose name is not in the icon font render as a word instead of a glyph.
   const brokenIcons = await page.evaluate(() => [...document.querySelectorAll('.rzi, .rz-button-icon-left, i.material-icons')]
-    .filter(e => { const r = e.getBoundingClientRect(); const fs = parseFloat(getComputedStyle(e).fontSize) || 16; return r.width > fs * 1.7 && e.textContent.trim().length > 3; })
+    .filter(e => { const r = e.getBoundingClientRect(); const fs = parseFloat(getComputedStyle(e).fontSize) || 16; return Math.max(r.width, e.scrollWidth) > fs * 1.7 && e.textContent.trim().length > 3; })
     .map(e => e.textContent.trim())).catch(() => []);
   if (brokenIcons.length) t.note(`Icons shown as text: ${[...new Set(brokenIcons)].join(', ')}.`);
   const shot = `shots/${c.id}.jpg`;

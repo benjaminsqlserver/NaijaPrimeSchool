@@ -131,7 +131,7 @@ export default [
     id: 'FIN-06', module: M, sprint: S, feature: 'Invoices', user: 'tunde.bakare',
     title: 'Apply a discount to an invoice line',
     steps: ['Open Somto Obi\'s invoice.', 'Enter a ₦10,000 discount on the Tuition line (sibling discount) and press Tab.'],
-    expected: '"Discount applied."; the Tuition net falls by ₦10,000 and the Discount and Balance figures update (₦222,000 → ₦212,000).',
+    expected: '"Discount applied."; the Tuition net falls by ₦10,000 and the Discount and Balance figures update (₦222,000 → ₦212,000); every figure card shows its icon.',
     async run(t) {
       await openInvoiceOf(t, 'Somto Obi');
       const before = await stat(t, 'Balance');
@@ -142,6 +142,8 @@ export default [
       await t.settle();
       const after = await stat(t, 'Balance');
       check(naira(before) - naira(after) === 10000, `Balance ${before} → ${after}`);
+      const iconText = await t.page.locator('.nps-stat-card .rzi').evaluateAll(els => els.filter(e => e.scrollWidth > 48).map(e => e.textContent.trim()));
+      check(!iconText.length, `Stat card icon drawn as the word "${iconText.join(', ')}" across the Discount figure`);
       return `"${msg}"; ${before} → ${after}`;
     },
   },
