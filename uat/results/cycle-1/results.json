@@ -1,6 +1,6 @@
 {
  "cycle": "cycle-1",
- "runAt": "2026-09-30T02:52:22.236Z",
+ "runAt": "2026-09-30T02:53:11.818Z",
  "baseUrl": "http://localhost:5080",
  "browser": "Chromium 141.0.7390.37",
  "cases": [
@@ -1072,6 +1072,137 @@
    "screenshot": "shots/FAM-08.jpg",
    "durationMs": 6065,
    "executedAt": "2026-09-30T02:52:22.236Z"
+  },
+  {
+   "order": 48,
+   "id": "FAM-09",
+   "module": "Students & parents",
+   "sprint": "Sprint 3",
+   "feature": "Parent links",
+   "title": "Link a parent to a pupil as primary contact",
+   "role": "HeadTeacher",
+   "user": "folake.adeyemi",
+   "preconditions": "",
+   "steps": [
+    "Open Adaeze's page → Parents tab → Link a parent.",
+    "Parent Obioma NnajiI5FGB, relationship Father, Primary contact on, Authorised to collect on.",
+    "Press Save link.",
+    "Sign in as the parent and open My wards."
+   ],
+   "expected": "\"Parent link saved.\"; the tab reads Parents (1) with a Primary badge; the parent now sees the pupil under My wards.",
+   "status": "Pass",
+   "actual": "\"Saved Parent link saved.\"; PARENTS (1); parent now sees Adaeze under My wards.",
+   "screenshot": "shots/FAM-09.jpg",
+   "durationMs": 10895,
+   "executedAt": "2026-09-30T02:52:33.132Z"
+  },
+  {
+   "order": 49,
+   "id": "FAM-10",
+   "module": "Students & parents",
+   "sprint": "Sprint 3",
+   "feature": "Parent links",
+   "title": "Mark a guardian as not authorised to collect the pupil",
+   "role": "HeadTeacher",
+   "user": "folake.adeyemi",
+   "preconditions": "",
+   "steps": [
+    "On the pupil's Parents tab press Edit link on the father.",
+    "Turn \"Authorised to collect\" off; add note \"Collection by mother only (court order)\"; Save link."
+   ],
+   "expected": "A \"Cannot pick up\" badge appears next to the parent with the note.",
+   "status": "Pass",
+   "actual": "Row now reads \"Obioma NnajiI5FGBPRIMARYCANNOT PICK UP 08061234567 · obioma.nnajii5fgb@example.ng Father Collection by mother only (court order) edit link_off\"",
+   "screenshot": "shots/FAM-10.jpg",
+   "durationMs": 7820,
+   "executedAt": "2026-09-30T02:52:40.953Z"
+  },
+  {
+   "order": 50,
+   "id": "FAM-11",
+   "module": "Students & parents",
+   "sprint": "Sprint 3",
+   "feature": "Edit parent",
+   "title": "Update a parent's contact details",
+   "role": "HeadTeacher",
+   "user": "folake.adeyemi",
+   "preconditions": "",
+   "steps": [
+    "Open Obioma NnajiI5FGB from Parents (Edit).",
+    "Change Alternate phone to 07012345678 and Employer to \"Access Bank\"; Save changes."
+   ],
+   "expected": "\"Parent profile updated.\"; the Pupils tab lists the linked pupil.",
+   "status": "Pass",
+   "actual": "\"Saved Parent profile updated.\"; tabs: PROFILE | LINKED PUPILS (1) | REMINDERS",
+   "screenshot": "shots/FAM-11.jpg",
+   "durationMs": 5834,
+   "executedAt": "2026-09-30T02:52:46.789Z"
+  },
+  {
+   "order": 51,
+   "id": "FAM-12",
+   "module": "Students & parents",
+   "sprint": "Sprint 3",
+   "feature": "Enrolments",
+   "title": "Enrolments register: filter and withdraw",
+   "role": "HeadTeacher",
+   "user": "folake.adeyemi",
+   "preconditions": "",
+   "steps": [
+    "Open Family → Enrolments.",
+    "Filter Class = Primary 3A.",
+    "Press Withdraw on Adaeze NnajiI5FGB and confirm."
+   ],
+   "expected": "Primary 3A shows its pupils; after withdrawal the row shows status Withdrawn with today's date.",
+   "status": "Pass",
+   "actual": "2 Primary 3A enrolments; \"Withdrawn Enrolment withdrawn.\"; row: Adaeze NnajiI5FGB NPS/UAT/I5FGB Primary 3A 2026/2027 30 Sep 2026 30 Sep 2026 WITHDRAWN open_in_new delete",
+   "screenshot": "shots/FAM-12.jpg",
+   "durationMs": 5176,
+   "executedAt": "2026-09-30T02:52:51.967Z"
+  },
+  {
+   "order": 52,
+   "id": "FAM-13",
+   "module": "Students & parents",
+   "sprint": "Sprint 3",
+   "feature": "Enrolments",
+   "title": "Re-enrol a pupil in another class",
+   "role": "HeadTeacher",
+   "user": "folake.adeyemi",
+   "preconditions": "",
+   "steps": [
+    "Open Adaeze's page → Enrolment history → New enrolment.",
+    "Class Primary 4A, enrolment date today; press Enrol.",
+    "Try to enrol again in Primary 2A."
+   ],
+   "expected": "The Primary 4A enrolment is Active; a second active enrolment in the same session is refused.",
+   "status": "Pass",
+   "actual": "\"Enrolled Pupil enrolled in class.\"; second enrolment refused: \"Failed Student already has an active enrolment in this session. Withdraw it first.\"",
+   "screenshot": "shots/FAM-13.jpg",
+   "durationMs": 10333,
+   "executedAt": "2026-09-30T02:53:02.301Z"
+  },
+  {
+   "order": 53,
+   "id": "FAM-14",
+   "module": "Students & parents",
+   "sprint": "Sprint 3",
+   "feature": "Deactivate",
+   "title": "A deactivated parent can no longer sign in to the portal",
+   "role": "HeadTeacher",
+   "user": "folake.adeyemi",
+   "preconditions": "",
+   "steps": [
+    "Open Obioma NnajiI5FGB's page and press Deactivate.",
+    "Try to sign in as the parent.",
+    "Press Activate."
+   ],
+   "expected": "The parent shows Inactive and the portal login is refused while inactive; after Activate the parent can sign in again.",
+   "status": "Fail",
+   "actual": "The deactivated parent could still sign in to the portal (only the parent record was deactivated, not the login).",
+   "screenshot": "shots/FAM-14.jpg",
+   "durationMs": 9516,
+   "executedAt": "2026-09-30T02:53:11.818Z"
   }
  ]
 }
