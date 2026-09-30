@@ -1,6 +1,6 @@
 {
  "cycle": "cycle-1",
- "runAt": "2026-09-30T02:56:06.996Z",
+ "runAt": "2026-09-30T02:56:37.016Z",
  "baseUrl": "http://localhost:5080",
  "browser": "Chromium 141.0.7390.37",
  "cases": [
@@ -1851,6 +1851,159 @@
    "screenshot": "shots/STO-01.jpg",
    "durationMs": 1211,
    "executedAt": "2026-09-30T02:56:06.996Z"
+  },
+  {
+   "order": 84,
+   "id": "STO-02",
+   "module": "Store & inventory",
+   "sprint": "Sprint 7",
+   "feature": "Catalogue",
+   "title": "Catalogue search and low-stock filter",
+   "role": "SchoolStoreKeeper",
+   "user": "musa.ibrahim",
+   "preconditions": "",
+   "steps": [
+    "Open Store & Inventory → Catalog.",
+    "Turn on \"Low stock only\".",
+    "Turn it off; search \"textbook\"."
+   ],
+   "expected": "Low stock only shows the 2 low items with a \"Low\" badge; the search finds the two Primary 5 textbooks.",
+   "status": "Pass",
+   "actual": "Low stock only → 2; \"textbook\" → 2.",
+   "screenshot": "shots/STO-02.jpg",
+   "durationMs": 3398,
+   "executedAt": "2026-09-30T02:56:10.396Z"
+  },
+  {
+   "order": 85,
+   "id": "STO-03",
+   "module": "Store & inventory",
+   "sprint": "Sprint 7",
+   "feature": "Catalogue",
+   "title": "Add a new item with an opening balance",
+   "role": "SchoolStoreKeeper",
+   "user": "musa.ibrahim",
+   "preconditions": "",
+   "steps": [
+    "Press New item.",
+    "Name \"Crayons (12 colours)\", SKU ST-CRY-I5FGB, category Stationery, unit Box, reorder level 5.",
+    "Opening quantity 20 at ₦1,500.",
+    "Press Save item."
+   ],
+   "expected": "\"'Crayons (12 colours)' added.\"; the item page shows On hand 20, last unit cost ₦1,500, stock value ₦30,000 and an Opening Balance movement.",
+   "status": "Pass",
+   "actual": "\"Saved 'Crayons (12 colours)' added.\"; inventory On hand 20.00 BOX; account_balance_wallet Stock value 30,000.00.",
+   "screenshot": "shots/STO-03.jpg",
+   "durationMs": 3662,
+   "executedAt": "2026-09-30T02:56:14.060Z"
+  },
+  {
+   "order": 86,
+   "id": "STO-04",
+   "module": "Store & inventory",
+   "sprint": "Sprint 7",
+   "feature": "Catalogue",
+   "title": "SKUs are unique",
+   "role": "SchoolStoreKeeper",
+   "user": "musa.ibrahim",
+   "preconditions": "",
+   "steps": [
+    "Press New item; name \"Pencils (duplicate)\", SKU \"ST-PEN-HB\" (already used), category Stationery, unit Box.",
+    "Press Save item."
+   ],
+   "expected": "\"An item with SKU 'ST-PEN-HB' already exists.\"",
+   "status": "Pass",
+   "actual": "Refused: \"Failed An item with SKU 'ST-PEN-HB' already exists.\"",
+   "screenshot": "shots/STO-04.jpg",
+   "durationMs": 2591,
+   "executedAt": "2026-09-30T02:56:16.653Z"
+  },
+  {
+   "order": 87,
+   "id": "STO-05",
+   "module": "Store & inventory",
+   "sprint": "Sprint 7",
+   "feature": "Stock movements",
+   "title": "Receive a purchase from a supplier",
+   "role": "SchoolStoreKeeper",
+   "user": "musa.ibrahim",
+   "preconditions": "",
+   "steps": [
+    "Open Record movement.",
+    "Item HB pencils, type Purchase, quantity 20, unit cost ₦950, reference \"LPO-2701\", supplier Lagos Book Hub Ltd.",
+    "Press Save movement."
+   ],
+   "expected": "Saved; HB pencils on hand rises from 3 to 23 and the item is no longer low; the dashboard shows 1 item below reorder level.",
+   "status": "Pass",
+   "actual": "\"Saved Movement recorded.\"; inventory On hand 23.00 BOX; dashboard warning Below reorder level 1.",
+   "screenshot": "shots/STO-05.jpg",
+   "durationMs": 7810,
+   "executedAt": "2026-09-30T02:56:24.465Z"
+  },
+  {
+   "order": 88,
+   "id": "STO-06",
+   "module": "Store & inventory",
+   "sprint": "Sprint 7",
+   "feature": "Stock movements",
+   "title": "Issue a textbook to a pupil",
+   "role": "SchoolStoreKeeper",
+   "user": "musa.ibrahim",
+   "preconditions": "",
+   "steps": [
+    "Open Record movement.",
+    "Item Primary 5 English textbook, type Issue, quantity 1, pupil Kamsi Eze.",
+    "Press Save movement."
+   ],
+   "expected": "Saved; on hand falls from 59 to 58; the movement history shows the issue to Kamsi Eze.",
+   "status": "Pass",
+   "actual": "inventory On hand 58.00 EA; history: NPS/STK/2026/0022 30 Sep 2026 ISSUE −1.00 EA To pupil Kamsi Eze 0.00",
+   "screenshot": "shots/STO-06.jpg",
+   "durationMs": 6694,
+   "executedAt": "2026-09-30T02:56:31.162Z"
+  },
+  {
+   "order": 89,
+   "id": "STO-07",
+   "module": "Store & inventory",
+   "sprint": "Sprint 7",
+   "feature": "Stock movements",
+   "title": "Cannot issue more than is on hand",
+   "role": "SchoolStoreKeeper",
+   "user": "musa.ibrahim",
+   "preconditions": "",
+   "steps": [
+    "Open Record movement.",
+    "Item Whiteboard markers (4 on hand), type Issue, quantity 50, class Primary 5A.",
+    "Press Save movement."
+   ],
+   "expected": "Refused with a clear message such as \"Cannot remove 50 — only 4 are on hand.\"; stock is unchanged.",
+   "status": "Fail",
+   "actual": "The message is garbled: \"Failed Cannot remove 50.000 4.000 are on hand.\"",
+   "screenshot": "shots/STO-07.jpg",
+   "durationMs": 3067,
+   "executedAt": "2026-09-30T02:56:34.231Z"
+  },
+  {
+   "order": 90,
+   "id": "STO-08",
+   "module": "Store & inventory",
+   "sprint": "Sprint 7",
+   "feature": "Stock movements",
+   "title": "Movement log with filters",
+   "role": "SchoolStoreKeeper",
+   "user": "musa.ibrahim",
+   "preconditions": "",
+   "steps": [
+    "Open Store & Inventory → Movements.",
+    "Filter Type = Issue."
+   ],
+   "expected": "Every movement is listed with number, item, type, quantity, counter-party and cost; the filter shows only issues (to pupils and classes).",
+   "status": "Pass",
+   "actual": "22 movements; 5 issues.",
+   "screenshot": "shots/STO-08.jpg",
+   "durationMs": 2783,
+   "executedAt": "2026-09-30T02:56:37.016Z"
   }
  ]
 }
