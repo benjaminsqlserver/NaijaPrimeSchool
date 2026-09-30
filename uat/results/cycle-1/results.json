@@ -1,6 +1,6 @@
 {
  "cycle": "cycle-1",
- "runAt": "2026-09-30T02:57:01.190Z",
+ "runAt": "2026-09-30T02:57:12.574Z",
  "baseUrl": "http://localhost:5080",
  "browser": "Chromium 141.0.7390.37",
  "cases": [
@@ -2150,6 +2150,128 @@
    "screenshot": "shots/PTL-05.jpg",
    "durationMs": 1196,
    "executedAt": "2026-09-30T02:57:01.190Z"
+  },
+  {
+   "order": 98,
+   "id": "PTL-06",
+   "module": "Family portals",
+   "sprint": "Sprint 8",
+   "feature": "Student portal",
+   "title": "Student profile",
+   "role": "Student",
+   "user": "chiamaka.okafor",
+   "preconditions": "",
+   "steps": [
+    "Open My profile."
+   ],
+   "expected": "Chiamaka's own details: name, admission number, class, date of birth; no edit controls.",
+   "status": "Pass",
+   "actual": "My profile Read-only view of your demographic and admission details. Contact the school office if anything is wrong. arrow_back BACK TO PORTAL CO Chiamaka Okafor NPS/26/001 DATE OF BIRTH 25 Jun 2016 GENDER Female BLOOD G",
+   "screenshot": "shots/PTL-06.jpg",
+   "durationMs": 971,
+   "executedAt": "2026-09-30T02:57:02.162Z"
+  },
+  {
+   "order": 99,
+   "id": "PTL-07",
+   "module": "Family portals",
+   "sprint": "Sprint 8",
+   "feature": "Student portal",
+   "title": "Student views published results and report card",
+   "role": "Student",
+   "user": "chiamaka.okafor",
+   "preconditions": "",
+   "steps": [
+    "Open My results.",
+    "Press the view (eye) button on the First Term card."
+   ],
+   "expected": "Only published cards are listed; the report card opens read-only.",
+   "status": "Fail",
+   "actual": "The view button leads to \"Access denied\" — the report card page is staff-only.",
+   "screenshot": "shots/PTL-07.jpg",
+   "durationMs": 2406,
+   "executedAt": "2026-09-30T02:57:04.571Z"
+  },
+  {
+   "order": 100,
+   "id": "PTL-08",
+   "module": "Family portals",
+   "sprint": "Sprint 8",
+   "feature": "Student portal",
+   "title": "A student cannot open another pupil's report card",
+   "role": "Student",
+   "user": "chiamaka.okafor",
+   "preconditions": "",
+   "steps": [
+    "Signed in as Chiamaka, type the address of Kamsi Eze's report card (/reports/<id>)."
+   ],
+   "expected": "Refused — pupils only ever see their own report cards.",
+   "status": "Pass",
+   "actual": "Refused with \"Access denied\".",
+   "screenshot": "shots/PTL-08.jpg",
+   "durationMs": 4603,
+   "executedAt": "2026-09-30T02:57:09.175Z"
+  },
+  {
+   "order": 101,
+   "id": "PTL-09",
+   "module": "Family portals",
+   "sprint": "Sprint 8",
+   "feature": "Student portal",
+   "title": "Student attendance summary",
+   "role": "Student",
+   "user": "chiamaka.okafor",
+   "preconditions": "",
+   "steps": [
+    "Open My attendance."
+   ],
+   "expected": "Days present / total and a percentage for the current term, with the recent register entries.",
+   "status": "Pass",
+   "actual": "My attendance Running tally of your daily attendance for the current term. arrow_back BACK TO PORTAL Days counted 12 Present 10 Late 2 Absent 0 Percentage 100.0%",
+   "screenshot": "shots/PTL-09.jpg",
+   "durationMs": 1010,
+   "executedAt": "2026-09-30T02:57:10.188Z"
+  },
+  {
+   "order": 102,
+   "id": "PTL-10",
+   "module": "Family portals",
+   "sprint": "Sprint 8",
+   "feature": "Student portal",
+   "title": "Student fees and payments",
+   "role": "Student",
+   "user": "chiamaka.okafor",
+   "preconditions": "",
+   "steps": [
+    "Open My fees."
+   ],
+   "expected": "Her First Term invoice (Paid, balance ₦0) and the receipt that paid it; no \"Pay online\" button on a paid invoice.",
+   "status": "Pass",
+   "actual": "My fees Your invoice history and outstanding balance. Pay online below, or at the bursary. arrow_back BACK TO PORTAL Invoiced 247,000.00 Paid 257,000.00 Outstanding -10,000.00 Invoices Number Term Issued Total Balance Status NPS/INV/2026/00",
+   "screenshot": "shots/PTL-10.jpg",
+   "durationMs": 1167,
+   "executedAt": "2026-09-30T02:57:11.357Z"
+  },
+  {
+   "order": 103,
+   "id": "COM-01",
+   "module": "Announcements & reminders",
+   "sprint": "Sprint 8",
+   "feature": "Announcements",
+   "title": "Announcement list with status, reads and reminder counters",
+   "role": "HeadTeacher",
+   "user": "folake.adeyemi",
+   "preconditions": "",
+   "steps": [
+    "Sign in as the head teacher.",
+    "Open Communications → Announcements."
+   ],
+   "expected": "The four seeded notices: the pinned welcome, PTA meeting (expires in 14 days), the Primary 5A excursion, and the \"Mid-term break dates\" draft; each published one shows reads and email/SMS counters.",
+   "status": "Pass",
+   "actual": "push_pinWelcome back to a new term! General · Everyone PUBLISHED 30 Sep 2026 — 0 70 PENDING edit notifications || Mid-term break dates Holiday · Everyone DRAFT — 0 — edit publish delete || Primary 5A excursion to the National Museum Academic · Specific Class · Primary 5A PUBLISHED 30 Sep 2026 — 0 3 || PTA meeting this Saturday Events · Parents PUBLISHED 30 Sep 2026 14 Oct 2026 0 40 PENDING edit notifications_a",
+   "screenshot": "shots/COM-01.jpg",
+   "durationMs": 1215,
+   "executedAt": "2026-09-30T02:57:12.574Z"
   }
  ]
 }
