@@ -18,14 +18,14 @@
                     </div>
                     <div style="flex: 1"></div>
                     <div class="nps-user-chip">
-                        <span class="rzi rzi-person"></span>
+                        <span class="rzi" aria-hidden="true">person</span>
                         <span>@context.User.Identity?.Name</span>
                     </div>
                     <form action="/Account/Logout" method="post" style="margin: 0;">
                         <AntiforgeryToken />
                         <input type="hidden" name="returnUrl" value="Account/Login" />
                         <button type="submit" class="rz-button rz-button-sm rz-light nps-logout-button" title="Sign out">
-                            <span class="rzi rzi-logout"></span>
+                            <span class="rzi" aria-hidden="true">logout</span>
                             <span>Sign out</span>
                         </button>
                     </form>

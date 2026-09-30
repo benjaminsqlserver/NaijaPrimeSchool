@@ -245,6 +245,19 @@ public class InvoiceService(ApplicationDbContext db) : IInvoiceService
         if (invoice.InvoiceStatus?.Code == "CANCELLED")
             return OperationResult.Failure("Cancelled invoices cannot be edited.");
 
+        // A discount can't bring what's due below what has already been paid;
+        // money already received is returned with a refund instead.
+        var otherDiscounts = await db.InvoiceLines
+            .Where(l => l.InvoiceId == invoice.Id && l.Id != line.Id)
+            .SumAsync(l => l.Discount, ct);
+        var subtotal = await db.InvoiceLines.Where(l => l.InvoiceId == invoice.Id).SumAsync(l => l.Amount, ct);
+        var paid = await db.PaymentAllocations.Where(a => a.InvoiceId == invoice.Id).SumAsync(a => a.AmountApplied, ct);
+        var newDue = subtotal - otherDiscounts - request.Discount;
+        if (newDue < paid)
+            return OperationResult.Failure(
+                $"₦{paid:N2} has already been paid on this invoice, so the discount can be at most " +
+                $"₦{Math.Max(0m, subtotal - otherDiscounts - paid):N2}. Refund a payment first if the family has overpaid.");
+
         line.Discount = request.Discount;
 
         // Recompute totals from the lines.
@@ -260,7 +273,7 @@ public class InvoiceService(ApplicationDbContext db) : IInvoiceService
             .FirstOrDefaultAsync(i => i.Id == id, ct);
         if (invoice is null) return OperationResult.Failure("Invoice not found.");
 
-        if (invoice.Allocations.Any(a => a.AmountApplied > 0))
+        if (LiveAllocations(invoice).Any(a => a.AmountApplied > 0))
             return OperationResult.Failure(
                 "Cannot cancel an invoice that has payments applied. Refund the payments first.");
 
@@ -283,7 +296,7 @@ public class InvoiceService(ApplicationDbContext db) : IInvoiceService
             .FirstOrDefaultAsync(i => i.Id == id, ct);
         if (invoice is null) return OperationResult.Failure("Invoice not found.");
 
-        if (invoice.Allocations.Any(a => a.AmountApplied > 0))
+        if (LiveAllocations(invoice).Any(a => a.AmountApplied > 0))
             return OperationResult.Failure(
                 "Cannot delete an invoice with payments applied.");
 
@@ -365,6 +378,14 @@ public class InvoiceService(ApplicationDbContext db) : IInvoiceService
         };
     }
 
+    // The invoice's allocations that still count. A refund soft-deletes its
+    // allocations, but EF's relationship fix-up keeps those tracked rows in
+    // Invoice.Allocations (the global query filter only applies to new
+    // queries), so they must be skipped here or the refunded money would
+    // still count as paid.
+    private IEnumerable<PaymentAllocation> LiveAllocations(Invoice invoice) =>
+        invoice.Allocations.Where(a => !a.IsDeleted && db.Entry(a).State != EntityState.Deleted);
+
     // Internal helper — also used by PaymentService after allocations.
     internal async Task RecomputeInvoiceTotalsAsync(Guid invoiceId, CancellationToken ct)
     {
@@ -377,7 +398,7 @@ public class InvoiceService(ApplicationDbContext db) : IInvoiceService
         invoice.Subtotal = invoice.Lines.Sum(l => l.Amount);
         invoice.DiscountTotal = invoice.Lines.Sum(l => l.Discount);
         invoice.AmountDue = invoice.Subtotal - invoice.DiscountTotal;
-        invoice.AmountPaid = invoice.Allocations.Sum(a => a.AmountApplied);
+        invoice.AmountPaid = LiveAllocations(invoice).Sum(a => a.AmountApplied);
 
         // Bring status into line with money flow.
         var statusCode = invoice.AmountPaid <= 0m

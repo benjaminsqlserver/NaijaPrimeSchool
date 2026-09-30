@@ -113,7 +113,8 @@
 
 @code {
     private RadzenDataGrid<UserDto>? grid;
-    private List<UserDto> users = [];
+    // Starts null: a Radzen grid only calls LoadData for its first page while Data is null.
+    private List<UserDto>? users;
     private int totalCount;
     private bool loading;
 

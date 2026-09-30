@@ -4,7 +4,7 @@
 
 <div class="nps-status-page">
     <div class="nps-status-card rz-shadow-4">
-        <span class="nps-status-icon rzi rzi-logout"></span>
+        <span class="nps-status-icon rzi" aria-hidden="true">logout</span>
         <h1>Signing you out</h1>
         <p>Please wait while we complete the sign out.</p>
 
@@ -12,7 +12,7 @@
             <AntiforgeryToken />
             <input type="hidden" name="returnUrl" value="Account/Login" />
             <button type="submit" class="rz-button rz-button-md rz-primary">
-                <span class="rzi rzi-logout"></span>
+                <span class="rzi" aria-hidden="true">logout</span>
                 <span>Confirm sign out</span>
             </button>
         </form>

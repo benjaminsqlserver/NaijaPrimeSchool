@@ -1,0 +1,5 @@
+# Working files from UAT runs; the cycle-* folders (results + screenshots) are the evidence and are committed.
+results/scratch/
+results/*.log
+results/app.pid
+tests/node_modules/

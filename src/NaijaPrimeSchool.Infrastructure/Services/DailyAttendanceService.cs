@@ -1,14 +1,16 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using NaijaPrimeSchool.Application.Attendance;
 using NaijaPrimeSchool.Application.Attendance.Dtos;
 using NaijaPrimeSchool.Application.Common;
 using NaijaPrimeSchool.Domain.Attendance;
 using NaijaPrimeSchool.Domain.Family;
+using NaijaPrimeSchool.Infrastructure.Notifications;
 using NaijaPrimeSchool.Infrastructure.Persistence;
 
 namespace NaijaPrimeSchool.Infrastructure.Services;
 
-public class DailyAttendanceService(ApplicationDbContext db) : IDailyAttendanceService
+public class DailyAttendanceService(ApplicationDbContext db, IOptions<NotificationOptions> notificationOptions) : IDailyAttendanceService
 {
     private static IQueryable<DailyAttendanceRegisterDto> ProjectRegister(IQueryable<DailyAttendanceRegister> q) =>
         q.Select(r => new DailyAttendanceRegisterDto
@@ -79,8 +81,21 @@ public class DailyAttendanceService(ApplicationDbContext db) : IDailyAttendanceS
         return await GetByIdAsync(register, ct);
     }
 
+    // Registers record what happened, so they can't be opened for a day that
+    // hasn't come yet (in the school's time zone).
+    private OperationResult<Guid>? RefuseFutureDate(DateOnly date)
+    {
+        var zone = QuietHours.ResolveZone(notificationOptions.Value.TimeZone);
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, zone).DateTime);
+        return date > today
+            ? OperationResult<Guid>.Failure($"Attendance can't be taken in advance: {date:d MMM yyyy} is in the future.")
+            : null;
+    }
+
     public async Task<OperationResult<Guid>> OpenAsync(OpenDailyRegisterRequest request, CancellationToken ct = default)
     {
+        if (RefuseFutureDate(request.Date) is { } refused) return refused;
+
         var schoolClass = await db.SchoolClasses
             .Include(c => c.Session)
             .FirstOrDefaultAsync(c => c.Id == request.SchoolClassId, ct);

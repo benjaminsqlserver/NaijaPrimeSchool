@@ -189,7 +189,12 @@ public class ParentService(
 
         parent.IsActive = isActive;
         await db.SaveChangesAsync(ct);
-        return OperationResult.Success();
+
+        var login = await PortalAccounts.SetActiveAsync(
+            userManager, parent.UserId, isActive, "Parent record deactivated", currentUser.UserName ?? "system");
+        return login.Succeeded
+            ? OperationResult.Success()
+            : OperationResult.Failure(login.Errors.Select(e => e.Description));
     }
 
     public async Task<OperationResult> SoftDeleteAsync(Guid id, CancellationToken ct = default)

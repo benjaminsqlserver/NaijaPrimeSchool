@@ -93,7 +93,7 @@ public class StockMovementService(ApplicationDbContext db) : IStockMovementServi
 
         if (type.Direction == -1 && request.Quantity > item.QuantityOnHand)
             return OperationResult<Guid>.Failure(
-                $"Cannot remove {request.Quantity:N3} {item.QuantityOnHand:N3} are on hand.");
+                $"Cannot remove {request.Quantity:#,0.###} of '{item.Name}': only {item.QuantityOnHand:#,0.###} on hand.");
 
         // Counter-party validation: at most one IssuedTo* and the IsValidForType
         // pairing (purchases name a supplier, issues name a recipient).

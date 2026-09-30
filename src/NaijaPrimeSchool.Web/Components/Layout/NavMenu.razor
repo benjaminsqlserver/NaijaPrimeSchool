@@ -21,14 +21,20 @@
         </Authorized>
     </AuthorizeView>
 
+    @* Menu links mirror each page's [Authorize] roles: teachers only get the
+       timetable, assessments and attendance, never a link that ends in
+       "Access denied". *@
     <AuthorizeView Roles="@($"{Roles.SuperAdmin},{Roles.HeadTeacher},{Roles.Teacher}")">
         <Authorized>
             <RadzenPanelMenuItem Text="Academics" Icon="school" Expanded="true">
-                <RadzenPanelMenuItem Text="Sessions" Icon="event" Path="/sessions" />
-                <RadzenPanelMenuItem Text="Terms" Icon="event_note" Path="/terms" />
-                <RadzenPanelMenuItem Text="Classes" Icon="class" Path="/classes" />
-                <RadzenPanelMenuItem Text="Subjects" Icon="menu_book" Path="/subjects" />
-                <RadzenPanelMenuItem Text="Periods" Icon="schedule" Path="/timetable-periods" />
+                @if (IsSchoolLeader(context))
+                {
+                    <RadzenPanelMenuItem Text="Sessions" Icon="event" Path="/sessions" />
+                    <RadzenPanelMenuItem Text="Terms" Icon="event_note" Path="/terms" />
+                    <RadzenPanelMenuItem Text="Classes" Icon="class" Path="/classes" />
+                    <RadzenPanelMenuItem Text="Subjects" Icon="menu_book" Path="/subjects" />
+                    <RadzenPanelMenuItem Text="Periods" Icon="schedule" Path="/timetable-periods" />
+                }
                 <RadzenPanelMenuItem Text="Timetable" Icon="grid_on" Path="/timetable" />
             </RadzenPanelMenuItem>
         </Authorized>
@@ -60,8 +66,11 @@
         <Authorized>
             <RadzenPanelMenuItem Text="Results & Reports" Icon="assignment" Expanded="true">
                 <RadzenPanelMenuItem Text="Assessments" Icon="grading" Path="/assessments" />
-                <RadzenPanelMenuItem Text="Subject results" Icon="leaderboard" Path="/results" />
-                <RadzenPanelMenuItem Text="Report cards" Icon="description" Path="/reports" />
+                @if (IsSchoolLeader(context))
+                {
+                    <RadzenPanelMenuItem Text="Subject results" Icon="leaderboard" Path="/results" />
+                    <RadzenPanelMenuItem Text="Report cards" Icon="description" Path="/reports" />
+                }
             </RadzenPanelMenuItem>
         </Authorized>
     </AuthorizeView>
@@ -130,3 +139,8 @@
         </Authorized>
     </AuthorizeView>
 </RadzenPanelMenu>
+
+@code {
+    private static bool IsSchoolLeader(AuthenticationState state) =>
+        state.User.IsInRole(Roles.SuperAdmin) || state.User.IsInRole(Roles.HeadTeacher);
+}

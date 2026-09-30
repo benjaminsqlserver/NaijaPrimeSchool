@@ -238,7 +238,8 @@ public class PaymentService(
             .FirstOrDefaultAsync(p => p.Id == id, ct);
         if (payment is null) return OperationResult.Failure("Payment not found.");
 
-        if (payment.Allocations.Any())
+        // Skip allocations a refund has already soft-deleted (still tracked in this context).
+        if (payment.Allocations.Any(a => !a.IsDeleted && db.Entry(a).State != EntityState.Deleted))
             return OperationResult.Failure(
                 "Refund the payment first so its allocations are released, then delete.");
 

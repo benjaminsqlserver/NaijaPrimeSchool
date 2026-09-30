@@ -149,6 +149,26 @@ public class TimetableService(ApplicationDbContext db) : ITimetableService
             .Select(e => (Guid?)e.Id)
             .FirstOrDefaultAsync(ct);
 
+        // A teacher can only be in one classroom at a time.
+        if (request.TeacherId is { } teacherId)
+        {
+            var clash = await db.TimetableEntries
+                .Where(e => e.TermId == request.TermId
+                            && e.WeekDayId == request.WeekDayId
+                            && e.TimetablePeriodId == request.TimetablePeriodId
+                            && e.TeacherId == teacherId
+                            && e.SchoolClassId != request.SchoolClassId)
+                .Select(e => new
+                {
+                    ClassName = e.SchoolClass!.Name,
+                    TeacherName = e.Teacher!.FirstName + " " + e.Teacher.LastName,
+                })
+                .FirstOrDefaultAsync(ct);
+            if (clash is not null)
+                return OperationResult<Guid>.Failure(
+                    $"{clash.TeacherName} already teaches {clash.ClassName} at that time.");
+        }
+
         // Treat (term, class, day, period) as the natural key, regardless of the supplied Id
         var entity = existingId.HasValue
             ? await db.TimetableEntries.FirstAsync(e => e.Id == existingId.Value, ct)
