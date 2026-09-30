@@ -4,6 +4,7 @@
 
 @inject IPortalService PortalService
 @inject IInvoiceService InvoiceService
+@inject IOnlinePaymentService OnlinePayments
 @inject NavigationManager Nav
 
 <PageTitle>My fees · Naija Prime School</PageTitle>
@@ -11,7 +12,7 @@
 <div class="nps-page-header">
     <div>
         <h1>My fees</h1>
-        <p>Your invoice history and outstanding balance. Settle outstanding fees at the bursary.</p>
+        <p>Your invoice history and outstanding balance. @(onlinePaymentsEnabled ? "Pay online below, or at the bursary." : "Settle outstanding fees at the bursary.")</p>
     </div>
     <div class="nps-page-actions">
         <RadzenButton Text="Back to portal" Icon="arrow_back" Variant="Variant.Flat" ButtonStyle="ButtonStyle.Light"
@@ -53,6 +54,15 @@ else
                 <RadzenDataGridColumn TItem="InvoiceDto" Title="Status" Width="140px">
                     <Template Context="i"><RadzenBadge Text="@i.InvoiceStatusName" BadgeStyle="@StatusStyle(i.InvoiceStatusCode)" Variant="Variant.Flat" /></Template>
                 </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="InvoiceDto" Title="" Width="130px" Sortable="false" TextAlign="TextAlign.Right" Visible="@onlinePaymentsEnabled">
+                    <Template Context="i">
+                        @if (i.Balance > 0 && i.InvoiceStatusCode is not ("CANCELLED" or "DRAFT"))
+                        {
+                            <RadzenButton Text="Pay online" Icon="credit_card" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Primary"
+                                          Click="@(() => Nav.NavigateTo($"/portal/pay/{i.Id}"))" />
+                        }
+                    </Template>
+                </RadzenDataGridColumn>
             </Columns>
         </RadzenDataGrid>
     </RadzenCard>
@@ -83,9 +93,14 @@ else
 @code {
     private StudentLedgerDto? ledger;
     private bool loading = true;
+    // Only students pay from this page; staff previewing it see no button.
+    private bool onlinePaymentsEnabled;
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
+        var user = AuthState is null ? null : (await AuthState).User;
+        onlinePaymentsEnabled = OnlinePayments.GetSettings().Enabled && user?.IsInRole(Roles.Student) == true;
         var studentId = await PortalService.ResolveStudentIdForCurrentUserAsync();
         if (studentId is not null)
         {

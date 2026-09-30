@@ -5,6 +5,7 @@
 @inject IPortalService PortalService
 @inject IStudentService StudentService
 @inject IInvoiceService InvoiceService
+@inject IOnlinePaymentService OnlinePayments
 @inject IReportCardService ReportCardService
 @inject IDailyAttendanceService DailyAttendanceService
 @inject NavigationManager Nav
@@ -120,6 +121,15 @@ else
                             <RadzenDataGridColumn TItem="InvoiceDto" Title="Status" Width="140px">
                                 <Template Context="i"><RadzenBadge Text="@i.InvoiceStatusName" BadgeStyle="@StatusStyle(i.InvoiceStatusCode)" Variant="Variant.Flat" /></Template>
                             </RadzenDataGridColumn>
+                            <RadzenDataGridColumn TItem="InvoiceDto" Title="" Width="130px" Sortable="false" TextAlign="TextAlign.Right" Visible="@onlinePaymentsEnabled">
+                                <Template Context="i">
+                                    @if (i.Balance > 0 && i.InvoiceStatusCode is not ("CANCELLED" or "DRAFT"))
+                                    {
+                                        <RadzenButton Text="Pay online" Icon="credit_card" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Primary"
+                                                      Click="@(() => Nav.NavigateTo($"/portal/pay/{i.Id}"))" />
+                                    }
+                                </Template>
+                            </RadzenDataGridColumn>
                         </Columns>
                     </RadzenDataGrid>
                 }
@@ -137,6 +147,9 @@ else
     private StudentDashboardDto? dashboard;
     private IReadOnlyList<ReportCardDto> reportCards = [];
     private StudentLedgerDto? ledger;
+    // Only parents pay from this page; staff previewing it see no button.
+    private bool onlinePaymentsEnabled;
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
     private int tabIndex = 0;
 
     protected override async Task OnInitializedAsync()
@@ -151,6 +164,8 @@ else
         dashboard = await PortalService.GetStudentDashboardAsync(StudentId);
         reportCards = await ReportCardService.ListAsync(new ReportCardFilter { StudentId = StudentId, IsPublished = true });
         ledger = await InvoiceService.GetStudentLedgerAsync(StudentId);
+        var user = AuthState is null ? null : (await AuthState).User;
+        onlinePaymentsEnabled = OnlinePayments.GetSettings().Enabled && user?.IsInRole(Roles.Parent) == true;
         loading = false;
     }
 

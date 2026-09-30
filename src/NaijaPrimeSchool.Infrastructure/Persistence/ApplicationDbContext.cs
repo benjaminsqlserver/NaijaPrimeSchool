@@ -97,6 +97,9 @@ public class ApplicationDbContext(
     public DbSet<AnnouncementNotification> AnnouncementNotifications => Set<AnnouncementNotification>();
     public DbSet<NotificationPreference> NotificationPreferences => Set<NotificationPreference>();
 
+    public DbSet<OnlinePaymentStatus> OnlinePaymentStatuses => Set<OnlinePaymentStatus>();
+    public DbSet<OnlinePayment> OnlinePayments => Set<OnlinePayment>();
+
     public DbSet<MessageThreadStatus> MessageThreadStatuses => Set<MessageThreadStatus>();
     public DbSet<MessageThread> MessageThreads => Set<MessageThread>();
     public DbSet<ThreadMessage> ThreadMessages => Set<ThreadMessage>();
@@ -187,6 +190,52 @@ public class ApplicationDbContext(
         ConfigureInventory(builder);
         ConfigureCommunications(builder);
         ConfigureMessaging(builder);
+        ConfigureOnlinePayments(builder);
+    }
+
+    private static void ConfigureOnlinePayments(ModelBuilder builder)
+    {
+        ConfigureLookup<OnlinePaymentStatus>(builder, "OnlinePaymentStatuses", extra: b =>
+        {
+            b.Property(st => st.Name).HasMaxLength(40).IsRequired();
+            b.Property(st => st.Code).HasMaxLength(20).IsRequired();
+            b.HasIndex(st => st.Name).IsUnique();
+            b.HasIndex(st => st.Code).IsUnique();
+        });
+
+        builder.Entity<OnlinePayment>(b =>
+        {
+            b.ToTable("OnlinePayments");
+            b.HasKey(o => o.Id);
+            b.Property(o => o.Reference).HasMaxLength(60).IsRequired();
+            b.Property(o => o.PayerEmail).HasMaxLength(256).IsRequired();
+            b.Property(o => o.Amount).HasPrecision(12, 2);
+            b.Property(o => o.Currency).HasMaxLength(3).IsRequired();
+            b.Property(o => o.Provider).HasMaxLength(40).IsRequired();
+            b.Property(o => o.AuthorizationUrl).HasMaxLength(500);
+            b.Property(o => o.ProviderTransactionId).HasMaxLength(100);
+            b.Property(o => o.Channel).HasMaxLength(40);
+            b.Property(o => o.StatusMessage).HasMaxLength(500);
+            b.Property(o => o.CreatedBy).HasMaxLength(100);
+            b.Property(o => o.ModifiedBy).HasMaxLength(100);
+            b.Property(o => o.DeletedBy).HasMaxLength(100);
+
+            // Restrict throughout: invoices, pupils, users and payments are
+            // only soft-deleted, and an online payment is a financial record.
+            b.HasOne(o => o.Invoice).WithMany().HasForeignKey(o => o.InvoiceId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne(o => o.Student).WithMany().HasForeignKey(o => o.StudentId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne(o => o.PayerUser).WithMany().HasForeignKey(o => o.PayerUserId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne(o => o.Payment).WithMany().HasForeignKey(o => o.PaymentId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne(o => o.OnlinePaymentStatus).WithMany(st => st.OnlinePayments)
+                .HasForeignKey(o => o.OnlinePaymentStatusId).OnDelete(DeleteBehavior.Restrict);
+
+            b.HasIndex(o => o.Reference).IsUnique();
+            // One attempt can produce at most one receipt.
+            b.HasIndex(o => o.PaymentId).IsUnique().HasFilter("[PaymentId] IS NOT NULL");
+            b.HasIndex(o => new { o.InvoiceId, o.CreatedOn });
+            b.HasIndex(o => o.IsDeleted);
+            b.HasQueryFilter(o => !o.IsDeleted);
+        });
     }
 
     private static void ConfigureAcademics(ModelBuilder builder)
