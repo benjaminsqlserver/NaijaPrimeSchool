@@ -1,6 +1,6 @@
 {
  "cycle": "cycle-1",
- "runAt": "2026-09-30T02:53:11.818Z",
+ "runAt": "2026-09-30T02:54:03.989Z",
  "baseUrl": "http://localhost:5080",
  "browser": "Chromium 141.0.7390.37",
  "cases": [
@@ -1203,6 +1203,180 @@
    "screenshot": "shots/FAM-14.jpg",
    "durationMs": 9516,
    "executedAt": "2026-09-30T02:53:11.818Z"
+  },
+  {
+   "order": 54,
+   "id": "FAM-15",
+   "module": "Students & parents",
+   "sprint": "Sprint 10",
+   "feature": "Delete parent",
+   "title": "Deleting a parent: blocked while linked, then retires the login",
+   "role": "HeadTeacher",
+   "user": "folake.adeyemi",
+   "preconditions": "",
+   "steps": [
+    "In Parents press Delete on Obioma NnajiI5FGB and confirm.",
+    "Unlink the parent from Adaeze's Parents tab.",
+    "Delete the parent again (same screen session).",
+    "Try to sign in as the parent."
+   ],
+   "expected": "First delete is refused (active link); after unlinking, the delete succeeds and the parent's portal login stops working.",
+   "status": "Pass",
+   "actual": "Refused: \"Failed Cannot delete this parent because 1 active student link(s) remain. Unlink them first.\"; after unlinking: \"Deleted 'Obioma NnajiI5FGB' removed.\"; login retired.",
+   "screenshot": "shots/FAM-15.jpg",
+   "durationMs": 19495,
+   "executedAt": "2026-09-30T02:53:31.315Z"
+  },
+  {
+   "order": 55,
+   "id": "ATT-01",
+   "module": "Attendance",
+   "sprint": "Sprint 4",
+   "feature": "Daily register",
+   "title": "Open today's class register",
+   "role": "Teacher",
+   "user": "chinedu.okeke",
+   "preconditions": "",
+   "steps": [
+    "Sign in as teacher chinedu.okeke.",
+    "Open Attendance → Daily attendance.",
+    "Class Primary 5A, date today (30 Sep 2026).",
+    "Press Open register."
+   ],
+   "expected": "\"Register opened.\"; all 13 enrolled pupils are pre-loaded as Present (Present: 13, Total: 13), with the term and session shown.",
+   "status": "Pass",
+   "actual": "Register opened; PRESENT: 13 ABSENT: 0 LATE: 0 TOTAL: 13",
+   "screenshot": "shots/ATT-01.jpg",
+   "durationMs": 3937,
+   "executedAt": "2026-09-30T02:53:35.254Z"
+  },
+  {
+   "order": 56,
+   "id": "ATT-02",
+   "module": "Attendance",
+   "sprint": "Sprint 4",
+   "feature": "Daily register",
+   "title": "Mark absences and late arrivals, then save",
+   "role": "Teacher",
+   "user": "chinedu.okeke",
+   "preconditions": "",
+   "steps": [
+    "On today's Primary 5A register set Kamsi Eze = Absent with remark \"No word from parent\".",
+    "Set Aminu Ibrahim = Late, arrival 08:25.",
+    "Press Save changes."
+   ],
+   "expected": "\"Attendance saved.\"; counts become Present 12 (late arrivals count as present), Absent 1, Late 1; the arrival time and remark are kept.",
+   "status": "Pass",
+   "actual": "\"Saved Attendance saved.\"; PRESENT: 12 ABSENT: 1 LATE: 1 TOTAL: 13; arrival 08:25 kept.",
+   "screenshot": "shots/ATT-02.jpg",
+   "durationMs": 5270,
+   "executedAt": "2026-09-30T02:53:40.526Z"
+  },
+  {
+   "order": 57,
+   "id": "ATT-03",
+   "module": "Attendance",
+   "sprint": "Sprint 4",
+   "feature": "Daily register",
+   "title": "Submit the register; it locks",
+   "role": "Teacher",
+   "user": "chinedu.okeke",
+   "preconditions": "",
+   "steps": [
+    "On today's Primary 5A register press Submit register."
+   ],
+   "expected": "\"Register submitted.\"; a \"Submitted <date time>\" badge and a Reopen button replace Save/Submit; the status drop-downs are disabled.",
+   "status": "Pass",
+   "actual": "PRESENT: 12 ABSENT: 1 LATE: 1 TOTAL: 13 SUBMITTED 30 SEP 02:53; 13 drop-downs disabled.",
+   "screenshot": "shots/ATT-03.jpg",
+   "durationMs": 4170,
+   "executedAt": "2026-09-30T02:53:44.698Z"
+  },
+  {
+   "order": 58,
+   "id": "ATT-04",
+   "module": "Attendance",
+   "sprint": "Sprint 4",
+   "feature": "Daily register",
+   "title": "Head teacher reopens a submitted register",
+   "role": "HeadTeacher",
+   "user": "folake.adeyemi",
+   "preconditions": "",
+   "steps": [
+    "Sign in as the head teacher; open today's Primary 5A register.",
+    "Press Reopen.",
+    "Kamsi Eze's mother phones in: change him to Present; Submit register again."
+   ],
+   "expected": "\"Register reopened for editing.\"; after the change and re-submission the counts show Present 13, Absent 0.",
+   "status": "Pass",
+   "actual": "\"Reopened Register reopened for editing.\"; after correction: PRESENT: 13 ABSENT: 0 LATE: 1 TOTAL: 13 SUBMITTED 30 SEP 02:53",
+   "screenshot": "shots/ATT-04.jpg",
+   "durationMs": 6622,
+   "executedAt": "2026-09-30T02:53:51.321Z"
+  },
+  {
+   "order": 59,
+   "id": "ATT-05",
+   "module": "Attendance",
+   "sprint": "Sprint 4",
+   "feature": "Daily register",
+   "title": "View an earlier day's submitted register",
+   "role": "Teacher",
+   "user": "chinedu.okeke",
+   "preconditions": "",
+   "steps": [
+    "Open the Primary 5A register for 29 Sep 2026."
+   ],
+   "expected": "The submitted register shows each pupil's recorded status (read-only) with counts.",
+   "status": "Pass",
+   "actual": "PRESENT: 12 ABSENT: 1 LATE: 1 TOTAL: 13 SUBMITTED 30 SEP 02:44",
+   "screenshot": "shots/ATT-05.jpg",
+   "durationMs": 2712,
+   "executedAt": "2026-09-30T02:53:54.034Z"
+  },
+  {
+   "order": 60,
+   "id": "ATT-06",
+   "module": "Attendance",
+   "sprint": "Sprint 4",
+   "feature": "Daily register",
+   "title": "A register cannot be opened for a future date",
+   "role": "Teacher",
+   "user": "chinedu.okeke",
+   "preconditions": "",
+   "steps": [
+    "Choose Primary 5A and a date one week ahead.",
+    "Press Open register."
+   ],
+   "expected": "The register is refused with a message that attendance cannot be taken in advance.",
+   "status": "Fail",
+   "actual": "A register was opened for 7 Oct 2026, a week in the future.",
+   "screenshot": "shots/ATT-06.jpg",
+   "durationMs": 3047,
+   "executedAt": "2026-09-30T02:53:57.082Z"
+  },
+  {
+   "order": 61,
+   "id": "ATT-07",
+   "module": "Attendance",
+   "sprint": "Sprint 4",
+   "feature": "Subject attendance",
+   "title": "Take attendance for a timetabled lesson",
+   "role": "Teacher",
+   "user": "chinedu.okeke",
+   "preconditions": "",
+   "steps": [
+    "Open Attendance → Subject attendance.",
+    "Term First Term, class Primary 5A, date today.",
+    "Press Take attendance on the first lesson.",
+    "Mark Zainab Bello Absent; press Submit."
+   ],
+   "expected": "Today's 7 lessons are listed from the timetable; the lesson register opens pre-filled; after Submit it shows Present 12, Absent 1 and \"Submitted\".",
+   "status": "Pass",
+   "actual": "7 lessons listed; after submit: PRESENT: 12 ABSENT: 1 TOTAL: 13 SUBMITTED 30 SEP 02:54",
+   "screenshot": "shots/ATT-07.jpg",
+   "durationMs": 6905,
+   "executedAt": "2026-09-30T02:54:03.989Z"
   }
  ]
 }
