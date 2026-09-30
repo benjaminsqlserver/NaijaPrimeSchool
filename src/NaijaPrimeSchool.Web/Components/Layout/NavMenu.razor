@@ -13,6 +13,14 @@
         </Authorized>
     </AuthorizeView>
 
+    <AuthorizeView Roles="@($"{Roles.SuperAdmin},{Roles.HeadTeacher}")">
+        <Authorized>
+            <RadzenPanelMenuItem Text="Administration" Icon="policy" Expanded="true">
+                <RadzenPanelMenuItem Text="Audit log" Icon="history" Path="/admin/audit-log" />
+            </RadzenPanelMenuItem>
+        </Authorized>
+    </AuthorizeView>
+
     <AuthorizeView Roles="@($"{Roles.SuperAdmin},{Roles.HeadTeacher},{Roles.Teacher}")">
         <Authorized>
             <RadzenPanelMenuItem Text="Academics" Icon="school" Expanded="true">
