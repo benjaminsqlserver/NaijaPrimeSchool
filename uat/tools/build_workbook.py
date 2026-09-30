@@ -89,6 +89,17 @@ def thumbnail(src: Path) -> io.BytesIO | None:
     return buf
 
 
+def sprint_list(labels) -> str:
+    """'Sprint 3', 'Sprints 3 & 9', 'Sprint 5b' ... -> 'Sprints 3, 5b, 9'."""
+    labels = list(labels)
+    ranges = [l for l in labels if "–" in l]
+    if ranges:
+        return ranges[0]
+    nums = {n for l in labels for n in re.findall(r"\d+b?", l)}
+    ordered = sorted(nums, key=lambda n: (int(n.rstrip("b")), n))
+    return ("Sprint " if len(ordered) == 1 else "Sprints ") + ", ".join(ordered)
+
+
 def accounts():
     text = (UAT / "tests" / "lib.mjs").read_text(encoding="utf-8")
     block = text[text.index("export const USERS"):text.index("};", text.index("export const USERS"))]
@@ -149,10 +160,10 @@ def main():
     totals = [0, 0, 0, 0, 0]
     for m, ids in modules.items():
         row += 1
-        sprints = sorted({r1[i]["sprint"] for i in ids})
+        sprints = sprint_list(r1[i]["sprint"] for i in ids)
         p1 = sum(r1[i]["status"] == "Pass" for i in ids)
         pf = sum(final(i)["status"] == "Pass" for i in ids)
-        vals = [m, ", ".join(sprints), len(ids), p1, len(ids) - p1, pf, len(ids) - pf, pf / len(ids)]
+        vals = [m, sprints, len(ids), p1, len(ids) - p1, pf, len(ids) - pf, pf / len(ids)]
         for j, v in enumerate(vals, start=1):
             c = ws.cell(row=row, column=j, value=v)
             c.border = BOX

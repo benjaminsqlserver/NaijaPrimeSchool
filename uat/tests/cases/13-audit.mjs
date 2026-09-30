@@ -88,7 +88,7 @@ export default [
     id: 'AUD-05', module: M, sprint: S, feature: 'Security', user: 'folake.adeyemi',
     title: 'Password changes are logged without the password',
     pre: 'USR-07 reset a user\'s password earlier in the run.',
-    steps: ['Search the audit log for "(hidden)".', 'Expand the entry.'],
+    steps: ['Search the audit log for "(hidden)".', 'Expand the entries until the password reset (Kemi Adewale\'s account) is found.'],
     expected: 'The user account shows "Updated" with Password Hash (hidden) → (hidden); no password hash appears anywhere.',
     async run(t) {
       await t.go('/admin/audit-log');
@@ -96,11 +96,18 @@ export default [
       await t.settle(900);
       const n = await t.rowCount();
       check(n >= 1, 'No password change found');
-      await t.rows().first().locator('.rz-row-toggler').click();
-      await t.page.waitForTimeout(600);
+      // Other "(hidden)" entries are security-stamp changes (e.g. a deactivated
+      // family login); open entries until the password reset is found.
+      let found = false;
+      for (let i = 0; i < Math.min(n, 12) && !found; i++) {
+        await t.rows().nth(i).locator('.rz-row-toggler').click();
+        await t.page.waitForTimeout(500);
+        found = /Password Hash/i.test(await t.text());
+      }
       const body = await t.text();
-      check(/Password Hash/i.test(body) && !/AQAAAA/.test(body), 'Hash visible or field missing');
-      return `${n} entries; "Password Hash (hidden) → (hidden)"; no hash shown.`;
+      check(found, 'No "Password Hash" change found among the (hidden) entries');
+      check(!/AQAAAA/.test(body), 'A password hash is visible');
+      return `${n} entries with hidden values (password resets and security-stamp changes); "Password Hash (hidden) → (hidden)" shown; no hash anywhere.`;
     },
   },
 ];

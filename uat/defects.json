@@ -13,7 +13,8 @@
     "actual": "All seven links are shown and each lands on \"Access denied\".",
     "cause": "NavMenu showed the whole Academics and Results sections to the Teacher role, but those pages authorise SuperAdmin and HeadTeacher only.",
     "fix": "NavMenu.razor: the admin-only links inside Academics and Results & Reports are rendered only for SuperAdmin / HeadTeacher; teachers keep Timetable and Assessments.",
-    "status": "Open"
+    "status": "Fixed & verified",
+    "retest": "Cycle 2: AUTH-10 Pass"
   },
   {
     "id": "DEF-02",
@@ -29,7 +30,8 @@
     "actual": "\"Welcome, ngozi.okafor!\" and the cards Staff & students 58 / Roles configured 7 / Active users 58 / Deactivated 0 — for parents, pupils and all staff.",
     "cause": "Home.razor (Sprint 1) was written for the SuperAdmin and never scoped when other roles were added; the greeting used the login name.",
     "fix": "Home.razor: greets by first name; the account statistics show only for SuperAdmin; every other role sees shortcut cards to its own pages.",
-    "status": "Open"
+    "status": "Fixed & verified",
+    "retest": "Cycle 2: AUTH-07 Pass"
   },
   {
     "id": "DEF-03",
@@ -45,7 +47,8 @@
     "actual": "Six blank icon placeholders (dashboard cards, header user chip, Sign out); the same markup on the sign-in, sign-out and access-denied pages.",
     "cause": "Icons were written as <span class=\"rzi rzi-people\"></span>; Radzen's icon font draws the glyph from the icon name as text, so an empty span shows nothing.",
     "fix": "Home.razor uses <RadzenIcon>; MainLayout and the Account pages write the icon name inside the span (<span class=\"rzi\">logout</span>).",
-    "status": "Open"
+    "status": "Fixed & verified",
+    "retest": "Cycle 2: AUTH-06 Pass"
   },
   {
     "id": "DEF-04",
@@ -63,7 +66,8 @@
     "actual": "\"No users match your filters.\" (and the same for students and parents) until a search or filter is changed.",
     "cause": "The grids load pages on the server (Radzen LoadData) but their data field started as an empty list; Radzen only requests the first page when Data is null. (Same issue fixed on the Audit log page in Sprint 16.)",
     "fix": "Users.razor, Students.razor, Parents.razor: the grid data starts as null.",
-    "status": "Open"
+    "status": "Fixed & verified",
+    "retest": "Cycle 2: USR-01 Pass, FAM-01 Pass, FAM-07 Pass"
   },
   {
     "id": "DEF-05",
@@ -79,7 +83,8 @@
     "actual": "\"Timetable updated.\" — Mr. Okeke is double-booked.",
     "cause": "TimetableService.UpsertEntryAsync only enforced one lesson per class per slot; it never checked the teacher's other classes.",
     "fix": "TimetableService.UpsertEntryAsync refuses a teacher who already has a lesson in another class in the same term, day and period, naming the clash.",
-    "status": "Open"
+    "status": "Fixed & verified",
+    "retest": "Cycle 2: ACA-15 Pass"
   },
   {
     "id": "DEF-06",
@@ -95,7 +100,8 @@
     "actual": "The deactivated parent signs straight in to the portal.",
     "cause": "ParentService / StudentService.SetActiveAsync only flipped the family record's IsActive flag; the Sprint 9 portal account (ApplicationUser) stayed active.",
     "fix": "New PortalAccounts helper: deactivating/activating a parent or pupil record now deactivates/reactivates the linked login the same way User Management does (IsActive, lockout, new security stamp to end open sessions).",
-    "status": "Open"
+    "status": "Fixed & verified",
+    "retest": "Cycle 2: FAM-14 Pass"
   },
   {
     "id": "DEF-07",
@@ -111,7 +117,8 @@
     "actual": "\"Register opened.\" with every pupil marked Present for next week.",
     "cause": "DailyAttendanceService.OpenAsync (and SubjectAttendanceService.OpenAsync) validated the term and weekday but not that the date had arrived.",
     "fix": "Both services refuse a date after today in the school's time zone (Notifications:TimeZone, Africa/Lagos).",
-    "status": "Open"
+    "status": "Fixed & verified",
+    "retest": "Cycle 2: ATT-06 Pass"
   },
   {
     "id": "DEF-08",
@@ -127,7 +134,8 @@
     "actual": "\"Discount applied.\"; the invoice shows Balance −₦10,000.00 and stays Paid.",
     "cause": "InvoiceService.SetLineDiscountAsync only checked the discount against the line amount, not against what had already been paid.",
     "fix": "SetLineDiscountAsync refuses a discount that would bring the amount due below the amount paid, and says how much discount is still possible.",
-    "status": "Open"
+    "status": "Fixed & verified",
+    "retest": "Cycle 2: FIN-11 Pass"
   },
   {
     "id": "DEF-09",
@@ -143,7 +151,8 @@
     "actual": "\"Payment refunded.\" but the invoice still counts the ₦100,000 as paid (balance ₦112,000 instead of ₦212,000; status Partially Paid).",
     "cause": "The refund soft-deletes the payment's allocations, then InvoiceService.RecomputeInvoiceTotalsAsync sums invoice.Allocations. EF Core's relationship fix-up keeps the soft-deleted rows (still tracked) in that collection, so the refunded money still counted. Same root cause as the Sprint 10 parent-deletion hotfix.",
     "fix": "Invoice totals and the cancel/delete guards ignore soft-deleted or removed allocations (InvoiceService.LiveAllocations); PaymentService's delete guard does the same.",
-    "status": "Open"
+    "status": "Fixed & verified",
+    "retest": "Cycle 2: FIN-10 Pass"
   },
   {
     "id": "DEF-10",
@@ -160,7 +169,8 @@
     "actual": "\"Access denied\" — the buttons link to the staff report-card page (/reports/{id}), which only SuperAdmin and HeadTeacher may open.",
     "cause": "Sprint 8 reused the staff editing page for the portal links instead of giving families a view of their own.",
     "fix": "New read-only page /portal/report-cards/{id} (PortalReportCard.razor): a pupil sees only their own published cards, a parent only their linked wards' published cards, with a Print button. The portal links now point there; the staff page stays staff-only.",
-    "status": "Open"
+    "status": "Fixed & verified",
+    "retest": "Cycle 2: PTL-03 Pass, PTL-07 Pass"
   },
   {
     "id": "DEF-11",
@@ -176,7 +186,8 @@
     "actual": "\"Cannot remove 50.000 4.000 are on hand.\"",
     "cause": "A word was missing from the message template in StockMovementService, and quantities were printed with three decimals.",
     "fix": "Message reworded; quantities print without trailing zeros.",
-    "status": "Open"
+    "status": "Fixed & verified",
+    "retest": "Cycle 2: STO-07 Pass"
   },
   {
     "id": "DEF-12",
@@ -192,6 +203,7 @@
     "actual": "The icon renders as the text \"DISCOUNT\" in large letters across the discount amount. Found by reviewing the FIN-06 screenshot (the case's scripted checks passed).",
     "cause": "InvoiceDetail.razor used the icon name \"discount\", which is not in the icon font bundled with Radzen, so the browser shows the name as text.",
     "fix": "Uses the \"local_offer\" (price tag) icon instead. The UAT runner now flags any icon drawn as text on every page it visits.",
-    "status": "Open"
+    "status": "Fixed & verified",
+    "retest": "Cycle 2: FIN-06 Pass"
   }
 ]
